@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- App -->
+    <string name="app_name">Mesh Relay</string>
+
+    <!-- Common -->
+    <string name="common_unknown">Desconocido</string>
+    <string name="common_not_available">N/D</string>
+    <string name="common_none">Ninguno</string>
+    <string name="common_never">Nunca</string>
+    <string name="common_yes">Sí</string>
+    <string name="common_no">No</string>
+    <string name="common_cancel">Cancelar</string>
+    <string name="common_ok">Aceptar</string>
+    <string name="common_back">Atrás</string>
+    <string name="common_close">Cerrar</string>
+    <string name="common_clear">Borrar</string>
+    <string name="common_loading">Cargando…</string>
+
+    <!-- Formats -->
+    <string name="format_distance_km">%1$s km</string>
+    <string name="format_distance_km_uncertain">%1$s±%2$s km</string>
+    <string name="format_altitude_m">%1$d m</string>
+    <string name="format_snr_db">%1$s dB</string>
+    <string name="format_rssi_dbm">%1$s dBm</string>
+    <string name="format_percent">%1$s%%</string>
+    <string name="format_coordinates">%1$s, %2$s</string>
+    <string name="format_ago_seconds">hace %1$ds</string>
+    <string name="format_ago_minutes">%1$dm %2$02ds</string>
+    <string name="format_ago_hours">%1$dh %2$02dm</string>
+    <string name="format_source">Fuente: %1$s</string>
+    <string name="format_source_aged">Fuente: %1$s:%2$s</string>
+    <string name="format_db_header">DB(%1$d) · %2$s</string>
+    <string name="format_packets_per_hour">%1$s pkt/h</string>
+    <string name="format_uptime">%1$dd %2$dh %3$dm</string>
+
+    <!-- Ages -->
+    <string name="age_1m">1m</string>
+    <string name="age_5m">5m</string>
+    <string name="age_30m">30m</string>
+    <string name="age_1h">1h</string>
+    <string name="age_12h">12h</string>
+    <string name="age_1d">1d</string>
+    <string name="age_1w">1w</string>
+    <string name="age_1y">1y</string>
+    <string name="age_unknown">??</string>
+
+    <!-- Directions -->
+    <string name="direction_n">N</string>
+    <string name="direction_ne">NE</string>
+    <string name="direction_e">E</string>
+    <string name="direction_se">SE</string>
+    <string name="direction_s">S</string>
+    <string name="direction_sw">SO</string>
+    <string name="direction_w">O</string>
+    <string name="direction_nw">NO</string>
+    <string name="direction_unknown">—</string>
+
+    <!-- Sources -->
+    <string name="source_db">DB</string>
+    <string name="source_current">actual</string>
+
+    <!-- Sort -->
+    <string name="sort_label">Ordenar por</string>
+    <string name="sort_packets">Número de paquetes</string>
+    <string name="sort_percent">Porcentaje</string>
+    <string name="sort_avg_snr">SNR medio</string>
+    <string name="sort_avg_rssi">RSSI medio</string>
+    <string name="sort_name">Nombre del nodo</string>
+
+    <!-- Gauge -->
+    <string name="gauge_mode">Modo de indicador</string>
+    <string name="gauge_simple">Simple</string>
+    <string name="gauge_complex">Complejo</string>
+    <string name="gauge_snr">SNR</string>
+    <string name="gauge_rssi">RSSI</string>
+
+    <!-- Navigation -->
+    <string name="nav_relays">Repetidores</string>
+    <string name="nav_neighbours">Vecinos</string>
+
+    <!-- Actions -->
+    <string name="action_pause">Pausar</string>
+    <string name="action_resume">Reanudar</string>
+    <string name="action_reset">Reiniciar</string>
+    <string name="action_reset_confirm_title">¿Reiniciar estadísticas?</string>
+    <string name="action_reset_confirm_body">Borra todas las estadísticas de repetidores y vecinos recogidas. La base de nodos y la lista de descartados se conservan.</string>
+    <string name="action_reload_db">Recargar base de nodos</string>
+    <string name="action_sort">Ordenar</string>
+    <string name="action_gauge_mode">Modo de indicador</string>
+    <string name="action_settings">Ajustes</string>
+    <string name="action_back">Atrás</string>
+    <string name="action_disconnect">Desconectar</string>
+    <string name="action_skip_node">Descartar</string>
+    <string name="action_skip_confirm_title">¿Descartar este nodo?</string>
+    <string name="action_skip_confirm_body">Dejar de tratar a %1$s como este repetidor. Permanece en la base de nodos y puede restaurarse desde Ajustes.</string>
+    <string name="action_clear_skipped">Borrar nodos descartados</string>
+    <string name="action_clear_skipped_confirm_title">¿Borrar los nodos descartados de este repetidor?</string>
+    <string name="action_clear_skipped_confirm_body">Estos nodos volverán a considerarse candidatos para este repetidor.</string>
+
+    <!-- Devices -->
+    <string name="devices_title">Dispositivos</string>
+    <string name="devices_scanning">Buscando…</string>
+    <string name="devices_empty_title">No se encontraron dispositivos</string>
+    <string name="devices_empty_body">Asegúrate de que tu nodo esté encendido y el Bluetooth activado, y vuelve a buscar.</string>
+    <string name="devices_demo_section">Demo</string>
+    <string name="devices_found_section">Dispositivos disponibles</string>
+    <string name="devices_bonded">Dispositivos vinculados</string>
+    <string name="devices_permissions_title">Permisos necesarios</string>
+    <string name="devices_permissions_body">Mesh Relay necesita permiso de Bluetooth para buscar y conectar con tu nodo.</string>
+    <string name="devices_permissions_grant">Conceder permisos</string>
+    <string name="devices_adapter_off_title">El Bluetooth está desactivado</string>
+    <string name="devices_adapter_off_body">Activa el Bluetooth para buscar tu nodo.</string>
+    <string name="devices_unsupported_title">Bluetooth no compatible</string>
+    <string name="devices_unsupported_body">Este dispositivo no admite Bluetooth de baja energía (BLE), necesario para que Mesh Relay se conecte a un nodo.</string>
+    <string name="devices_state_connecting">Conectando…</string>
+    <string name="devices_state_connected">Conectado</string>
+    <string name="devices_state_disconnected">Desconectado</string>
+
+    <!-- Relays -->
+    <string name="relays_title">Repetidores</string>
+    <string name="relays_empty_title">Aún no hay repetidores</string>
+    <string name="relays_empty_body">Aún no hay paquetes repetidos. El tráfico que llega directamente, sin ser reenviado, está en la pestaña Vecinos.</string>
+    <string name="relays_status_total">Total</string>
+    <string name="relays_status_relayed">Repetidos</string>
+    <string name="relays_status_paused">Pausado</string>
+    <string name="relays_local_node">Nodo local</string>
+    <string name="relays_local_node_unknown">Nodo local desconocido</string>
+
+    <!-- Neighbours -->
+    <string name="neighbours_title">Vecinos</string>
+    <string name="neighbours_empty_title">Aún no hay vecinos</string>
+    <string name="neighbours_empty_body">Aún no hay paquetes recibidos directamente. Los nodos cuyo tráfico te llega a través de un repetidor están en la pestaña Repetidores.</string>
+    <string name="neighbours_status_direct">Directos</string>
+
+    <!-- Detail -->
+    <string name="detail_relay_title">Repetidor %1$s</string>
+    <string name="detail_neighbour_title">Vecino %1$s</string>
+    <string name="detail_tab_matching_nodes">Nodos coincidentes</string>
+    <string name="detail_tab_node">Nodo</string>
+    <string name="detail_tab_remote_nodes">Nodos remotos</string>
+    <string name="detail_total_relayed">Total repetidos</string>
+    <string name="detail_total_direct">Total directos</string>
+    <string name="detail_packets_per_hour">Paquetes/hora</string>
+    <string name="detail_skipped_nodes">Nodos descartados</string>
+    <string name="detail_signal_snr">SNR</string>
+    <string name="detail_signal_rssi">RSSI</string>
+    <string name="detail_stat_min">Mín</string>
+    <string name="detail_stat_avg">Media</string>
+    <string name="detail_stat_max">Máx</string>
+    <string name="detail_stat_last">Último</string>
+    <string name="detail_stat_count">Recuento</string>
+    <string name="detail_no_signal_data">Aún no hay datos de señal</string>
+
+    <!-- Node card -->
+    <string name="node_long_name">Nombre largo</string>
+    <string name="node_short_name">Nombre corto</string>
+    <string name="node_role">Rol</string>
+    <string name="node_hardware">Hardware</string>
+    <string name="node_position">Posición</string>
+    <string name="node_last_snr_db">Último SNR</string>
+    <string name="node_last_heard_db">Visto por última vez</string>
+    <string name="node_firmware">Firmware</string>
+    <string name="node_uptime">Tiempo activo</string>
+    <string name="node_restarts">Reinicios</string>
+    <string name="node_telemetry">Telemetría</string>
+    <string name="node_public_key_present">Clave pública</string>
+    <string name="node_hops_away">Saltos de distancia</string>
+    <string name="node_no_matching_title">Sin nodos coincidentes</string>
+    <string name="node_no_matching_body">Ningún nodo de la base de nodos termina en este byte. Puede que el repetidor aún no haya difundido su información de nodo.</string>
+    <string name="node_open_google_maps">Abrir en Google Maps</string>
+    <string name="node_open_osm">Abrir en OpenStreetMap</string>
+    <string name="node_open_meshview">Abrir en Meshview</string>
+
+    <!-- Remote nodes -->
+    <string name="remote_title">Nodos remotos conocidos</string>
+    <string name="remote_column_node">Nodo</string>
+    <string name="remote_column_packets">Paquetes</string>
+    <string name="remote_column_hops">Saltos</string>
+    <string name="remote_column_left">Restantes</string>
+    <string name="remote_direction_hint">Muchos repetidores solo oyen desde una dirección, así que la dispersión de direcciones aquí muestra hacia dónde escucha este repetidor.</string>
+    <string name="remote_empty">Aún no hay nodos remotos</string>
+    <string name="remote_via_relays">También repetido vía</string>
+    <string name="remote_via_relay_current">Vía este repetidor</string>
+
+    <!-- Settings -->
+    <string name="settings_title">Ajustes</string>
+    <string name="settings_language">Idioma</string>
+    <string name="settings_language_system">Predeterminado del sistema</string>
+    <string name="settings_language_english">English</string>
+    <string name="settings_language_spanish">Español</string>
+    <string name="settings_gauge_mode">Modo de indicador</string>
+    <string name="settings_default_sort">Orden predeterminado</string>
+    <string name="settings_meshview_url">URL de Meshview</string>
+    <string name="settings_meshview_url_hint">p. ej. https://meshview.meshtastic.es</string>
+    <string name="settings_keep_screen_on">Mantener la pantalla encendida</string>
+    <string name="settings_background_collection">Recopilar en segundo plano</string>
+    <string name="settings_background_collection_summary">Sigue recopilando datos mientras la aplicación está en segundo plano. Sin esto, Android suspende la aplicación y la recopilación se detiene.</string>
+    <string name="settings_skipped_nodes">Nodos descartados</string>
+    <string name="settings_skipped_nodes_empty">No hay nodos descartados</string>
+    <string name="settings_clear_all_skipped">Borrar todos los nodos descartados</string>
+    <string name="settings_about">Acerca de</string>
+    <string name="settings_version">Versión</string>
+    <string name="settings_licence">Licencia</string>
+    <string name="settings_upstream">Una adaptación de mesh_stats, GPL-3.0.</string>
+
+    <!-- Service -->
+    <string name="service_channel_name">Recopilación en segundo plano</string>
+    <string name="service_notification_title">Mesh Relay está en ejecución</string>
+    <string name="service_notification_text">Recopilando estadísticas de repetidores y vecinos</string>
+    <string name="service_notification_counters">%1$d paquetes · %2$d repetidos</string>
+
+    <!-- Plurals -->
+    <plurals name="plural_matching_nodes">
+        <item quantity="one">%d nodo coincidente</item>
+        <item quantity="other">%d nodos coincidentes</item>
+    </plurals>
+    <plurals name="plural_known_nodes">
+        <item quantity="one">%d nodo conocido</item>
+        <item quantity="other">%d nodos conocidos</item>
+    </plurals>
+    <plurals name="plural_packets">
+        <item quantity="one">%d paquete</item>
+        <item quantity="other">%d paquetes</item>
+    </plurals>
+    <plurals name="plural_skipped_nodes">
+        <item quantity="one">%d nodo descartado</item>
+        <item quantity="other">%d nodos descartados</item>
+    </plurals>
+</resources>
