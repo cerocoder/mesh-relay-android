@@ -33,4 +33,26 @@ class AgeFormatTest {
         assertEquals(RelativeAge.Never, AgeText.relative(Long.MIN_VALUE))
         assertEquals(RelativeAge.Never, AgeText.relative(-1))
     }
+
+    @Test
+    fun `relativeTo treats a zero timestamp as never, not an epoch of hours`() {
+        // A real wall-clock "now" - RelayStats and NeighbourStats default
+        // lastPacketAtMillis to 0 for a relay never heard from. Subtracting
+        // that sentinel from "now" is what produced "492777h 46m" before this
+        // overload existed.
+        val now = 1_772_140_800_000L
+        assertEquals(RelativeAge.Never, AgeText.relativeTo(now, 0L))
+    }
+
+    @Test
+    fun `relativeTo delegates to relative for a real timestamp`() {
+        val now = 1_772_140_800_000L
+        assertEquals(RelativeAge.Seconds(2), AgeText.relativeTo(now, now - 2_400))
+    }
+
+    @Test
+    fun `relativeTo still reports never for a timestamp in the future`() {
+        val now = 1_772_140_800_000L
+        assertEquals(RelativeAge.Never, AgeText.relativeTo(now, now + 5_000))
+    }
 }

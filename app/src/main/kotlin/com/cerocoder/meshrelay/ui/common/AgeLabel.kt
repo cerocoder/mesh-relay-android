@@ -11,15 +11,16 @@ import com.cerocoder.meshrelay.stats.RelativeAge
 /**
  * Shows how long ago [atMillis] was, against the ticking [LocalRelativeClock].
  *
- * Does no arithmetic beyond the subtraction and no formatting of its own -
- * every branch of [RelativeAge] is rendered through a string resource, so the
- * only untestable-on-JVM part of this feature is the subtraction itself; the
- * branching and number formatting live in [AgeText], which is unit tested.
+ * Does no arithmetic beyond what [AgeText.relativeTo] needs and no formatting
+ * of its own - every branch of [RelativeAge] is rendered through a string
+ * resource, so the only untestable-on-JVM part of this feature is reading the
+ * clock; the sentinel check, subtraction and number formatting all live in
+ * [AgeText], which is unit tested.
  */
 @Composable
 fun AgeLabel(atMillis: Long, modifier: Modifier = Modifier) {
     val now = LocalRelativeClock.current
-    val text = when (val age = AgeText.relative(now - atMillis)) {
+    val text = when (val age = AgeText.relativeTo(now, atMillis)) {
         is RelativeAge.Seconds -> stringResource(R.string.format_ago_seconds, age.seconds)
         is RelativeAge.Minutes -> stringResource(R.string.format_ago_minutes, age.minutes, age.seconds)
         is RelativeAge.Hours -> stringResource(R.string.format_ago_hours, age.hours, age.minutes)

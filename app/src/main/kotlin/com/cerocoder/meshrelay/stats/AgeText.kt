@@ -51,4 +51,16 @@ object AgeText {
             minutes = ((elapsedMillis % HOUR) / MINUTE).toInt(),
         )
     }
+
+    /**
+     * Relative age of an event that may never have happened.
+     *
+     * A zero [atMillis] is the model's never-heard sentinel - RelayStats and
+     * NeighbourStats both default the field to it - and must not be subtracted
+     * from the wall clock, which would render an epoch's worth of hours. Callers
+     * hold a timestamp rather than an elapsed time, so this is the only place that
+     * can tell the sentinel from a real instant.
+     */
+    fun relativeTo(nowMillis: Long, atMillis: Long): RelativeAge =
+        if (atMillis == 0L) RelativeAge.Never else relative(nowMillis - atMillis)
 }
