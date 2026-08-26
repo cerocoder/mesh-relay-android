@@ -26,7 +26,11 @@ class GaugeGeometryTest {
 
     @Test
     fun `simple mode fills from the scale floor to the latest value`() {
-        val marks = GaugeGeometry.marks(stats(-20f, -2.5f), MIN, MAX, GaugeMode.SIMPLE)
+        // Three distinct values on purpose: minVal (-6) is not the scale floor and
+        // maxVal (8) is not the latest value, so this kills both the "fill from the
+        // observed minimum" and the "fill to maxVal" mutants. With minVal == floor or
+        // maxVal == lastVal the assertions hold for the wrong implementation too.
+        val marks = GaugeGeometry.marks(stats(-6f, 8f, -2.5f), MIN, MAX, GaugeMode.SIMPLE)
         assertEquals(0f, marks.fillStart, 0.0001f)
         assertEquals(0.5f, marks.fillEnd, 0.0001f)
         assertNull(marks.avg)
