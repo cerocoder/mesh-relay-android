@@ -87,4 +87,35 @@ class AggregatesTest {
         assertEquals(1, record.observedRestartCount)
         assertEquals(30, record.lastUptimeSeconds)
     }
+
+    @Test
+    fun `two packets over a positive window give a real rate`() {
+        // Separates the packetCount < 2 guard from the duration guard: every other
+        // case in this file has both guards true or both false at once. Nudging the
+        // threshold to packetCount < 3 (or requiring more than two packets some
+        // other way) would return 0f here instead of a real rate.
+        val relay = RelayStats(
+            relayByte = 1,
+            packetCount = 2,
+            firstPacketAtMillis = 0L,
+            lastPacketAtMillis = 1_000L,
+        )
+        assertEquals(7200f, relay.packetsPerHour, 0.01f)   // 2 packets in 1 second
+    }
+
+    @Test
+    fun `an uptime repeated exactly is not a restart`() {
+        // Identical uptime_seconds arriving twice is ordinary on a lossy mesh - the
+        // same telemetry reaching this device by two relay paths. A regression that
+        // treats "not greater than" as a fall (using <= instead of <) would count
+        // this as a reboot and inflate the restart count for a node that never went
+        // down.
+        var record = TelemetryRecord()
+            .withUptime(3_600)
+            .withUptime(7_200)
+            .withUptime(30)
+        record = record.withUptime(30)
+        assertEquals(1, record.observedRestartCount)
+        assertEquals(30, record.lastUptimeSeconds)
+    }
 }
