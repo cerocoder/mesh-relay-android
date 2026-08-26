@@ -7,11 +7,13 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import org.meshtastic.proto.FromRadio
 import org.meshtastic.proto.QueueStatus
 import org.meshtastic.proto.ToRadio
 import java.io.IOException
+import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.milliseconds
@@ -39,6 +41,12 @@ class FakeRadioTransport(
     // breaks id uniqueness.
     private val nextFrameId = AtomicInteger(1)
 
+    // Guards against starting the traffic loop twice - the node stage can in
+    // principle be requested more than once in a session, but the loop it starts
+    // never terminates on its own, so a second start would leak a coroutine
+    // emitting the same traffic on top of the first.
+    private val trafficStarted = AtomicBoolean(false)
+
     override fun start() {
         scope.launch {
             delay(connectDelay)
@@ -62,8 +70,14 @@ class FakeRadioTransport(
             nonce == MeshProtocol.CONFIG_NONCE ->
                 emit(scenario.configStageFrames(nonce))
 
-            nonce == MeshProtocol.NODE_INFO_NONCE ->
+            nonce == MeshProtocol.NODE_INFO_NONCE -> {
                 emit(scenario.nodeStageFrames(nonce))
+                // Real firmware does not wait for the phone to finish reading the
+                // node database before mesh traffic keeps arriving - starting the
+                // loop here, rather than after emit()'s coroutine completes, is
+                // what makes that true of the demo too.
+                startTrafficLoop()
+            }
 
             // Real firmware answers a heartbeat with a queue status - that is what
             // proves the link is alive. Without a reply, the demo would not behave
@@ -84,7 +98,39 @@ class FakeRadioTransport(
         scope.launch {
             frames.forEach { frame ->
                 delay(frameDelay)
-                callback.onDataReceived(frame.copy(id = nextFrameId.getAndIncrement()).encode())
+                emitNow(frame)
+            }
+        }
+    }
+
+    private fun emitNow(frame: FromRadio) {
+        callback.onDataReceived(frame.copy(id = nextFrameId.getAndIncrement()).encode())
+    }
+
+    /**
+     * Starts the mesh-traffic loop: one frame per scenario.trafficIntervalMillis,
+     * cycling the scenario's traffic once it runs out.
+     *
+     * Materialising the sequence to a list up front, rather than re-calling
+     * trafficFrames() forever, keeps a scenario's own trafficFrames() honestly
+     * finite - it only has to describe one cycle, not know how to repeat itself.
+     *
+     * An empty list means the scenario never sends traffic (every scenario but
+     * zona-centro, today) - the loop must not start in that case: a delay/relaunch
+     * cycle with nothing to emit would still be live, pointless work, and in a
+     * virtual-time test it would make advanceUntilIdle() spin forever.
+     */
+    private fun startTrafficLoop() {
+        if (!trafficStarted.compareAndSet(false, true)) return
+        val frames = scenario.trafficFrames().toList()
+        if (frames.isEmpty()) return
+
+        scope.launch {
+            var index = 0
+            while (isActive) {
+                delay(scenario.trafficIntervalMillis.milliseconds)
+                emitNow(frames[index])
+                index = (index + 1) % frames.size
             }
         }
     }
