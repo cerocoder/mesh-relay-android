@@ -228,13 +228,17 @@ object SampleData {
 
     private val illescasMudo = NodeRecord(
         num = NUM_ILLESCAS_MUDO,
-        // A User submessage WAS present - Wire's proto3 default for an unset
-        // string field is "", not null - so a screen writing `name ?: "..."`
-        // must not fire its fallback here. Compare with NUM_TOLEDO_BAJA above,
-        // whose absence is a real null because no User was ever heard at all.
+        // A User submessage WAS present but its name fields were never filled
+        // in - Wire's proto3 default for an unset string field is "", not
+        // null - so a screen writing `name ?: "..."` must not fire its
+        // fallback here. Compare with NUM_TOLEDO_BAJA above, whose null names
+        // reflect that no User was ever heard from it at all. hwModel is a
+        // real value here on purpose: this case is about the name fields
+        // specifically, not about every field a present-but-thin User leaves
+        // at its proto3 default.
         longName = "",
         shortName = "",
-        hwModel = null,
+        hwModel = "HELTEC_V3",
         role = "CLIENT",
         dbPosition = null,
         dbSnr = null,
