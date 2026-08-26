@@ -43,7 +43,7 @@
     <string name="age_1d">1d</string>
     <string name="age_1w">1w</string>
     <string name="age_1y">1y</string>
-    <string name="age_unknown">??</string>
+    <string name="age_unknown">\?\?</string>
 
     <!-- Directions -->
     <string name="direction_n">N</string>
