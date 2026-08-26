@@ -210,6 +210,44 @@
     <string name="service_notification_text">Collecting relay and neighbour statistics</string>
     <string name="service_notification_counters">%1$d packets · %2$d relayed</string>
 
+    <!-- BLE failures -->
+    <string name="ble_failure_request_rejected">BLE operation rejected: %1$s</string>
+    <string name="ble_failure_device_disconnected">The node disconnected during the operation.</string>
+    <string name="ble_failure_bluetooth_off">Bluetooth is off. Turn it on and try again.</string>
+    <string name="ble_failure_bluetooth_unavailable">This device has no Bluetooth adapter.</string>
+    <string name="ble_failure_invalid_request">The BLE request was refused: the connection was already lost.</string>
+    <string name="ble_failure_permission_denied">Missing Bluetooth permission. Grant it in Settings and try again.</string>
+    <string name="ble_failure_operation_cancelled">The BLE operation was interrupted.</string>
+    <string name="ble_failure_unknown">BLE failure: %1$s</string>
+    <string name="ble_failure_unknown_cause">unknown error</string>
+    <string name="ble_failure_status_link_lost">Connection to the node was lost.</string>
+    <string name="ble_failure_status_missing_service">The node does not expose the Meshtastic service.</string>
+    <string name="ble_failure_status_missing_characteristic">The required characteristic was not found.</string>
+    <string name="ble_failure_status_request_rejected">The node rejected the request.</string>
+    <string name="ble_failure_status_no_response">The node did not respond to the connection attempt.</string>
+    <string name="ble_failure_status_unexpected_reply">The node sent an unexpected reply.</string>
+    <string name="ble_failure_status_request_cancelled">The request was cancelled.</string>
+    <string name="ble_failure_status_notifications_disabled">Notifications were not enabled.</string>
+    <string name="ble_failure_status_unsupported_setting">The node does not support this setting.</string>
+    <string name="ble_failure_status_needs_auth">Status %1$d: authentication is required — the node is not paired.</string>
+    <string name="ble_failure_status_out_of_range">Status %1$d: the node is out of range.</string>
+    <string name="ble_failure_status_needs_encryption">Status %1$d: an encrypted channel is required.</string>
+    <string name="ble_failure_status_peer_terminated">Status %1$d: the node ended the connection itself.</string>
+    <string name="ble_failure_status_radio_hang">Status %1$d: the node\'s radio hung.</string>
+    <string name="ble_failure_status_connection_failed">Status %1$d: the connection did not establish.</string>
+    <string name="ble_failure_status_stale_connection">Status %1$d: a stale Android connection.</string>
+    <string name="ble_failure_status_unrecognized">Status %1$d (unrecognized). Try reconnecting to the node.</string>
+    <string name="ble_failure_bonding_no_response">The node is not responding to the pairing request. Make sure it is powered on and in range, then try again.</string>
+    <string name="ble_failure_bonding_incomplete">Pairing did not complete: the code was not entered, or it was rejected. Try pairing again.</string>
+    <string name="ble_failure_disconnect_link_loss">Connection lost: the node is out of range.</string>
+    <string name="ble_failure_disconnect_peer_user">The node ended the connection itself.</string>
+    <string name="ble_failure_disconnect_local_host">The connection was ended by the phone.</string>
+    <string name="ble_failure_disconnect_timeout">The node did not respond to the connection attempt.</string>
+    <string name="ble_failure_disconnect_not_supported">The node does not expose the required Meshtastic service.</string>
+    <string name="ble_failure_disconnect_cancelled">The connection attempt was cancelled.</string>
+    <string name="ble_failure_disconnect_success">The connection was closed normally.</string>
+    <string name="ble_failure_disconnect_unknown">The connection was lost for an unknown reason.</string>
+
     <!-- Plurals -->
     <plurals name="plural_matching_nodes">
         <item quantity="one">%d matching node</item>

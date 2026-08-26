@@ -210,6 +210,44 @@
     <string name="service_notification_text">Recopilando estadísticas de repetidores y vecinos</string>
     <string name="service_notification_counters">%1$d paquetes · %2$d repetidos</string>
 
+    <!-- BLE failures -->
+    <string name="ble_failure_request_rejected">Operación BLE rechazada: %1$s</string>
+    <string name="ble_failure_device_disconnected">El nodo se desconectó durante la operación.</string>
+    <string name="ble_failure_bluetooth_off">El Bluetooth está desactivado. Actívalo e inténtalo de nuevo.</string>
+    <string name="ble_failure_bluetooth_unavailable">Este dispositivo no tiene adaptador Bluetooth.</string>
+    <string name="ble_failure_invalid_request">Solicitud BLE rechazada: la conexión ya se había perdido.</string>
+    <string name="ble_failure_permission_denied">Falta el permiso de Bluetooth. Concédelo en Ajustes e inténtalo de nuevo.</string>
+    <string name="ble_failure_operation_cancelled">La operación BLE se interrumpió.</string>
+    <string name="ble_failure_unknown">Fallo BLE: %1$s</string>
+    <string name="ble_failure_unknown_cause">error desconocido</string>
+    <string name="ble_failure_status_link_lost">Se perdió la conexión con el nodo.</string>
+    <string name="ble_failure_status_missing_service">El nodo no expone el servicio Meshtastic.</string>
+    <string name="ble_failure_status_missing_characteristic">No se encontró la característica necesaria.</string>
+    <string name="ble_failure_status_request_rejected">El nodo rechazó la solicitud.</string>
+    <string name="ble_failure_status_no_response">El nodo no respondió al intento de conexión.</string>
+    <string name="ble_failure_status_unexpected_reply">El nodo envió una respuesta inesperada.</string>
+    <string name="ble_failure_status_request_cancelled">Se canceló la solicitud.</string>
+    <string name="ble_failure_status_notifications_disabled">No se activaron las notificaciones.</string>
+    <string name="ble_failure_status_unsupported_setting">El nodo no admite este ajuste.</string>
+    <string name="ble_failure_status_needs_auth">Estado %1$d: se requiere autenticación — el nodo no está vinculado.</string>
+    <string name="ble_failure_status_out_of_range">Estado %1$d: el nodo está fuera de alcance.</string>
+    <string name="ble_failure_status_needs_encryption">Estado %1$d: se requiere un canal cifrado.</string>
+    <string name="ble_failure_status_peer_terminated">Estado %1$d: el nodo cerró la conexión por su cuenta.</string>
+    <string name="ble_failure_status_radio_hang">Estado %1$d: se colgó la radio del nodo.</string>
+    <string name="ble_failure_status_connection_failed">Estado %1$d: la conexión no llegó a establecerse.</string>
+    <string name="ble_failure_status_stale_connection">Estado %1$d: conexión de Android obsoleta.</string>
+    <string name="ble_failure_status_unrecognized">Estado %1$d (no reconocido). Intenta volver a conectar con el nodo.</string>
+    <string name="ble_failure_bonding_no_response">El nodo no responde a la solicitud de vinculación. Asegúrate de que esté encendido y al alcance, y vuelve a intentarlo.</string>
+    <string name="ble_failure_bonding_incomplete">La vinculación no se completó: no se introdujo el código o fue rechazado. Vuelve a intentar la vinculación.</string>
+    <string name="ble_failure_disconnect_link_loss">Conexión perdida: el nodo está fuera de alcance.</string>
+    <string name="ble_failure_disconnect_peer_user">El nodo cerró la conexión por su cuenta.</string>
+    <string name="ble_failure_disconnect_local_host">El teléfono cerró la conexión.</string>
+    <string name="ble_failure_disconnect_timeout">El nodo no respondió al intento de conexión.</string>
+    <string name="ble_failure_disconnect_not_supported">El nodo no expone el servicio Meshtastic necesario.</string>
+    <string name="ble_failure_disconnect_cancelled">Se canceló el intento de conexión.</string>
+    <string name="ble_failure_disconnect_success">La conexión se cerró con normalidad.</string>
+    <string name="ble_failure_disconnect_unknown">Se perdió la conexión por un motivo desconocido.</string>
+
     <!-- Plurals -->
     <plurals name="plural_matching_nodes">
         <item quantity="one">%d nodo coincidente</item>
