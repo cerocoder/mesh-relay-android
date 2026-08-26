@@ -84,4 +84,16 @@ class NodeRecordTest {
         val info = NodeInfo(num = 1, user = User(public_key = okio.ByteString.of(1, 2, 3)))
         assertTrue(NodeRecord.fromProto(info).hasPublicKey)
     }
+
+    @Test
+    fun `a database position never carries a precision, even when the record has one`() {
+        // The node database does not carry precision_bits. Without the explicit override
+        // in fromProto this leaks through as 12, inflating the obfuscation radius and
+        // suppressing the direction arrow for any node closer than that radius.
+        val info = NodeInfo(
+            num = 1,
+            position = Position(latitude_i = 404168000, longitude_i = -37038000, precision_bits = 12),
+        )
+        assertNull(NodeRecord.fromProto(info).dbPosition!!.precisionBits)
+    }
 }
