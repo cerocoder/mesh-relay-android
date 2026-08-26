@@ -9,8 +9,8 @@ import kotlinx.coroutines.CoroutineScope
 /**
  * Picks the transport implementation from the address prefix.
  *
- * This is the single branch point between connection methods: stage 2 will add a
- * second branch here for BLE, and nowhere else will need to change.
+ * This is the single branch point between connection methods: the branches below are
+ * the demo device and BLE, so adding a third transport touches exactly this one place.
  */
 class RadioTransportFactoryImpl(
     private val scope: CoroutineScope,
