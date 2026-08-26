@@ -176,10 +176,28 @@ class NodeDirectory(private val time: TimeSource) {
      * Field by field, the new value when the message carried one and the old value
      * when it did not.
      *
-     * [NodeRecord.hasPublicKey] is the one that cannot be expressed as "null means
-     * absent": a NodeInfo with no user submessage carries no key information at
-     * all, and reading its `false` literally would unlearn a key already seen. A
-     * key is therefore remembered once observed.
+     * [NodeRecord.hasPublicKey] is the one field that cannot use `?:`, because it
+     * is a `Boolean`: absence and `false` are the same value. Two different
+     * situations reach here as `false`, and the `||` cannot tell them apart, so it
+     * reads both as absence - a key is remembered once observed and no
+     * [applyNodeInfo] ever unlearns it:
+     *
+     *  - the NodeInfo carried no `user` submessage at all, so it said nothing
+     *    about a key. Keeping what was already known is plainly right.
+     *  - the NodeInfo carried a `user` whose `public_key` was empty. That is real
+     *    information, and this line deliberately ignores it.
+     *
+     * The second case is the accepted cost. Node database entries arrive in
+     * several shapes and the thinner ones routinely omit the key, so believing an
+     * empty one would make the field flip back and forth as full and thin entries
+     * alternate - while a node genuinely withdrawing a key it has already
+     * published is not something this mesh does. [applyUser] takes the opposite
+     * view, for the opposite reason: a `User` message *is* the identity record, so
+     * what it says about a key is authoritative there.
+     *
+     * Both halves of that asymmetry are pinned by tests; it is a decision, not an
+     * accident, and flattening this `||` into a straight assignment would fail
+     * them.
      */
     private fun merge(existing: NodeRecord, incoming: NodeRecord): NodeRecord = NodeRecord(
         num = incoming.num,

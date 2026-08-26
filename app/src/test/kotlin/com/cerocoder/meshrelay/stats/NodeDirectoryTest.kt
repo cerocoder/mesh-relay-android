@@ -9,6 +9,7 @@ import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+import org.meshtastic.proto.Config
 import org.meshtastic.proto.DeviceMetrics
 import org.meshtastic.proto.EnvironmentMetrics
 import org.meshtastic.proto.HardwareModel
@@ -63,6 +64,10 @@ private val ILLESCAS_ZERO = 0xA1001B00.toInt()
 private val BARE_NODE = 0xA1004459.toInt()
 private val PINTO = 0xA100119C.toInt()
 private val LOCAL_NODE = 0xA1FFEE01.toInt()
+
+// Only its presence reaches NodeRecord.hasPublicKey, so the bytes are arbitrary;
+// a real Curve25519 key would be 32 of them.
+private val PUBLIC_KEY = okio.ByteString.of(1, 2, 3)
 
 private const val DB_LAST_HEARD_SECONDS = 1_700_000_000
 private const val DB_AT_MILLIS = 1_700_000_000_000L
@@ -387,6 +392,77 @@ class NodeDirectoryTest {
         assertEquals(6.25f, merged.dbSnr!!, 1e-6f)
         assertEquals(2, merged.hopsAway)
         assertEquals(DB_LAST_HEARD_SECONDS + 60, merged.lastHeardEpochSeconds)
+    }
+
+    @Test
+    fun `a public key once seen survives a node info that carries no user at all`() {
+        // hasPublicKey is the one field of the merge that cannot be written with
+        // ?:, because a Boolean has no third state: absence and false are the same
+        // value, so the rule has to be spelled as an ||. Nothing else in the file
+        // exercises that line, and flattening it to a straight assignment - the
+        // obvious tidy-up - would silently unlearn every key.
+
+        // Routing knows this node exists before anything has described it.
+        directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER, last_heard = DB_LAST_HEARD_SECONDS))
+        assertFalse(directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!.hasPublicKey)
+
+        // Then the full entry arrives and the key becomes known: the incoming half
+        // of the || has to count for something.
+        directory.applyNodeInfo(
+            NodeInfo(
+                num = GETAFE_ROUTER,
+                user = User(short_name = "gt2a", public_key = PUBLIC_KEY),
+                last_heard = DB_LAST_HEARD_SECONDS + 30,
+            ),
+        )
+        assertTrue(directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!.hasPublicKey)
+
+        // And a later thin entry - no user submessage at all - says nothing about a
+        // key, so it unsays nothing: the existing half has to count too.
+        directory.applyNodeInfo(
+            NodeInfo(num = GETAFE_ROUTER, last_heard = DB_LAST_HEARD_SECONDS + 60),
+        )
+        val record = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
+
+        assertTrue(record.hasPublicKey)
+        // The rest of the record survives the same way, which is what makes the
+        // hasPublicKey assertion above about the || rather than about the merge.
+        assertEquals("gt2a", record.shortName)
+        assertEquals(DB_LAST_HEARD_SECONDS + 60, record.lastHeardEpochSeconds)
+    }
+
+    @Test
+    fun `a user message is authoritative about the identity it carries`() {
+        // The other half of that asymmetry, pinned so it stays a decision. Unlike a
+        // NodeInfo with no user submessage, a User message *is* the identity
+        // record: what it says is what is true, including that this node has no key
+        // and is not a router.
+        directory.applyNodeInfo(
+            NodeInfo(num = GETAFE_ROUTER, user = User(short_name = "gt2a", public_key = PUBLIC_KEY)),
+        )
+        val handshake = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
+        assertTrue(handshake.hasPublicKey)
+        assertEquals("CLIENT", handshake.role)
+
+        directory.applyUser(
+            GETAFE_ROUTER,
+            User(short_name = "gt2a", role = Config.DeviceConfig.Role.ROUTER),
+        )
+        val promoted = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
+
+        assertEquals("ROUTER", promoted.role)
+        // An empty public_key inside a User that was populated is a statement, not
+        // a silence - so here, and only here, the key is dropped.
+        assertFalse(promoted.hasPublicKey)
+
+        // And the protocol's own defaults are values rather than absences: CLIENT
+        // means CLIENT, the reading NodeRecord.fromProto already settled. Reading
+        // the sentinel as "unset" here would leave this node a ROUTER for ever.
+        directory.applyUser(GETAFE_ROUTER, User(short_name = "gt2a", public_key = PUBLIC_KEY))
+        val demoted = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
+
+        assertEquals("CLIENT", demoted.role)
+        assertTrue(demoted.hasPublicKey)
     }
 
     @Test
