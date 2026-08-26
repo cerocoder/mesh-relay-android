@@ -1,0 +1,109 @@
+package com.cerocoder.meshrelay.stats.model
+
+import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
+import org.junit.Test
+import org.meshtastic.proto.Position
+
+private fun report(
+    at: Long = 1_000L,
+    lat: Double? = 40.4168,
+    lon: Double? = -3.7038,
+    alt: Int? = 667,
+    bits: Int? = null,
+) = PositionReport(at, lat, lon, alt, bits)
+
+class PositionTest {
+
+    @Test
+    fun `scaled integer coordinates become degrees`() {
+        val proto = Position(latitude_i = 404168000, longitude_i = -37038000, altitude = 667)
+        val parsed = PositionReport.fromProto(proto, atMillis = 5_000L)
+
+        assertEquals(40.4168, parsed.latitude!!, 1e-9)
+        assertEquals(-3.7038, parsed.longitude!!, 1e-9)
+        assertEquals(667, parsed.altitude)
+        assertEquals(5_000L, parsed.atMillis)
+    }
+
+    @Test
+    fun `height above the ellipsoid wins over height above sea level`() {
+        val proto = Position(latitude_i = 1, longitude_i = 1, altitude = 600, altitude_hae = 655)
+        assertEquals(655, PositionReport.fromProto(proto, 0L).altitude)
+    }
+
+    @Test
+    fun `sea level altitude is used when there is no ellipsoid height`() {
+        val proto = Position(latitude_i = 1, longitude_i = 1, altitude = 600)
+        assertEquals(600, PositionReport.fromProto(proto, 0L).altitude)
+    }
+
+    @Test
+    fun `absent coordinates stay absent rather than becoming zero`() {
+        // latitude_i is an optional field: null means the sender withheld its
+        // position. Reading that as 0.0 would place the node in the Gulf of Guinea
+        // and give it a plausible-looking distance.
+        val parsed = PositionReport.fromProto(Position(), 0L)
+        assertNull(parsed.latitude)
+        assertNull(parsed.longitude)
+        assertNull(parsed.altitude)
+        assertFalse(parsed.hasCoordinates)
+        assertFalse(parsed.hasAltitude)
+    }
+
+    @Test
+    fun `zero precision bits means absent, not full precision`() {
+        // precision_bits is not an optional field, so 0 is what an unset value looks
+        // like. Treating it as a real precision would make the obfuscation radius
+        // enormous and hide every direction behind UNKNOWN.
+        assertNull(PositionReport.fromProto(Position(latitude_i = 1, longitude_i = 1), 0L).precisionBits)
+        assertEquals(13, PositionReport.fromProto(Position(latitude_i = 1, longitude_i = 1, precision_bits = 13), 0L).precisionBits)
+    }
+
+    @Test
+    fun `last is the newest report`() {
+        val history = PositionHistory(nodeNum = 1)
+            .plus(report(at = 1_000L))
+            .plus(report(at = 2_000L))
+        assertEquals(2_000L, history.last!!.atMillis)
+    }
+
+    @Test
+    fun `best prefers the newest report carrying both coordinates and altitude`() {
+        val history = PositionHistory(nodeNum = 1)
+            .plus(report(at = 1_000L, alt = 600))
+            .plus(report(at = 2_000L, alt = null))
+        assertEquals(1_000L, history.best!!.atMillis)
+    }
+
+    @Test
+    fun `best is the newest report when it is already complete`() {
+        val history = PositionHistory(nodeNum = 1)
+            .plus(report(at = 1_000L, alt = 600))
+            .plus(report(at = 2_000L, alt = 700))
+        assertEquals(2_000L, history.best!!.atMillis)
+    }
+
+    @Test
+    fun `best is absent when no report has both coordinates and altitude`() {
+        // A quirk of the original, reproduced on purpose: a report with coordinates
+        // but no altitude does not count, and the caller falls back to the node
+        // database instead. Callers rely on this to label the position source, so
+        // "fixing" it here would make CUR and DB disagree with the terminal tool.
+        val history = PositionHistory(nodeNum = 1)
+            .plus(report(at = 1_000L, alt = null))
+            .plus(report(at = 2_000L, alt = null))
+        assertNull(history.best)
+    }
+
+    @Test
+    fun `history is bounded and keeps the newest reports`() {
+        var history = PositionHistory(nodeNum = 1)
+        repeat(PositionHistory.MAX_REPORTS + 5) { i -> history = history.plus(report(at = i.toLong())) }
+        assertEquals(PositionHistory.MAX_REPORTS, history.reports.size)
+        assertEquals(5L, history.reports.first().atMillis)
+        assertTrue(history.last!!.atMillis == (PositionHistory.MAX_REPORTS + 4).toLong())
+    }
+}
