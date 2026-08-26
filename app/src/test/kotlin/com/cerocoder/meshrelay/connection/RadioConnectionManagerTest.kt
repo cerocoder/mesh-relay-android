@@ -672,6 +672,14 @@ class RadioConnectionManagerTest {
         // silence, and the tick at t=120s sees 70s - past the 60s limit. A reload that
         // restarted the heartbeat would move those ticks to 80/110/140 and would still
         // be Connected here.
+        //
+        // That discrimination rests on the silence comparison in startKeepAlive being
+        // strict (>): the restarted heartbeat's tick at t=110s sees exactly 60_000 ms of
+        // silence and survives, which is what pushes its break out to t=140s, past the
+        // window asserted below. Relax that comparison to >= and the mutant breaks at
+        // t=110s instead - this test would keep passing while no longer telling the two
+        // implementations apart. Anyone touching the comparison has to revisit the numbers
+        // here.
         advanceTimeBy(75.seconds)
 
         val state = manager.connectionState.value
