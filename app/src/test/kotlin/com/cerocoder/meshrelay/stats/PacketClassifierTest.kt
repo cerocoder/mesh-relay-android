@@ -79,9 +79,34 @@ class PacketClassifierTest {
     }
 
     @Test
+    fun `a packet with no hop information from a sender we do not skip still counts`() {
+        // The unskipped twin of the test above. Dropping a packet for want of hop
+        // information is a rule about skipped senders only: hoisting it out of the
+        // skip block would discard every packet from firmware that leaves hop_start
+        // unset, and without this assertion the whole suite would still pass.
+        assertEquals(
+            Ingest.Relayed(0x69, SENDER, 0, 0, Signal(-7.5f, -94f)),
+            PacketClassifier.classify(packet(hopStart = 0, hopLimit = 0), emptySet()),
+        )
+    }
+
+    @Test
     fun `skipping one node does not affect another`() {
         val result = PacketClassifier.classify(packet(hopStart = 3, hopLimit = 2), setOf(OTHER))
         assertEquals(Ingest.Relayed(0x69, SENDER, 3, 2, Signal(-7.5f, -94f)), result)
+    }
+
+    @Test
+    fun `a skipped sender heard directly is still a neighbour`() {
+        // Direct is decided before the skip list is ever consulted, exactly as
+        // mesh_stats.py:1043 returns before it reaches skip_relays. Skipping a node
+        // says it is not a relay, not that we stopped hearing it: its own first-hand
+        // transmissions remain neighbour observations. Swap the two blocks and this
+        // packet - one hop made, so first-hand - would come back Dropped.
+        assertEquals(
+            Ingest.Direct(SENDER, Signal(-7.5f, -94f)),
+            PacketClassifier.classify(packet(relay = 0, hopStart = 3, hopLimit = 2), setOf(SENDER)),
+        )
     }
 
     @Test
@@ -107,6 +132,18 @@ class PacketClassifierTest {
     fun `a packet without signal information is still classified and counted`() {
         val result = PacketClassifier.classify(packet(rssi = 0, snr = 0f), emptySet())
         assertEquals(Ingest.Relayed(0x69, SENDER, 3, 1, null), result)
+    }
+
+    @Test
+    fun `a direct packet without signal information carries none either`() {
+        // The Neighbours half of the deviation. Every other Direct case here has a
+        // real RSSI, so a classifier that built the Signal inline in the Direct
+        // branch instead of using signalOf would pass the whole suite - and feed
+        // every neighbour the same phantom 0/0 stream this file exists to prevent.
+        assertEquals(
+            Ingest.Direct(SENDER, null),
+            PacketClassifier.classify(packet(relay = 0, rssi = 0, snr = 0f), emptySet()),
+        )
     }
 
     @Test
