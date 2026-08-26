@@ -1,0 +1,29 @@
+[versions]
+agp = "9.3.1"
+kotlin = "2.4.10"
+composeBom = "2026.06.01"
+coroutines = "1.11.0"
+protobufs = "2.7.26"
+wire = "6.4.5"
+activityCompose = "1.13.0"
+nordicBle = "2.11.0"
+nordicScanner = "1.6.0"
+
+[libraries]
+compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
+compose-material3 = { module = "androidx.compose.material3:material3" }
+compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
+compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
+activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
+coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
+meshtastic-protobufs = { module = "org.meshtastic:protobufs", version.ref = "protobufs" }
+wire-runtime = { module = "com.squareup.wire:wire-runtime", version.ref = "wire" }
+nordic-ble = { module = "no.nordicsemi.android:ble", version.ref = "nordicBle" }
+nordic-ble-ktx = { module = "no.nordicsemi.android:ble-ktx", version.ref = "nordicBle" }
+nordic-scanner = { module = "no.nordicsemi.android.support.v18:scanner", version.ref = "nordicScanner" }
+junit = { module = "junit:junit", version = "4.13.2" }
+
+[plugins]
+android-application = { id = "com.android.application", version.ref = "agp" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
