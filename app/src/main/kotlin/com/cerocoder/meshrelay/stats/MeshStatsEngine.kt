@@ -97,6 +97,13 @@ class MeshStatsEngine(
     private val _counters = MutableStateFlow(Counters.EMPTY)
     val counters: StateFlow<Counters> = _counters.asStateFlow()
 
+    // This block hands `this` to a coroutine while the constructor is still
+    // running, which is safe only because every field the loop touches is declared
+    // *above* it and is therefore already initialised when the launch happens. A
+    // new property added below this block would be read at its default value by a
+    // loop that had already started - silently, with no warning and no test able to
+    // see it, because the launch and the initialiser would be racing. Declare state
+    // above this line.
     init {
         scope.launch {
             // The skip-list belongs to SettingsRepository, which touches storage.

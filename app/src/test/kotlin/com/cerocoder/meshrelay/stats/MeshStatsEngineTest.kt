@@ -7,6 +7,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -93,6 +95,34 @@ private fun brokenPositionFrame() = TimestampedFrame(
 )
 
 /**
+ * A TELEMETRY_APP packet whose payload fills two variants of one `oneof`.
+ *
+ * `12 00` is field 2, length 0 - an empty `device_metrics`; `1a 00` is field 3,
+ * length 0 - an empty `environment_metrics`. Every byte is well formed, so the
+ * reader never objects: it is Wire's *generated constructor* that rejects the
+ * result, with a `require()` over `Internal.countNonNull` on the variant fields,
+ * and that throws `IllegalArgumentException`.
+ *
+ * This is the case that decides the width of the catch, and the reason
+ * [brokenPositionFrame] cannot decide it alone: a wire-type error surfaces as
+ * `java.net.ProtocolException`, which *extends* `IOException`, so a catch
+ * narrowed to `IOException` would still handle it. Only this frame escapes such a
+ * catch and kills the loop. Sent as a direct packet, like [brokenPositionFrame].
+ */
+private fun conflictingTelemetryFrame() = TimestampedFrame(
+    rxMillis = 1_000L,
+    frame = FromRadio(
+        packet = MeshPacket(
+            from = SENDER, relay_node = 0, rx_snr = -3f, rx_rssi = -80,
+            decoded = Data(
+                portnum = PortNum.TELEMETRY_APP,
+                payload = ByteString.of(*byteArrayOf(0x12, 0x00, 0x1a, 0x00)),
+            ),
+        ),
+    ),
+)
+
+/**
  * Every test drives the virtual clock with [runCurrent] rather than
  * `advanceUntilIdle()`.
  *
@@ -113,11 +143,43 @@ class MeshStatsEngineTest {
         skipped: MutableStateFlow<Set<Int>> = MutableStateFlow(emptySet()),
     ) = MeshStatsEngine(scope, skipped, SortMode.PACKETS) { 1_000L }
 
+    /**
+     * Subscribes to [MeshStatsEngine.snapshot] and returns the list every emission
+     * is appended to.
+     *
+     * The collector runs on an `UnconfinedTestDispatcher`, not on the test's
+     * `StandardTestDispatcher`, and that is load-bearing rather than stylistic.
+     * The command loop has **no suspension point** between buffered commands -
+     * `apply`, `buildSnapshot`, `directory.snapshot` and both `StateFlow`
+     * assignments are all ordinary calls, and `ChannelIterator.hasNext()` returns
+     * straight from the buffer - so an implementation that rebuilt once per
+     * command would perform all thirty assignments inside a single scheduler
+     * event. A *dispatched* collector is resumed by the first assignment and, for
+     * every assignment after it, merely marked pending
+     * (`StateFlowSlot.makePending`); it would therefore wake exactly once and read
+     * only the final value, and thirty rebuilds would be indistinguishable from
+     * one. An unconfined collector is resumed inline by each assignment, so the
+     * list below counts rebuilds rather than scheduler turns - which is the only
+     * way `a burst of frames costs one snapshot` can fail against the
+     * implementation it forbids.
+     *
+     * Same pattern, for the same reason, as `RadioConnectionManagerTest:181`. The
+     * side effect is that the subscription is established eagerly, during this
+     * call rather than at the next [runCurrent] - which only makes the
+     * subscription point easier to reason about.
+     */
+    private fun TestScope.collectSnapshots(subject: MeshStatsEngine): List<StatsSnapshot> {
+        val seen = mutableListOf<StatsSnapshot>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            subject.snapshot.collect { seen += it }
+        }
+        return seen
+    }
+
     @Test
     fun `a relayed packet builds a relay entry`() = runTest(StandardTestDispatcher()) {
         val subject = engine(backgroundScope)
-        val seen = mutableListOf<StatsSnapshot>()
-        backgroundScope.launch { subject.snapshot.collect { seen += it } }
+        val seen = collectSnapshots(subject)
         runCurrent()
 
         subject.attach(flowOf(relayed()))
@@ -138,8 +200,7 @@ class MeshStatsEngineTest {
     @Test
     fun `a direct packet builds a neighbour entry and no relay`() = runTest(StandardTestDispatcher()) {
         val subject = engine(backgroundScope)
-        val seen = mutableListOf<StatsSnapshot>()
-        backgroundScope.launch { subject.snapshot.collect { seen += it } }
+        val seen = collectSnapshots(subject)
         runCurrent()
 
         subject.attach(flowOf(direct()))
@@ -156,8 +217,7 @@ class MeshStatsEngineTest {
         // snapshot per packet would rebuild and recompose the list dozens of times a
         // second for no visible difference.
         val subject = engine(backgroundScope)
-        val seen = mutableListOf<StatsSnapshot>()
-        backgroundScope.launch { subject.snapshot.collect { seen += it } }
+        val seen = collectSnapshots(subject)
         runCurrent()
         val before = seen.size
 
@@ -188,8 +248,7 @@ class MeshStatsEngineTest {
         subject.attach(flowOf(relayed()))
         runCurrent()
 
-        val seen = mutableListOf<StatsSnapshot>()
-        backgroundScope.launch { subject.snapshot.collect { seen += it } }
+        val seen = collectSnapshots(subject)
         runCurrent()
 
         assertEquals(1, seen.last().relays.single().packetCount)
@@ -201,8 +260,7 @@ class MeshStatsEngineTest {
         // time passed - which is what lets a subscribed screen sit on a quiet mesh
         // without the engine doing any work at all.
         val subject = engine(backgroundScope)
-        val seen = mutableListOf<StatsSnapshot>()
-        backgroundScope.launch { subject.snapshot.collect { seen += it } }
+        val seen = collectSnapshots(subject)
         runCurrent()
         subject.attach(flowOf(relayed()))
         runCurrent()
@@ -219,7 +277,7 @@ class MeshStatsEngineTest {
         // Ports mesh_stats.py:1012-1014: paused means the packet never happened, not
         // that it happened and was not displayed. Even the total is untouched.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         runCurrent()
         subject.setPaused(true)
         runCurrent()
@@ -238,7 +296,7 @@ class MeshStatsEngineTest {
         // has the screen paused must still be learned, or resuming would show relays
         // that cannot be named.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         runCurrent()
         subject.setPaused(true)
         runCurrent()
@@ -254,7 +312,7 @@ class MeshStatsEngineTest {
     fun `reset clears statistics but keeps the node database and the skip list`() = runTest(StandardTestDispatcher()) {
         val skipped = MutableStateFlow(setOf(0x11223344))
         val subject = engine(backgroundScope, skipped)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct()))
         runCurrent()
 
@@ -274,7 +332,7 @@ class MeshStatsEngineTest {
     @Test
     fun `changing the sort mode reorders without losing anything`() = runTest(StandardTestDispatcher()) {
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(relayed(relay = 0x69, snr = -15f), relayed(relay = 0x69, snr = -15f), relayed(relay = 0xa4, snr = 5f)))
         runCurrent()
 
@@ -296,7 +354,7 @@ class MeshStatsEngineTest {
         // A relay whose packets all arrived with rx_rssi == 0 has no average. Treated
         // as 0.0 dB it would outrank every real measurement on the screen.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(relayed(relay = 0x69, snr = -15f), relayed(relay = 0xa4, rssi = 0, snr = 0f)))
         runCurrent()
         subject.setSortMode(SortMode.AVG_SNR)
@@ -309,7 +367,7 @@ class MeshStatsEngineTest {
     fun `skipping a node changes which relays it is a candidate for`() = runTest(StandardTestDispatcher()) {
         val skipped = MutableStateFlow(emptySet<Int>())
         val subject = engine(backgroundScope, skipped)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(relay = 0xa4)))
         runCurrent()
         assertEquals("1ce5", subject.snapshot.value.directory.uniqueRelayName(0xa4))
@@ -326,12 +384,33 @@ class MeshStatsEngineTest {
     fun `an undecodable payload does not stop ingestion`() = runTest(StandardTestDispatcher()) {
         // One malformed position packet must not end the only channel data arrives on.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(brokenPositionFrame(), relayed()))
         runCurrent()
 
         assertEquals(1, subject.snapshot.value.relays.single().packetCount)
         // The broken frame was still heard, and is still a directly received packet.
+        assertEquals(2, subject.snapshot.value.counters.totalPackets)
+        assertEquals(1, subject.snapshot.value.counters.totalDirectPackets)
+    }
+
+    @Test
+    fun `a payload rejected by a generated require does not stop ingestion either`() = runTest(StandardTestDispatcher()) {
+        // This is the test that fixes the width of the catch, and the one above
+        // cannot do it: a wire-type error reaches us as java.net.ProtocolException,
+        // which extends IOException, so narrowing the catch to IOException would
+        // leave that test green. A Telemetry payload occupying two variants of its
+        // oneof is rejected by Wire's generated constructor - a require() over
+        // Internal.countNonNull - and throws IllegalArgumentException, which walks
+        // straight past an IOException catch, out of the command loop, and ends the
+        // only channel data arrives on. The relayed frame behind it is what proves
+        // the loop is still alive.
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(conflictingTelemetryFrame(), relayed()))
+        runCurrent()
+
+        assertEquals(1, subject.snapshot.value.relays.single().packetCount)
         assertEquals(2, subject.snapshot.value.counters.totalPackets)
         assertEquals(1, subject.snapshot.value.counters.totalDirectPackets)
     }
@@ -344,7 +423,7 @@ class MeshStatsEngineTest {
         // become a neighbour, a relay's remote node, or a directory record - the last
         // of which would make it a naming candidate for relay byte ff.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(userFrame(from = 0, shortName = "gh05"), relayed(from = 0), relayed()))
         runCurrent()
 
@@ -369,7 +448,7 @@ class MeshStatsEngineTest {
         // theirs. RelayStats.hexId formats "0x%02x", so an unrejected 0x1269 would also
         // print as four digits everywhere the byte is shown.
         val subject = engine(backgroundScope)
-        backgroundScope.launch { subject.snapshot.collect {} }
+        collectSnapshots(subject)
         subject.attach(flowOf(relayed(relay = 0x1269), relayed(relay = -1), relayed(relay = 0x69)))
         runCurrent()
 
