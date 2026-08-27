@@ -89,4 +89,65 @@ class StatsFormatTest {
         assertEquals("33.3", StatsFormat.percentageOf(part = 1, total = 3, locale = Locale.US))
         assertEquals("33,3", StatsFormat.percentageOf(part = 1, total = 3, locale = Locale("es", "ES")))
     }
+
+    @Test
+    fun `signalMin, signalAvg and signalMax are each null before any packet has arrived`() {
+        // The same EMPTY-sentinel guard as signalTriple and signalLast, but on
+        // the three functions signalTriple is now built from - a mutant could
+        // drop the guard on any one of them while leaving the others intact.
+        assertNull(StatsFormat.signalMin(SignalStats.EMPTY, Locale.US))
+        assertNull(StatsFormat.signalAvg(SignalStats.EMPTY, Locale.US))
+        assertNull(StatsFormat.signalMax(SignalStats.EMPTY, Locale.US))
+    }
+
+    @Test
+    fun `signalMin, signalAvg and signalMax match the components of signalTriple`() {
+        // Same inputs as the "min and max as whole numbers but the average to
+        // one decimal" case above: min=-6, max=8, avg=-0.1666...7. Kills a
+        // mutant that lets the three standalone functions drift from the
+        // triple they compose - e.g. one of them silently reverting to the
+        // wrong pattern while signalTriple's own test still passes because it
+        // reads from the same (now-wrong) function.
+        val s = stats(-6f, 8f, -2.5f)
+        assertEquals("-6", StatsFormat.signalMin(s, Locale.US))
+        assertEquals("-0.2", StatsFormat.signalAvg(s, Locale.US))
+        assertEquals("8", StatsFormat.signalMax(s, Locale.US))
+        assertEquals(
+            "${StatsFormat.signalMin(s, Locale.US)}/${StatsFormat.signalAvg(s, Locale.US)}/${StatsFormat.signalMax(s, Locale.US)}",
+            StatsFormat.signalTriple(s, Locale.US),
+        )
+    }
+
+    @Test
+    fun `signalAvg follows the given locale, not a fixed one`() {
+        // Only the average carries a decimal point at all, same reasoning as
+        // signalTriple's own locale test above.
+        val s = stats(1.5f)
+        assertEquals("1.5", StatsFormat.signalAvg(s, Locale.US))
+        assertEquals("1,5", StatsFormat.signalAvg(s, Locale("es", "ES")))
+    }
+
+    @Test
+    fun `packetsPerHour formats to one decimal place`() {
+        // Ports the ":.1f" precision mesh_stats.py:1824 formats packets_per_hour
+        // at. Kills a mutant that formats to zero decimals (a whole number,
+        // like the spot readings) or to some other precision.
+        assertEquals("120.0", StatsFormat.packetsPerHour(120f, Locale.US))
+        assertEquals("7.3", StatsFormat.packetsPerHour(7.3456f, Locale.US))
+    }
+
+    @Test
+    fun `packetsPerHour renders a real zero rather than hiding it`() {
+        // A relay heard only once, or not long enough to measure a rate, is a
+        // real answer of 0.0 pkt/h - not the absence of a reading the signal
+        // formatters above use null for. Kills a mutant that special-cases
+        // zero into null or an empty string.
+        assertEquals("0.0", StatsFormat.packetsPerHour(0f, Locale.US))
+    }
+
+    @Test
+    fun `packetsPerHour follows the given locale, not a fixed one`() {
+        assertEquals("7.3", StatsFormat.packetsPerHour(7.3f, Locale.US))
+        assertEquals("7,3", StatsFormat.packetsPerHour(7.3f, Locale("es", "ES")))
+    }
 }

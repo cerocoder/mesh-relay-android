@@ -32,6 +32,11 @@ object StatsFormat {
 
     private const val PERCENT_PATTERN = "%.1f"
 
+    /** A rate's own precision (`:.1f` in the original's `packets_per_hour` line,
+     *  mesh_stats.py:1824) - numerically the same pattern as [AVG_PATTERN], kept
+     *  as its own named constant because the two format unrelated quantities. */
+    private const val RATE_PATTERN = "%.1f"
+
     /**
      * Structural glue, not translatable prose - the same treatment
      * [PositionLineText]'s direction separator gets.
@@ -39,17 +44,40 @@ object StatsFormat {
     private const val TRIPLE_SEPARATOR = "/"
 
     /**
+     * The minimum out of a [signalTriple], on its own - the detail screen's
+     * signal block labels min/avg/max/last/count separately (mesh_stats.py:
+     * 1826-1830's `Min:`/`Avg:`/`Max:`/`Last:`/`Count:` rows) rather than the
+     * card's compact slashed form, so each needs its own formatter instead of
+     * a string this object would have to split back apart. `null` before
+     * [stats] has any data, on the same terms as [signalTriple] and [signalLast].
+     */
+    fun signalMin(stats: SignalStats, locale: Locale): String? =
+        if (stats.hasData) String.format(locale, SPOT_PATTERN, stats.minVal) else null
+
+    /** The average out of a [signalTriple], on its own. See [signalMin]. */
+    fun signalAvg(stats: SignalStats, locale: Locale): String? =
+        if (stats.hasData) String.format(locale, AVG_PATTERN, stats.avg) else null
+
+    /** The maximum out of a [signalTriple], on its own. See [signalMin]. */
+    fun signalMax(stats: SignalStats, locale: Locale): String? =
+        if (stats.hasData) String.format(locale, SPOT_PATTERN, stats.maxVal) else null
+
+    /**
      * `"min/avg/max"`, ports the triple mesh_stats.py:1412-1413 (and
      * :1471-1472 for rxRssi) builds as `f"{min:>4.0f}/{avg:>4.1f}/{max:>4.0f}"`.
      * `null` before [stats] has any data - the same case the original's
      * `"  --/  --/  --"` placeholder covers; the caller supplies its own
      * localized fallback text for that case.
+     *
+     * Built from [signalMin]/[signalAvg]/[signalMax] rather than duplicating
+     * their `String.format` calls, so the two shapes of this data (slashed
+     * triple, five separately labelled stats) can never drift apart.
      */
     fun signalTriple(stats: SignalStats, locale: Locale): String? {
         if (!stats.hasData) return null
-        val min = String.format(locale, SPOT_PATTERN, stats.minVal)
-        val avg = String.format(locale, AVG_PATTERN, stats.avg)
-        val max = String.format(locale, SPOT_PATTERN, stats.maxVal)
+        val min = signalMin(stats, locale)
+        val avg = signalAvg(stats, locale)
+        val max = signalMax(stats, locale)
         return "$min$TRIPLE_SEPARATOR$avg$TRIPLE_SEPARATOR$max"
     }
 
@@ -60,6 +88,14 @@ object StatsFormat {
      */
     fun signalLast(stats: SignalStats, locale: Locale): String? =
         if (stats.hasData) String.format(locale, SPOT_PATTERN, stats.lastVal) else null
+
+    /**
+     * A rate of packets per hour, ports the `:.1f` precision mesh_stats.py:1824
+     * formats `packets_per_hour` at. Unlike the signal readings above, a rate of
+     * zero (a relay heard only once, or not long enough to measure) is a real
+     * answer, not an absence of data - so this always returns a value, never `null`.
+     */
+    fun packetsPerHour(value: Float, locale: Locale): String = String.format(locale, RATE_PATTERN, value)
 
     /**
      * [part]'s share of [total] as a percentage, ports the `pct` calculation
