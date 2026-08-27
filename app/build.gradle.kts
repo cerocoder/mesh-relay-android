@@ -49,6 +49,15 @@ android {
 dependencies {
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.material3)
+    // material3 does not transitively pull in Icons.* (verified against the
+    // actual material3-android module this BOM resolves to: it vendors a
+    // handful of icons under its own internal package instead of depending on
+    // material-icons-core). This is a deliberate exception to "no new
+    // dependencies": the artifact is entirely BOM-managed (no version pinned
+    // here), and has been frozen at 1.7.8 since 2025-02-12, so it carries none
+    // of the independent-drift risk that rule exists to prevent. The
+    // extended icon set (material-icons-extended) is not added.
+    implementation(libs.compose.material.icons.core)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.activity.compose)

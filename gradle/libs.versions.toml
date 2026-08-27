@@ -12,6 +12,9 @@ nordicScanner = "1.6.0"
 [libraries]
 compose-bom = { module = "androidx.compose:compose-bom", version.ref = "composeBom" }
 compose-material3 = { module = "androidx.compose.material3:material3" }
+# Version is BOM-managed (androidx.compose.material:material-icons-core is
+# not a transitive dependency of material3; see app/build.gradle.kts).
+compose-material-icons-core = { module = "androidx.compose.material:material-icons-core" }
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }

@@ -10,11 +10,19 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
@@ -29,6 +37,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
@@ -53,15 +63,15 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * (whether the sort menu or the reset confirmation is open) that never need to
  * survive a recomposition elsewhere.
  *
- * Bundled icon set note: this build only depends on `androidx.compose.material3`,
- * whose actual Gradle module (verified against the exact `material3-android`
- * version this project's Compose BOM resolves to) does not pull in
- * `androidx.compose.material:material-icons-core` - so `Icons.Filled.*` is not
- * actually on the compile classpath despite `material3` using a handful of
- * icons internally under its own `internal` package. Rather than adding a new
- * dependency (forbidden by this task's brief) or guessing at an unverifiable
- * import, every app bar action here is a labelled [TextButton] instead of an
- * icon button. See this task's report for the full finding.
+ * Icon set note: `material3` does not itself transitively provide `Icons.*`
+ * (it vendors a handful of icons internally under its own `internal` package
+ * instead of depending on `material-icons-core`) - see
+ * `app/build.gradle.kts` for the BOM-managed dependency added to cover this,
+ * and this task's report for the full finding. Only the small core icon set
+ * is used here, never `material-icons-extended`. Two actions - gauge mode and
+ * pause/resume - have no icon in that core set that would not misrepresent
+ * what they do, so they stay labelled [TextButton]s; every other action is an
+ * [IconButton].
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -94,25 +104,31 @@ fun RelayListScreen(
             TopAppBar(
                 title = { Text(stringResource(R.string.relays_title)) },
                 actions = {
+                    val sortDescription = stringResource(R.string.action_sort)
                     Box {
-                        TextButton(onClick = { sortMenuExpanded = true }) {
-                            Text(stringResource(R.string.action_sort))
+                        IconButton(
+                            onClick = { sortMenuExpanded = true },
+                            modifier = Modifier.semantics { contentDescription = sortDescription },
+                        ) {
+                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
                         }
                         DropdownMenu(
                             expanded = sortMenuExpanded,
                             onDismissRequest = { sortMenuExpanded = false },
                         ) {
                             SortMode.entries.forEach { mode ->
+                                val selected = mode == snapshot.sortMode
                                 DropdownMenuItem(
                                     text = {
                                         Text(
                                             text = stringResource(SortModeLabels.labelOf(mode)),
-                                            fontWeight = if (mode == snapshot.sortMode) {
-                                                FontWeight.Bold
-                                            } else {
-                                                FontWeight.Normal
-                                            },
+                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
                                         )
+                                    },
+                                    leadingIcon = if (selected) {
+                                        { Icon(Icons.Filled.Check, contentDescription = null) }
+                                    } else {
+                                        null
                                     },
                                     onClick = {
                                         sortMenuExpanded = false
@@ -123,6 +139,9 @@ fun RelayListScreen(
                         }
                     }
 
+                    // No core icon distinguishes "simple" from "complex" gauge
+                    // display without misrepresenting what the action does, so
+                    // this stays a labelled toggle rather than a guessed icon.
                     TextButton(
                         onClick = {
                             val next = if (gaugeMode == GaugeMode.SIMPLE) GaugeMode.COMPLEX else GaugeMode.SIMPLE
@@ -136,24 +155,33 @@ fun RelayListScreen(
                         )
                     }
 
+                    // Icons.Filled.Pause is not in material-icons-core (only
+                    // PlayArrow is), and showing PlayArrow for "pause" while
+                    // running would claim the opposite of what tapping it does,
+                    // so both states of this toggle stay a labelled TextButton.
                     TextButton(onClick = onTogglePause) {
                         Text(stringResource(if (snapshot.paused) R.string.action_resume else R.string.action_pause))
                     }
 
-                    TextButton(onClick = { resetDialogVisible = true }) {
-                        Text(stringResource(R.string.action_reset))
+                    IconButton(onClick = { resetDialogVisible = true }) {
+                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_reset))
                     }
 
-                    TextButton(onClick = onReloadNodeDb, enabled = !isReloading) {
+                    val reloadDescription = stringResource(R.string.action_reload_db)
+                    IconButton(
+                        onClick = onReloadNodeDb,
+                        enabled = !isReloading,
+                        modifier = Modifier.semantics { contentDescription = reloadDescription },
+                    ) {
                         if (isReloading) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         } else {
-                            Text(stringResource(R.string.action_reload_db))
+                            Icon(Icons.Filled.Refresh, contentDescription = null)
                         }
                     }
 
-                    TextButton(onClick = onOpenSettings) {
-                        Text(stringResource(R.string.action_settings))
+                    IconButton(onClick = onOpenSettings) {
+                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings))
                     }
                 },
             )
