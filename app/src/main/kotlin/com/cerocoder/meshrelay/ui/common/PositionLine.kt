@@ -86,9 +86,14 @@ private fun openUrl(context: Context, url: String) {
  * crash-proof map even though the current logic never surfaces them - an
  * unknown direction is omitted rather than printed, and an unknown age only
  * shows up paired with a known source.
+ *
+ * Internal rather than private so other screens in this module that need a
+ * fragment of [PositionLineText.parts] without the rest of [PositionLine] -
+ * `ui/relays/RelayCard.kt` today - resolve the same strings this function
+ * does instead of keeping a second, driftable copy.
  */
 @Composable
-private fun resolvePositionStrings(): PositionStrings {
+internal fun resolvePositionStrings(): PositionStrings {
     val locales = LocalConfiguration.current.locales
     val locale = if (locales.isEmpty()) Locale.getDefault() else locales.get(0)
     return PositionStrings(
