@@ -37,6 +37,16 @@ object StatsFormat {
      *  as its own named constant because the two format unrelated quantities. */
     private const val RATE_PATTERN = "%.1f"
 
+    /** A node database's own last-known SNR reading (`:.1f` at mesh_stats.py:1886) -
+     *  numerically the same pattern as [AVG_PATTERN], kept as its own named constant
+     *  because it formats a plain already-known value, not a [SignalStats] average. */
+    private const val DB_SNR_PATTERN = "%.1f"
+
+    /** A telemetry metric's latest value (`:.2f` at mesh_stats.py:1910) - one more
+     *  digit than a signal reading, since telemetry covers everything from a
+     *  battery percentage to a voltage. */
+    private const val TELEMETRY_PATTERN = "%.2f"
+
     /**
      * Structural glue, not translatable prose - the same treatment
      * [PositionLineText]'s direction separator gets.
@@ -106,5 +116,46 @@ object StatsFormat {
     fun percentageOf(part: Int, total: Int, locale: Locale): String {
         val percent = if (total > 0) part.toFloat() / total * 100f else 0f
         return String.format(locale, PERCENT_PATTERN, percent)
+    }
+
+    /**
+     * A node database's own last-known SNR reading (`NodeRecord.dbSnr`), ports the
+     * `:.1f` precision at mesh_stats.py:1886. Unlike [signalAvg]/[signalLast], this
+     * value is not backed by a running [SignalStats] - it is a single float already
+     * read from the node database - so there is no `hasData` guard here: the caller
+     * decides whether there is a reading at all (`NodeRecord.dbSnr` is nullable) and
+     * only calls this once it knows there is.
+     */
+    fun nodeDatabaseSnr(value: Float, locale: Locale): String = String.format(locale, DB_SNR_PATTERN, value)
+
+    /**
+     * One telemetry metric's latest value, ports the `:.2f` precision
+     * mesh_stats.py:1910 formats every `history_metrics` entry at
+     * (`f"     {k}: {hist.last_val:.2f}"`).
+     */
+    fun telemetryMetricValue(value: Float, locale: Locale): String = String.format(locale, TELEMETRY_PATTERN, value)
+
+    /** [uptimeParts]'s result: a node's last-known uptime broken into the three
+     *  fields `R.string.format_uptime` renders, one placeholder each. */
+    data class UptimeParts(val days: Int, val hours: Int, val minutes: Int)
+
+    /**
+     * Decomposes a device's uptime counter into days/hours/minutes, ports the
+     * `divmod` chain at mesh_stats.py:1903-1905 (`d, r = divmod(secs, 86400); h, r =
+     * divmod(r, 3600); m, _ = divmod(r, 60)`). Seconds within the final minute are
+     * dropped, exactly as the original drops them with `_`.
+     *
+     * [totalSeconds] is a device's `uptime_seconds` telemetry field, which only
+     * ever grows while the device stays up - never negative in practice, and this
+     * function does not special-case a negative input the way [percentageOf] does
+     * for a zero total, since there is no analogous real-world zero/negative case
+     * to guard against here.
+     */
+    fun uptimeParts(totalSeconds: Int): UptimeParts {
+        val days = totalSeconds / 86_400
+        val afterDays = totalSeconds % 86_400
+        val hours = afterDays / 3_600
+        val minutes = (afterDays % 3_600) / 60
+        return UptimeParts(days, hours, minutes)
     }
 }

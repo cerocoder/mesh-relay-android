@@ -150,4 +150,65 @@ class StatsFormatTest {
         assertEquals("7.3", StatsFormat.packetsPerHour(7.3f, Locale.US))
         assertEquals("7,3", StatsFormat.packetsPerHour(7.3f, Locale("es", "ES")))
     }
+
+    @Test
+    fun `nodeDatabaseSnr formats to one decimal place, including a negative reading`() {
+        // Ports the ":.1f" precision mesh_stats.py:1886 formats a node database's
+        // own last-known SNR at. Negative because a real SNR reading (unlike a
+        // percentage or a packet count) is routinely negative.
+        assertEquals("8.5", StatsFormat.nodeDatabaseSnr(8.5f, Locale.US))
+        assertEquals("-6.0", StatsFormat.nodeDatabaseSnr(-6.0f, Locale.US))
+    }
+
+    @Test
+    fun `nodeDatabaseSnr follows the given locale, not a fixed one`() {
+        assertEquals("8.5", StatsFormat.nodeDatabaseSnr(8.5f, Locale.US))
+        assertEquals("8,5", StatsFormat.nodeDatabaseSnr(8.5f, Locale("es", "ES")))
+    }
+
+    @Test
+    fun `telemetryMetricValue formats to two decimal places, one more than a signal reading`() {
+        // Ports the ":.2f" precision mesh_stats.py:1910 formats every telemetry
+        // history entry at - kills a mutant that reuses the one-decimal signal
+        // pattern instead of telemetry's own.
+        assertEquals("61.00", StatsFormat.telemetryMetricValue(61f, Locale.US))
+        assertEquals("3.87", StatsFormat.telemetryMetricValue(3.87f, Locale.US))
+    }
+
+    @Test
+    fun `telemetryMetricValue follows the given locale, not a fixed one`() {
+        assertEquals("3.87", StatsFormat.telemetryMetricValue(3.87f, Locale.US))
+        assertEquals("3,87", StatsFormat.telemetryMetricValue(3.87f, Locale("es", "ES")))
+    }
+
+    @Test
+    fun `uptimeParts decomposes into days, hours and minutes with no seconds`() {
+        // 1d 1h 0m: exercises all three non-zero fields (90000 = 86400 + 3600),
+        // and pins that seconds are truncated away, not rounded - divmod(0, 60)
+        // in the original leaves no seconds field to round in the first place.
+        assertEquals(StatsFormat.UptimeParts(1, 1, 0), StatsFormat.uptimeParts(90_000))
+    }
+
+    @Test
+    fun `uptimeParts is all zero for a freshly booted device`() {
+        // The zero-day case the controller singled out: kills a mutant that
+        // mishandles 0 in the division or modulo chain (e.g. a divide-by-zero
+        // guard that fires and substitutes a wrong sentinel).
+        assertEquals(StatsFormat.UptimeParts(0, 0, 0), StatsFormat.uptimeParts(0))
+    }
+
+    @Test
+    fun `uptimeParts truncates seconds within the final minute rather than rounding`() {
+        // 172799s = 1d 23h 59m 59s - the trailing 59s must disappear entirely,
+        // not round the minutes field up to 1d 0h 0m.
+        assertEquals(StatsFormat.UptimeParts(1, 23, 59), StatsFormat.uptimeParts(172_799))
+    }
+
+    @Test
+    fun `uptimeParts does not let hours or minutes leak into the wrong field`() {
+        // 900s is exactly 15 minutes - a mutant that swapped the hours/minutes
+        // divisors (3_600 and 60) would report this as 0d 15h 0m instead of
+        // 0d 0h 15m.
+        assertEquals(StatsFormat.UptimeParts(0, 0, 15), StatsFormat.uptimeParts(900))
+    }
 }
