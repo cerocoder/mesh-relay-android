@@ -30,22 +30,28 @@ import java.util.Locale
  *   positive, exactly as the original's "Explicitly skipped relay nodes" line
  *   only appears when its list is non-empty (mesh_stats.py:1818-1820).
  * - [DetailSubject.Neighbour]: total direct packets from this node
- *   ([R.string.detail_total_direct]), its packets/hour, then
+ *   ([R.string.detail_total_direct]), then
  *   [R.string.node_hops_away] from the node database - always shown, reading
  *   [R.string.common_not_available] rather than a fabricated distance when
- *   the database has never reported a hop count.
+ *   the database has never reported a hop count. **No packets/hour row at
+ *   all** - see [packetsPerHour]'s own doc for why.
  *
- * [packetsPerHour] is nullable for a reason worth stating plainly: unlike
- * [com.cerocoder.meshrelay.stats.model.RelayStats], which stores the
- * `firstPacketAtMillis` a rate needs,
+ * [packetsPerHour] is only ever shown for [DetailSubject.Relay], and the row
+ * is omitted entirely for [DetailSubject.Neighbour] rather than reading
+ * [R.string.common_not_available] - a correction to this screen's own first
+ * draft, which is worth stating plainly. `packets_per_hour` appears in
+ * exactly one place in the terminal tool's detail view, `mesh_stats.py:1824`,
+ * and that line is the **relay** detail; the original never shows a rate for
+ * a neighbour at all. `N/A` says "this value is missing"; the truth here is
+ * "this metric does not apply to this kind of subject" - two different claims,
+ * and only the second is honest. (It is also the only claim the data could
+ * ever back up: unlike [com.cerocoder.meshrelay.stats.model.RelayStats],
+ * which stores the `firstPacketAtMillis` a rate needs,
  * [com.cerocoder.meshrelay.stats.model.NeighbourStats] carries no equivalent
- * field - only a `lastPacketAtMillis` and two signal histories whose sample
- * timestamps are capped and skip any packet that carried no decodable signal.
- * Deriving a rate from that data would silently misrepresent it as an exact
- * figure the way the relay's is, which is exactly what the honesty rule this
- * whole screen is built around forbids - so a neighbour's rate reads
- * [R.string.common_not_available] instead of a guess. See this task's report
- * for the full reasoning; a caller here always passes `null` for a neighbour.
+ * field.) A caller here always passes `null` for a neighbour, and this
+ * function's own gate on `subject is DetailSubject.Relay` is what actually
+ * suppresses the row - not [packetsPerHour]'s nullability alone, which is
+ * incidental plumbing, not the rule.
  */
 @Composable
 fun DetailSummary(
@@ -71,12 +77,18 @@ fun DetailSummary(
             // reasoning RelayListScreen's own LabelledCount follows.
             value = totalPackets.toString(),
         )
-        SummaryRow(
-            label = stringResource(R.string.detail_packets_per_hour),
-            value = packetsPerHour?.let {
-                stringResource(R.string.format_packets_per_hour, StatsFormat.packetsPerHour(it, locale))
-            } ?: notAvailable,
-        )
+        // Relay-only: the terminal tool's own detail view shows this metric
+        // for exactly one kind of subject, mesh_stats.py:1824. A neighbour has
+        // no honest way to compute it (see this function's own KDoc) and the
+        // row is omitted rather than shown as common_not_available - N/A would
+        // claim the value is merely missing, when the truth is that it does
+        // not apply to a neighbour at all.
+        if (subject is DetailSubject.Relay && packetsPerHour != null) {
+            SummaryRow(
+                label = stringResource(R.string.detail_packets_per_hour),
+                value = stringResource(R.string.format_packets_per_hour, StatsFormat.packetsPerHour(packetsPerHour, locale)),
+            )
+        }
         when (subject) {
             is DetailSubject.Relay -> if (skippedCount > 0) {
                 SummaryRow(
