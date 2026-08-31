@@ -173,11 +173,9 @@ private fun ReadinessState(
 /**
  * The connection state, always visible regardless of [BleReadiness] - a
  * dropped adapter does not retroactively hide that the app is, say, still
- * trying to reconnect. The disconnect action shows whenever a link exists or
- * is being established ([ConnectionState.Connecting] or
- * [ConnectionState.Connected]); there is nothing to tear down from
- * [ConnectionState.Disconnected], so it is absent there rather than
- * disabled.
+ * trying to reconnect. The disconnect action's visibility is [canDisconnect] -
+ * see that function for why hiding it during a retry backoff is deliberate,
+ * not incidental.
  */
 @Composable
 private fun ConnectionStatusRow(
@@ -214,11 +212,50 @@ private fun ConnectionStatusRow(
                 )
             }
         }
-        if (state !is ConnectionState.Disconnected) {
+        if (canDisconnect(state)) {
             TextButton(onClick = onDisconnect) {
                 Text(stringResource(R.string.action_disconnect))
             }
         }
+    }
+}
+
+/**
+ * Whether there is a link (forming or established) for the disconnect
+ * control to tear down.
+ *
+ * **Deliberate deviation from `mesh-test-android`'s original**, which renders
+ * the button unconditionally in every state
+ * (`mesh-test-android/.../ui/DeviceListScreen.kt:38-40`). That original never
+ * exercised the hazard this function exists to avoid:
+ * `ConnectionState.Disconnected(retrying = true)` is still a
+ * [ConnectionState.Disconnected] - the reconnect loop revisits it between
+ * every backoff attempt - so an
+ * unconditional button would offer "Disconnect" while a reconnect is quietly
+ * in progress. A tap would then cancel that in-progress reconnection while
+ * the label implies there is a live link to end, which is worse than either
+ * showing nothing or trying again on its own. Three cases, not one `!is
+ * Disconnected` check:
+ *
+ * - [ConnectionState.Connecting] - the physical link exists, handshake
+ *   pending. Shown: there is something to tear down.
+ * - [ConnectionState.Connected] - shown, same reason.
+ * - [ConnectionState.Disconnected] with `retrying = true` - hidden **on
+ *   purpose**: this is the retry-backoff hazard above, not a fallthrough of
+ *   the `false` case below. No live link exists yet for "Disconnect" to end,
+ *   and showing it here would mislabel "abandon the reconnect loop" as
+ *   "disconnect."
+ * - [ConnectionState.Disconnected] with `retrying = false` - hidden because
+ *   there is, separately, simply nothing to disconnect from: no link, and no
+ *   attempt underway to form one.
+ */
+private fun canDisconnect(state: ConnectionState): Boolean = when (state) {
+    ConnectionState.Connecting -> true
+    ConnectionState.Connected -> true
+    is ConnectionState.Disconnected -> if (state.retrying) {
+        false // retry backoff in progress - see this function's own KDoc
+    } else {
+        false // no link, no attempt underway either
     }
 }
 
@@ -344,6 +381,13 @@ private fun SectionHeader(title: String, modifier: Modifier = Modifier) {
  *  something to tap on either way. */
 @Composable
 private fun DeviceRow(entry: DeviceListEntry, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    // Resolved here, in the composable, where stringResource is callable - deviceRowDetail
+    // itself stays a plain function so it can run on the JVM without a Composable host,
+    // the same split RelayCard's own hexWithMatchCount keeps.
+    val rssiText = (entry as? DeviceListEntry.Ble)?.rssi?.let {
+        stringResource(R.string.format_rssi_dbm, it.toString())
+    }
+
     Card(onClick = onClick, modifier = modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -355,7 +399,7 @@ private fun DeviceRow(entry: DeviceListEntry, onClick: () -> Unit, modifier: Mod
                 Text(text = entry.name, style = MaterialTheme.typography.bodyLarge)
             }
             Text(
-                text = deviceRowDetail(entry),
+                text = deviceRowDetail(entry, rssiText),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -363,8 +407,18 @@ private fun DeviceRow(entry: DeviceListEntry, onClick: () -> Unit, modifier: Mod
     }
 }
 
+/** Punctuation joining a BLE row's MAC address and its resolved RSSI text -
+ *  structural, not translatable prose, the same treatment
+ *  [com.cerocoder.meshrelay.ui.common.StatsFormat]'s `TRIPLE_SEPARATOR` and
+ *  [com.cerocoder.meshrelay.ui.common.PositionLineText]'s `DIRECTION_SEPARATOR`
+ *  already get. */
+private const val DETAIL_SEPARATOR = "  ·  "
+
 /**
- * The device card's second line.
+ * The device card's second line. Not `@Composable` - [rssiText] arrives
+ * already resolved (see [DeviceRow]), so this is plain string assembly, on
+ * the same terms [com.cerocoder.meshrelay.ui.relays.RelayCard]'s own
+ * `hexWithMatchCount` stays a plain function instead of a composable.
  *
  * For a real node, the scanner hands back a signal level and a bonding flag
  * alongside the MAC address - those are exactly what decide, when several
@@ -378,17 +432,9 @@ private fun DeviceRow(entry: DeviceListEntry, onClick: () -> Unit, modifier: Mod
  * third [DeviceListEntry] subtype added later fails to build here instead of
  * quietly showing nothing for it.
  */
-@Composable
-private fun deviceRowDetail(entry: DeviceListEntry): String = when (entry) {
+private fun deviceRowDetail(entry: DeviceListEntry, rssiText: String?): String = when (entry) {
     is DeviceListEntry.Demo -> entry.address
-    is DeviceListEntry.Ble -> {
-        val rssi = entry.rssi
-        if (rssi != null) {
-            "${entry.mac}  ·  ${stringResource(R.string.format_rssi_dbm, rssi.toString())}"
-        } else {
-            entry.mac
-        }
-    }
+    is DeviceListEntry.Ble -> if (rssiText != null) "${entry.mac}$DETAIL_SEPARATOR$rssiText" else entry.mac
 }
 
 @Preview(showBackground = true, name = "Devices found")
