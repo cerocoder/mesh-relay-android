@@ -104,6 +104,20 @@ class SettingsRepository(
         persist()
     }
 
+    /**
+     * Empties the skip list entirely - every relay's, not one byte's.
+     *
+     * The settings screen's global clear. [clearSkippedForRelay] is the same
+     * operation narrowed to the nodes one relay byte could be, offered on the
+     * relay's own detail screen; this one is what the settings screen guards
+     * behind a confirmation, because from there the user cannot see which relays
+     * they are about to un-resolve.
+     */
+    fun clearAllSkippedNodes() {
+        _skippedRelayNodes.value = emptySet()
+        persist()
+    }
+
     /** Snapshots the current in-memory state and writes it on [ioScope]. */
     private fun persist() {
         val settingsSnapshot = _settings.value

@@ -101,6 +101,24 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `clearing all skipped nodes empties the list regardless of relay byte`() = runTest(StandardTestDispatcher()) {
+        // The settings screen's global clear. Fails on an implementation that
+        // delegates to clearSkippedForRelay for one byte - the two nodes below end
+        // in different bytes on purpose - and on one that only mutates the flow
+        // without persisting, which would bring the list back on the next launch.
+        val store = FakeStore()
+        val subject = repo(store, this)
+        subject.addSkippedRelayNode(0x9e75f1a4.toInt())
+        subject.addSkippedRelayNode(0x11223344)
+
+        subject.clearAllSkippedNodes()
+
+        assertEquals(emptySet<Int>(), subject.skippedRelayNodes.value)
+        advanceUntilIdle()
+        assertEquals(emptySet<String>(), store.getStringSet("skipped_relay_nodes", setOf("unwritten")))
+    }
+
+    @Test
     fun `node identifiers parse with and without the leading mark`() {
         assertEquals(0x9e75f1a4.toInt(), NodeId.parse("!9e75f1a4"))
         assertEquals(0x9e75f1a4.toInt(), NodeId.parse("9e75f1a4"))

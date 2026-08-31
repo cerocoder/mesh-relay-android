@@ -79,6 +79,19 @@ class FakeRadioTransport(
                 startTrafficLoop()
             }
 
+            // A database reload requested mid-session (the terminal tool's [D] key).
+            // Real firmware replays the node database and closes with the nonce it
+            // was asked with; without this branch the demo falls through to `else`,
+            // nothing ever acknowledges the reload, and the spinner runs for the
+            // full thirty seconds until the connection manager's watchdog clears
+            // it - which looks exactly like a hang.
+            //
+            // Deliberately not folded into the NODE_INFO_NONCE branch above: that
+            // one also starts the traffic loop, and a reload must not restart mesh
+            // traffic that is already running.
+            nonce == MeshProtocol.NODE_INFO_RELOAD_NONCE ->
+                emit(scenario.nodeStageFrames(nonce))
+
             // Real firmware answers a heartbeat with a queue status - that is what
             // proves the link is alive. Without a reply, the demo would not behave
             // like a node.

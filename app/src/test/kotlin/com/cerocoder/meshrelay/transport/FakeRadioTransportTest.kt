@@ -89,6 +89,31 @@ class FakeRadioTransportTest {
     }
 
     @Test
+    fun `a mid-session reload is acknowledged with its own nonce`() = runTest {
+        // The reload nonce is deliberately distinct from the handshake's, and the
+        // connection manager only lowers its spinner on a config_complete_id equal
+        // to the one it asked with. A demo that answered with NODE_INFO_NONCE, or
+        // did not answer at all, would leave the spinner running for the full
+        // thirty seconds until the watchdog fired.
+        val callback = RecordingCallback()
+        val subject = transport(callback)
+
+        subject.start()
+        subject.send(ToRadio(want_config_id = MeshProtocol.NODE_INFO_RELOAD_NONCE).encode())
+        advanceUntilIdle()
+
+        // Exactly the node stage and its completion marker: not stage 1's frames
+        // (a branch that reused configStageFrames would send those instead), and
+        // nothing else.
+        assertEquals(6, callback.frames.size)
+        assertEquals(5, callback.frames.count { it.node_info != null })
+        // Answering with NODE_INFO_NONCE instead would drive the connection manager
+        // back through its "handshake finished" branch, restarting the heartbeat and
+        // handing a dying link a free extension on every reload.
+        assertEquals(MeshProtocol.NODE_INFO_RELOAD_NONCE, callback.frames.last().config_complete_id)
+    }
+
+    @Test
     fun `frames are assigned increasing ids`() = runTest {
         val callback = RecordingCallback()
         val subject = transport(callback)
