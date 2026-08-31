@@ -60,16 +60,25 @@ import java.util.Locale
  *   is rendered instead, exactly as [DetailSummary] already does for a
  *   neighbour's absent hop count.
  *
- * No `meshviewUrl` parameter: unlike [MatchingNodesTab] and [NodeCard],
- * this tab's own brief specifies a signature without one, so every
- * [PositionLine] below opens with `meshviewUrl = null` - a remote node here
- * still gets its Google Maps / OpenStreetMap buttons whenever it has
- * coordinates, just not the Meshview one.
+ * [meshviewUrl] is threaded straight to every row's own [PositionLine], the
+ * same parameter [MatchingNodesTab] already carries and in the same
+ * position relative to its neighbours - so the two tabs' signatures read
+ * alike for whoever wires them both (`DetailScreen`'s slots). This was
+ * fixed after an earlier draft omitted it: the terminal tool's own
+ * `render_position_oneline(node_num, loc, "")` call for this exact table
+ * (mesh_stats.py:1937) appends `{meshview_url}/node/{node_num}` whenever a
+ * Meshview URL is configured (mesh_stats.py:1798-1800) - so the original
+ * does show this link on these rows, and arguably these are the rows where
+ * it matters most: a remote node carried by a relay is exactly the thing a
+ * user wants to look up elsewhere. A `null` [meshviewUrl] (the setting left
+ * empty) still lets each row's Google Maps / OpenStreetMap buttons appear
+ * whenever it has coordinates - only the Meshview button itself is withheld.
  */
 @Composable
 fun RemoteNodesTab(
     relay: RelayStats,
     snapshot: StatsSnapshot,
+    meshviewUrl: String?,
     onOpenRemoteNode: (nodeNum: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -123,6 +132,7 @@ fun RemoteNodesTab(
                         shortName = directory.shortName(nodeNum),
                         stats = stats,
                         location = directory.locationInfo(nodeNum, localPosition),
+                        meshviewUrl = meshviewUrl,
                         notAvailable = notAvailable,
                         locale = locale,
                         onClick = { onOpenRemoteNode(nodeNum) },
@@ -193,6 +203,7 @@ private fun RemoteNodeRow(
     shortName: String,
     stats: RemoteNodeStats,
     location: LocationInfo,
+    meshviewUrl: String?,
     notAvailable: String,
     locale: Locale,
     onClick: () -> Unit,
@@ -245,10 +256,11 @@ private fun RemoteNodeRow(
                     textAlign = TextAlign.End,
                 )
             }
-            // No meshviewUrl to hand in - see this file's own top-level
-            // KDoc for why - so a remote node's own position line offers
-            // only the map-app buttons it has coordinates for.
-            PositionLine(info = location, nodeNum = nodeNum, meshviewUrl = null)
+            // Ports mesh_stats.py:1937's render_position_oneline(node_num, loc,
+            // "") call for this table - see this file's own top-level KDoc
+            // for the :1798-1800 evidence that the original shows this link
+            // here too.
+            PositionLine(info = location, nodeNum = nodeNum, meshviewUrl = meshviewUrl)
         }
     }
 }
@@ -329,6 +341,7 @@ private fun RemoteNodesTabVariedHopsPreview() {
             RemoteNodesTab(
                 relay = SampleData.relay(SampleData.RELAY_ONE_MATCH_BYTE),
                 snapshot = SampleData.snapshot,
+                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenRemoteNode = {},
             )
         }
@@ -343,6 +356,12 @@ private fun RemoteNodesTabAbsentHopDataPreview() {
             RemoteNodesTab(
                 relay = previewRelayWithAbsentHopData,
                 snapshot = SampleData.snapshot,
+                // Deliberately null: the Meshview URL is a user setting and
+                // can be left empty, so at least one preview must show that
+                // path - PositionLine still renders its bare coordinates
+                // line (here, nothing at all: neither remote node has a
+                // position), just never the Meshview button.
+                meshviewUrl = null,
                 onOpenRemoteNode = {},
             )
         }
@@ -357,6 +376,7 @@ private fun RemoteNodesTabEmptyPreview() {
             RemoteNodesTab(
                 relay = SampleData.relay(SampleData.RELAY_NO_MATCH_BYTE),
                 snapshot = SampleData.snapshot,
+                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenRemoteNode = {},
             )
         }
@@ -371,6 +391,7 @@ private fun RemoteNodesTabDarkPreview() {
             RemoteNodesTab(
                 relay = previewRelayWithAbsentHopData,
                 snapshot = SampleData.snapshot,
+                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenRemoteNode = {},
             )
         }
