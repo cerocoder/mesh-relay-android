@@ -98,6 +98,7 @@
     <string name="action_clear_skipped">Clear skipped nodes</string>
     <string name="action_clear_skipped_confirm_title">Clear skipped nodes for this relay?</string>
     <string name="action_clear_skipped_confirm_body">These nodes will be considered as candidates for this relay again.</string>
+    <string name="action_remove_skipped_node">Remove from skipped nodes</string>
 
     <!-- Devices -->
     <string name="devices_title">Devices</string>

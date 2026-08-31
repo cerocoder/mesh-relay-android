@@ -98,6 +98,7 @@
     <string name="action_clear_skipped">Borrar nodos descartados</string>
     <string name="action_clear_skipped_confirm_title">¿Borrar los nodos descartados de este repetidor?</string>
     <string name="action_clear_skipped_confirm_body">Estos nodos volverán a considerarse candidatos para este repetidor.</string>
+    <string name="action_remove_skipped_node">Quitar de los nodos descartados</string>
 
     <!-- Devices -->
     <string name="devices_title">Dispositivos</string>
