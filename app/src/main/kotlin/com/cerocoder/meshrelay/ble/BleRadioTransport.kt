@@ -1,9 +1,11 @@
 package com.cerocoder.meshrelay.ble
 
 import android.util.Log
+import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.protocol.BleFailure
 import com.cerocoder.meshrelay.ble.protocol.BleSession
 import com.cerocoder.meshrelay.ble.protocol.MeshRadioProfile
+import com.cerocoder.meshrelay.transport.FailureReason
 import com.cerocoder.meshrelay.transport.RadioTransport
 import com.cerocoder.meshrelay.transport.RadioTransportCallback
 import kotlinx.coroutines.CancellationException
@@ -74,20 +76,22 @@ class BleRadioTransport(
      * One attempt to "connect and live until the link breaks".
      *
      * Returns the reason the session ended - the user will see it. The Nordic layer
-     * hands it over already described; all that is left here is a fallback text for
-     * the case of an error it did not manage to describe.
+     * hands it over already described, as [FailureReason.Literal]; all that is left
+     * here is a fallback [FailureReason.Resource] for the case of an error it did not
+     * manage to describe.
      */
-    private suspend fun runSession(): String? {
+    private suspend fun runSession(): FailureReason? {
         val session = try {
             openSession(mac)
         } catch (e: CancellationException) {
             throw e
         } catch (e: Throwable) {
             Log.w(TAG, "failed to open a session with $mac", e)
-            return (e as? BleFailure)?.description ?: "failed to connect to the node"
+            return (e as? BleFailure)?.description?.let(FailureReason::Literal)
+                ?: FailureReason.Resource(R.string.transport_session_open_failed)
         }
 
-        var reason: String? = null
+        var reason: FailureReason? = null
         try {
             val radio = MeshRadioProfile(session.client)
             profile = radio
@@ -100,8 +104,9 @@ class BleRadioTransport(
                 // read error or from the stack reporting a disconnect - and the latter
                 // is the only signal there is when the link dies in silence.
                 val watcher = launch {
-                    reason = session.awaitDisconnect()
-                    Log.i(TAG, "stack reported a disconnect: $reason")
+                    val disconnectText = session.awaitDisconnect()
+                    reason = FailureReason.Literal(disconnectText)
+                    Log.i(TAG, "stack reported a disconnect: $disconnectText")
                     pump.cancel()
                 }
                 pump.join()
@@ -116,7 +121,8 @@ class BleRadioTransport(
             throw e
         } catch (e: Throwable) {
             Log.w(TAG, "session ended with an error", e)
-            reason = (e as? BleFailure)?.description ?: "the session was interrupted"
+            reason = (e as? BleFailure)?.description?.let(FailureReason::Literal)
+                ?: FailureReason.Resource(R.string.transport_session_interrupted)
         } finally {
             profile = null
             // An unclosed session is a leaked GATT connection and status 133 on the

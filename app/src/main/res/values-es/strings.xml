@@ -254,6 +254,14 @@
     <string name="ble_failure_disconnect_success">La conexión se cerró con normalidad.</string>
     <string name="ble_failure_disconnect_unknown">Se perdió la conexión por un motivo desconocido.</string>
 
+    <!-- Connection manager failures -->
+    <string name="connection_failed_to_connect">No se pudo conectar con el dispositivo. Comprueba que esté encendido e inténtalo de nuevo.</string>
+    <string name="connection_lost">Se perdió la conexión. Vuelve a conectar cuando el nodo esté de nuevo al alcance.</string>
+    <string name="connection_handshake_timeout">El nodo no respondió a la solicitud de configuración en %1$d segundos. Comprueba que esté encendido y al alcance.</string>
+    <string name="connection_node_stopped_responding">El nodo dejó de responder. Comprueba que esté encendido y al alcance.</string>
+    <string name="transport_session_open_failed">No se pudo abrir la conexión con el nodo. Comprueba que esté encendido y al alcance.</string>
+    <string name="transport_session_interrupted">La conexión con el nodo se interrumpió. Vuelve a intentarlo.</string>
+
     <!-- Plurals -->
     <plurals name="plural_matching_nodes">
         <item quantity="one">%d nodo coincidente</item>

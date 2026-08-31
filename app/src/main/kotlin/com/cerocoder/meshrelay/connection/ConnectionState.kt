@@ -1,5 +1,7 @@
 package com.cerocoder.meshrelay.connection
 
+import com.cerocoder.meshrelay.transport.FailureReason
+
 /**
  * The connection state as the application sees it.
  *
@@ -12,12 +14,16 @@ sealed interface ConnectionState {
     /**
      * There is no link.
      *
-     * @param reason a human-readable reason, if the link went down against the
-     *   user's will: a handshake timeout, a refused permission, a switched-off
-     *   adapter. `null` means a deliberate disconnect and is not shown as an error.
+     * @param reason a [FailureReason], if the link went down against the user's
+     *   will: a handshake timeout, a refused permission, a switched-off adapter.
+     *   `null` means a deliberate disconnect and is not shown as an error. Kept
+     *   unresolved (a resource id, or already-resolved text carried up from a
+     *   lower layer) rather than a plain `String`, so that naming the failure
+     *   never requires a `Context` and a runtime language change is reflected
+     *   the next time this state is shown.
      */
     data class Disconnected(
-        val reason: String? = null,
+        val reason: FailureReason? = null,
         /**
          * Whether attempts to restore the link are still going on.
          *

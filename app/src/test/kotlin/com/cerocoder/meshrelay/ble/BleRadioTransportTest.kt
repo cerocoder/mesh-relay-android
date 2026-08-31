@@ -1,6 +1,7 @@
 package com.cerocoder.meshrelay.ble
 
 import com.cerocoder.meshrelay.ble.protocol.FakeBleSession
+import com.cerocoder.meshrelay.transport.FailureReason
 import com.cerocoder.meshrelay.transport.RadioTransportCallback
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
@@ -25,9 +26,9 @@ private class RecordingCallback : RadioTransportCallback {
         connects++
     }
 
-    val reasons = mutableListOf<String?>()
+    val reasons = mutableListOf<FailureReason?>()
 
-    override fun onDisconnect(isPermanent: Boolean, reason: String?) {
+    override fun onDisconnect(isPermanent: Boolean, reason: FailureReason?) {
         disconnects++
         reasons += reason
     }
@@ -185,7 +186,7 @@ class BleRadioTransportTest {
         // bonding failure.
         assertEquals(
             "the disconnect reason must reach the callback",
-            "the node left the area",
+            FailureReason.Literal("the node left the area"),
             callback.reasons.firstOrNull(),
         )
 

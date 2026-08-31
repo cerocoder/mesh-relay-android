@@ -26,12 +26,15 @@ interface RadioTransportCallback {
     /**
      * @param isPermanent true - connection attempts have stopped (the user disconnected,
      *   the device is unreachable); false - the link may recover on its own.
-     * @param reason a human-readable reason for the UI, or null if the disconnect is
-     *   routine and there is nothing to explain. The transport must hand over text that
-     *   is already fit to display, not an exception message: a raw exception string on
-     *   screen is useless to the user and leaks implementation detail.
+     * @param reason a [FailureReason] fit for the UI, or null if the disconnect is
+     *   routine and there is nothing to explain. The transport must hand over a reason
+     *   that names the failure, not an exception message: a raw exception string on
+     *   screen is useless to the user and leaks implementation detail. It may be
+     *   already-resolved text carried up from a lower layer ([FailureReason.Literal]) or
+     *   an unresolved resource id ([FailureReason.Resource]) - either way, nothing above
+     *   this callback needs a [android.content.Context] to produce it.
      */
-    fun onDisconnect(isPermanent: Boolean, reason: String? = null)
+    fun onDisconnect(isPermanent: Boolean, reason: FailureReason? = null)
 
     /** An encoded FromRadio has arrived. */
     fun onDataReceived(bytes: ByteArray)

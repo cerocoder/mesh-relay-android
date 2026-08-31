@@ -1,9 +1,11 @@
 package com.cerocoder.meshrelay.connection
 
 import android.util.Log
+import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.stats.TimeSource
 import com.cerocoder.meshrelay.stats.TimestampedFrame
+import com.cerocoder.meshrelay.transport.FailureReason
 import com.cerocoder.meshrelay.transport.MeshProtocol
 import com.cerocoder.meshrelay.transport.RadioTransport
 import com.cerocoder.meshrelay.transport.RadioTransportCallback
@@ -158,7 +160,7 @@ class RadioConnectionManager(
                     Log.w(TAG, "failed to create a transport for the address", e)
                     transport = null
                     _connectionState.value =
-                        ConnectionState.Disconnected("failed to connect to the device")
+                        ConnectionState.Disconnected(FailureReason.Resource(R.string.connection_failed_to_connect))
                 }
             }
         }
@@ -246,12 +248,12 @@ class RadioConnectionManager(
         sendToRadio(ToRadio(want_config_id = MeshProtocol.CONFIG_NONCE))
     }
 
-    override fun onDisconnect(isPermanent: Boolean, reason: String?) {
+    override fun onDisconnect(isPermanent: Boolean, reason: FailureReason?) {
         watchdog?.cancel()
         keepAlive?.cancel()
         Log.i(TAG, "link lost (permanent=$isPermanent)")
         _connectionState.value = ConnectionState.Disconnected(
-            reason ?: if (isPermanent) "the connection was lost" else null,
+            reason ?: if (isPermanent) FailureReason.Resource(R.string.connection_lost) else null,
             // A non-permanent break is precisely another lap of the reconnect loop
             // inside the transport, and it will carry on by itself.
             retrying = !isPermanent,
@@ -364,7 +366,10 @@ class RadioConnectionManager(
                     closeTransportLocked()
                     val willRetry = scheduleRecovery()
                     _connectionState.value = ConnectionState.Disconnected(
-                        "the node did not answer the configuration request within $handshakeTimeout",
+                        FailureReason.Resource(
+                            R.string.connection_handshake_timeout,
+                            listOf(handshakeTimeout.inWholeSeconds),
+                        ),
                         retrying = willRetry,
                     )
                 }
@@ -415,7 +420,7 @@ class RadioConnectionManager(
                         closeTransportLocked()
                         val willRetry = scheduleRecovery()
                         _connectionState.value = ConnectionState.Disconnected(
-                            "the node stopped responding",
+                            FailureReason.Resource(R.string.connection_node_stopped_responding),
                             retrying = willRetry,
                         )
                     }

@@ -254,6 +254,14 @@
     <string name="ble_failure_disconnect_success">The connection was closed normally.</string>
     <string name="ble_failure_disconnect_unknown">The connection was lost for an unknown reason.</string>
 
+    <!-- Connection manager failures -->
+    <string name="connection_failed_to_connect">Could not connect to the device. Check that it\'s powered on and try again.</string>
+    <string name="connection_lost">The connection was lost. Connect again when the node is back in range.</string>
+    <string name="connection_handshake_timeout">The node did not answer the configuration request within %1$d seconds. Check that it\'s powered on and in range.</string>
+    <string name="connection_node_stopped_responding">The node stopped responding. Check that it\'s powered on and in range.</string>
+    <string name="transport_session_open_failed">Could not open a connection to the node. Check that it\'s powered on and in range.</string>
+    <string name="transport_session_interrupted">The connection to the node was interrupted. Try connecting again.</string>
+
     <!-- Plurals -->
     <plurals name="plural_matching_nodes">
         <item quantity="one">%d matching node</item>

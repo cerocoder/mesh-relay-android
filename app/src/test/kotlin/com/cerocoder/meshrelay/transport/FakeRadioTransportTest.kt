@@ -26,7 +26,7 @@ private class RecordingCallback : RadioTransportCallback {
         connected = true
     }
 
-    override fun onDisconnect(isPermanent: Boolean, reason: String?) {
+    override fun onDisconnect(isPermanent: Boolean, reason: FailureReason?) {
         disconnectedPermanently = isPermanent
     }
 

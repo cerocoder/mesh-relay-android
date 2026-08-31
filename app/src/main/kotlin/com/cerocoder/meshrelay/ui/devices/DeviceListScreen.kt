@@ -30,6 +30,7 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.transport.DeviceListEntry
+import com.cerocoder.meshrelay.transport.FailureReason
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
 /**
@@ -200,13 +201,15 @@ private fun ConnectionStatusRow(
                 }
                 Text(text = connectionStateLabel(state), style = MaterialTheme.typography.titleMedium)
             }
-            // The reason is already a resolved, human-readable string by the time
-            // it reaches this screen (see ConnectionState.Disconnected's own KDoc) -
-            // there is no raw code or exception text left to translate here, only
-            // to display.
-            if (state is ConnectionState.Disconnected && state.reason != null) {
+            // The reason is a FailureReason (see ConnectionState.Disconnected's own
+            // KDoc), not a plain String: some of its variants are still an
+            // unresolved string-resource id at this point, and resolveReason below
+            // is what turns either variant into text fit to show, right here where
+            // a Context (via stringResource) is finally at hand.
+            val reason = (state as? ConnectionState.Disconnected)?.reason
+            if (reason != null) {
                 Text(
-                    text = state.reason,
+                    text = resolveReason(reason),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -267,6 +270,21 @@ private fun connectionStateLabel(state: ConnectionState): String = when (state) 
     is ConnectionState.Disconnected -> stringResource(R.string.devices_state_disconnected)
     ConnectionState.Connecting -> stringResource(R.string.devices_state_connecting)
     ConnectionState.Connected -> stringResource(R.string.devices_state_connected)
+}
+
+/**
+ * Turns a [FailureReason] into text fit to show, right where a [Context]
+ * (via [stringResource]) is at hand.
+ *
+ * [FailureReason.Resource] is the common case: a failure named by the
+ * connection layer or the transport without either holding a `Context`.
+ * [FailureReason.Literal] carries text already resolved further down, in
+ * `ble/nordic`, close to where a `Context` lives there instead.
+ */
+@Composable
+private fun resolveReason(reason: FailureReason): String = when (reason) {
+    is FailureReason.Resource -> stringResource(reason.resId, *reason.args.toTypedArray())
+    is FailureReason.Literal -> reason.text
 }
 
 /**
@@ -479,7 +497,7 @@ private fun DeviceListScreenDisconnectedWithReasonPreview() {
         DeviceListScreen(
             devices = emptyList(),
             state = ConnectionState.Disconnected(
-                reason = "The node did not respond to the connection attempt.",
+                reason = FailureReason.Literal("The node did not respond to the connection attempt."),
                 retrying = true,
             ),
             readiness = BleReadiness.READY,

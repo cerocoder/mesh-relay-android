@@ -3,6 +3,7 @@ package com.cerocoder.meshrelay.connection
 import com.cerocoder.meshrelay.emulator.Scenarios
 import com.cerocoder.meshrelay.stats.TimeSource
 import com.cerocoder.meshrelay.stats.TimestampedFrame
+import com.cerocoder.meshrelay.transport.FailureReason
 import com.cerocoder.meshrelay.transport.FakeRadioTransport
 import com.cerocoder.meshrelay.transport.MeshProtocol
 import com.cerocoder.meshrelay.transport.RadioTransport
@@ -484,10 +485,10 @@ class RadioConnectionManagerTest {
 
         // Exactly what the transport sends on every lap of its own loop: the link is
         // lost, but it carries on trying by itself.
-        manager.onDisconnect(isPermanent = false, reason = "the node is out of range")
+        manager.onDisconnect(isPermanent = false, reason = FailureReason.Literal("the node is out of range"))
 
         val state = manager.connectionState.value as ConnectionState.Disconnected
-        assertEquals("the node is out of range", state.reason)
+        assertEquals(FailureReason.Literal("the node is out of range"), state.reason)
         assertEquals("the service must not go out while the transport is trying", true, state.retrying)
     }
 
