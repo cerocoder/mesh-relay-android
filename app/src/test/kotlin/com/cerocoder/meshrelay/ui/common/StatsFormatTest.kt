@@ -239,6 +239,28 @@ class StatsFormatTest {
     }
 
     @Test
+    fun `remoteNodeHopAverage formats to one decimal place, including a negative value`() {
+        // Ports the ":3.1f" precision mesh_stats.py:1938-1939 formats a
+        // remote node's average hops made/left at. Negative is exercised even
+        // though a real hop average is never negative in practice - the same
+        // defensive-precision check nodeDatabaseSnr's own test above runs -
+        // so a mutant that swapped in a whole-number pattern would be caught
+        // regardless of the sign of the input.
+        assertEquals("1.5", StatsFormat.remoteNodeHopAverage(1.5f, Locale.US))
+        assertEquals("2.0", StatsFormat.remoteNodeHopAverage(2.0f, Locale.US))
+        assertEquals("-3.0", StatsFormat.remoteNodeHopAverage(-3.0f, Locale.US))
+    }
+
+    @Test
+    fun `remoteNodeHopAverage follows the given locale, not a fixed one`() {
+        // 1.5 has an exact one-decimal representation under both locales, so
+        // only the separator itself can differ - a mutant hardcoding
+        // Locale.US or Locale.ROOT would fail the es-ES assertion here.
+        assertEquals("1.5", StatsFormat.remoteNodeHopAverage(1.5f, Locale.US))
+        assertEquals("1,5", StatsFormat.remoteNodeHopAverage(1.5f, Locale("es", "ES")))
+    }
+
+    @Test
     fun `nodeDatabaseLastHeard renders an absolute local date-time, not a relative age`() {
         // 1_756_219_512 is 2025-08-26T16:45:12+02:00 in Europe/Madrid (CEST) -
         // verified against real java.time.format.DateTimeFormatter output

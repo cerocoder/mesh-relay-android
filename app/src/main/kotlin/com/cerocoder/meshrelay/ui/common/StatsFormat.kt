@@ -52,6 +52,13 @@ object StatsFormat {
      *  battery percentage to a voltage. */
     private const val TELEMETRY_PATTERN = "%.2f"
 
+    /** A remote node's average hop count, made or left (`:3.1f` at
+     *  mesh_stats.py:1938-1939) - numerically the same pattern as [AVG_PATTERN],
+     *  kept as its own named constant because it formats a distinct quantity
+     *  ([com.cerocoder.meshrelay.stats.model.RemoteNodeStats.avgHopsMade] /
+     *  `.avgHopsLeft`), not a [SignalStats] average. */
+    private const val HOP_AVERAGE_PATTERN = "%.1f"
+
     /**
      * Structural glue, not translatable prose - the same treatment
      * [PositionLineText]'s direction separator gets.
@@ -213,4 +220,19 @@ object StatsFormat {
         val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
         return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale).format(localDateTime)
     }
+
+    /**
+     * A remote node's average hop count - either
+     * [com.cerocoder.meshrelay.stats.model.RemoteNodeStats.avgHopsMade] or
+     * `.avgHopsLeft` - ports the `:3.1f` precision mesh_stats.py:1938-1939
+     * formats both averages at. Those properties are nullable precisely
+     * because a packet can arrive with no hop information at all; this
+     * function only ever receives the non-null case and never fabricates a
+     * `0.0` for the other - the caller (`RemoteNodesTab`) is the one that
+     * decides between calling this and rendering
+     * [R.string.common_not_available], the same `?:` shape
+     * [com.cerocoder.meshrelay.ui.neighbours.NeighbourCard]'s `SignalRow`
+     * already uses for [signalTriple]/[signalLast].
+     */
+    fun remoteNodeHopAverage(value: Float, locale: Locale): String = String.format(locale, HOP_AVERAGE_PATTERN, value)
 }
