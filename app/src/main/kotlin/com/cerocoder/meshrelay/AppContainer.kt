@@ -23,6 +23,9 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
@@ -74,28 +77,81 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      * [MeshForegroundService.updateText] reaches the service through `startService`,
      * which on a service that is not running would *start* it - from the
      * application scope, that is from the background, which Android refuses. So the
-     * updater below has to know, and only the activity does: the service is started
-     * from the user's tap and stopped when attempts cease.
+     * updater below has to know.
      *
-     * `@Volatile` because it is written from the main thread and read from the
-     * updater coroutine on `Dispatchers.Default`.
+     * It also decides whether a start is a no-op: re-issuing one runs the service's
+     * `onStartCommand` again with no text extra, which resets the notification from
+     * the live counters back to its generic body.
+     *
+     * `@Volatile` because it is touched from two threads: started from the main
+     * thread (a tap, a settings toggle) and stopped from the surrender watcher and
+     * the updater, both on `Dispatchers.Default`. The check-and-set in each of
+     * [startForegroundService] and [stopForegroundService] is not atomic against the
+     * other, and does not need to be - the two are driven by opposite, non-competing
+     * events, and `startService`/`stopService` are themselves ordered by the system.
      */
     @Volatile
     private var foregroundServiceRunning = false
 
+    private val _connectRequested = MutableStateFlow(false)
+
     /**
-     * @see foregroundServiceRunning - exposed so the activity can tell "start it"
-     *   from "it is already up": re-issuing the start would run the service's
-     *   `onStartCommand` again with no text extra, resetting the notification to
-     *   its generic body and throwing away the counters already on it.
+     * Whether the user wants to be connected - not whether the app currently is.
+     *
+     * This lives here, at process lifetime, rather than in the activity's saved
+     * state, because that is the lifetime of the thing it describes. With the
+     * foreground service holding the process up, swiping the app away and
+     * relaunching it builds a *fresh* activity with no saved state while GATT is
+     * still live. A `rememberSaveable` flag would read `false` there, the device
+     * screen would decide it was free to scan, and a low-latency scan would run
+     * alongside an active GATT connection - the exact failure the device screen's
+     * own scanning rule exists to prevent, and one the sibling project hit on
+     * hardware.
+     *
+     * Cleared by [connectionManager] surrendering, below - never by an activity
+     * going away.
      */
-    val foregroundServiceActive: Boolean get() = foregroundServiceRunning
+    val connectRequested: StateFlow<Boolean> = _connectRequested.asStateFlow()
+
+    private val _requestedAddress = MutableStateFlow<String?>(null)
+
+    /**
+     * The address the user last asked for, while that request still stands.
+     *
+     * The navigation host needs it to tell "the user tapped the node they are
+     * already connected to" - a repeat tap the connection manager deliberately
+     * short-circuits, producing no state change - from "the user picked a
+     * different node".
+     */
+    val requestedAddress: StateFlow<String?> = _requestedAddress.asStateFlow()
 
     init {
         // The engine consumes a source-agnostic frame stream, so this is the only
         // line in the application that knows the frames come from a radio at all. A
         // file-backed source is added here later and nowhere else.
         engine.attach(connectionManager.frames)
+
+        // Surrender - and only surrender - ends the request and releases the
+        // process. While the reconnect loop is still trying, the process has to stay
+        // protected: the pauses between attempts are exactly when the system would
+        // suspend it. The distinction has to come from the state's own flag, because
+        // an ordinary failed attempt carries a reason too, and the reason alone
+        // cannot tell persistence from giving up.
+        //
+        // This watches the state here rather than from the composition for the same
+        // reason connectRequested lives here: the activity can be gone while the
+        // service still runs, and a link that dies for good after that would leave
+        // nobody to stop it - a notification claiming a connection that no longer
+        // exists, and a process held awake for nothing.
+        scope.launch {
+            connectionManager.connectionState.collect { state ->
+                if (state is ConnectionState.Disconnected && !state.retrying) {
+                    _connectRequested.value = false
+                    _requestedAddress.value = null
+                    stopForegroundService()
+                }
+            }
+        }
 
         // The notification carries counters, not a snapshot: it is the one thing
         // that still updates with the screen off, and building a snapshot for it
@@ -122,13 +178,51 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
 
     fun clearAllSkippedNodes() = settings.clearAllSkippedNodes()
 
-    /** @see foregroundServiceRunning */
-    fun onForegroundServiceStarted() {
+    /**
+     * Record the user's intent to be connected, and act on it.
+     *
+     * Named for the intent rather than for the call it makes, because the intent is
+     * what outlives the call: [connectRequested] stays true across every retry the
+     * transport makes on its own.
+     */
+    fun requestConnect(address: String) {
+        _requestedAddress.value = address
+        _connectRequested.value = true
+        connectionManager.connect(address)
+    }
+
+    /**
+     * Withdraw that intent at once, before the disconnect itself has finished.
+     *
+     * [RadioConnectionManager.disconnect] suspends, and the device screen must not
+     * spend that time still believing the user wants to be connected - the scanner
+     * is gated on exactly this flag.
+     */
+    fun requestDisconnect() {
+        _connectRequested.value = false
+        _requestedAddress.value = null
+    }
+
+    /**
+     * Bring the foreground service up, if it is not already.
+     *
+     * Must be called from the foreground - a tap on a device, or the background
+     * collection switch. `startForegroundService` from the background throws
+     * `ForegroundServiceStartNotAllowedException` on Android 12+, and this class has
+     * no way to check on the caller's behalf.
+     *
+     * @see foregroundServiceRunning for why a repeat start is not harmless.
+     */
+    fun startForegroundService() {
+        if (foregroundServiceRunning) return
+        MeshForegroundService.start(context)
         foregroundServiceRunning = true
     }
 
-    /** @see foregroundServiceRunning */
-    fun onForegroundServiceStopped() {
+    /** Safe from anywhere, including the background, and a no-op if it is not up. */
+    fun stopForegroundService() {
+        if (!foregroundServiceRunning) return
+        MeshForegroundService.stop(context)
         foregroundServiceRunning = false
     }
 

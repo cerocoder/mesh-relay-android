@@ -87,6 +87,7 @@ fun MeshRelayNavHost(
     val settings by container.settings.settings.collectAsState()
     val skippedRelayNodes by container.settings.skippedRelayNodes.collectAsState()
     val nodeDbReloading by container.connectionManager.nodeDbReloading.collectAsState()
+    val requestedAddress by container.requestedAddress.collectAsState()
 
     val meshviewUrl = meshviewUrlOrNull(settings)
 
@@ -125,7 +126,24 @@ fun MeshRelayNavHost(
             devices = devices,
             state = connectionState,
             readiness = readiness,
-            onSelect = onSelectDevice,
+            onSelect = { entry ->
+                // Tapping the node you are already connected to is how you get back
+                // to its statistics after backing out of them. Nothing else can do
+                // it: the hand-over above fires on the edge into Connected, and a
+                // repeat tap on the same address is short-circuited by the
+                // connection manager as already-connected, so there is no edge left
+                // to fire on and the user would be stranded on the device list until
+                // they disconnected and handshaked again.
+                //
+                // Deliberately narrowed to *this* node rather than "any tap while
+                // connected": tapping a different one is a request to switch nodes,
+                // and that belongs on the device list until its handshake finishes,
+                // where a failure has somewhere to be explained.
+                if (connectionState == ConnectionState.Connected && entry.address == requestedAddress) {
+                    backStack.push(Screen.Main(MainTab.RELAYS))
+                }
+                onSelectDevice(entry)
+            },
             onDisconnect = onDisconnect,
             onRequestPermissions = onRequestPermissions,
             modifier = modifier,

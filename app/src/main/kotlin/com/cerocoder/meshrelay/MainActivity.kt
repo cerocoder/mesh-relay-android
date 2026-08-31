@@ -24,13 +24,10 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.cerocoder.meshrelay.ble.BleReadiness
-import com.cerocoder.meshrelay.connection.ConnectionState
-import com.cerocoder.meshrelay.service.MeshForegroundService
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.LocalizedApp
@@ -127,23 +124,23 @@ private fun MeshRelayContent(
     readinessState: MutableState<BleReadiness>,
     backgroundCollection: Boolean,
 ) {
-    // LocalContext here is the locale-overridden wrapper LocalizedApp provides, and
-    // a new one of those appears every time the language changes. Everything below
-    // takes the application context underneath it instead: a receiver has to be
-    // unregistered against the very context it was registered on, and an Intent has
-    // no use for a display locale anyway - the service resolves its own strings
-    // from its own context.
+    // The application context, not LocalContext.current: LocalizedApp provides a
+    // locale-overridden wrapper there, and a fresh one of those appears every time
+    // the language changes. A broadcast receiver has to be unregistered against the
+    // very context instance it was registered on, so it takes the one context in
+    // this app that never changes identity.
     val appContext = LocalContext.current.applicationContext
 
-    val state by container.connectionManager.connectionState.collectAsState()
     val scope = rememberCoroutineScope()
 
     var readiness by readinessState
     val found = remember { mutableStateMapOf<String, DeviceListEntry.Ble>() }
 
-    // The user's intent to be connected - not the connection state. Saved, so a
-    // rotation does not read as "the user gave up" and restart the scan.
-    var connectRequested by rememberSaveable { mutableStateOf(false) }
+    // The user's intent to be connected. Read from the container, not held here:
+    // the foreground service can outlive this activity, so a flag saved in the
+    // activity's own state would come back false while GATT was still live. See
+    // AppContainer.connectRequested.
+    val connectRequested by container.connectRequested.collectAsState()
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
@@ -195,41 +192,23 @@ private fun MeshRelayContent(
         }
     }
 
-    // The service is stopped only once attempts have ceased altogether. While the
-    // reconnect loop is still trying, the process has to stay protected - the
-    // pauses between attempts are exactly when the system would suspend it. The
-    // flag has to come from the state, because an ordinary failed attempt also
-    // carries a reason: the reason alone cannot tell surrender from persistence.
-    LaunchedEffect(state) {
-        val current = state
-        if (current is ConnectionState.Disconnected && !current.retrying) {
-            connectRequested = false
-            MeshForegroundService.stop(appContext)
-            container.onForegroundServiceStopped()
-        }
-    }
-
-    // The background-collection switch has to take effect at once, not at the next
-    // connection: turned off it must release the process now, and turned back on
-    // over a link that is already up it must protect that link rather than the
-    // next one. Both directions happen while the user is looking at the settings
-    // screen, so the start below is still a foreground start.
-    val stateNow = state
-    val linkAlive = stateNow !is ConnectionState.Disconnected || stateNow.retrying
+    // Stopping the service when attempts cease is AppContainer's job, not this
+    // composition's: the activity can be gone while the service still runs, and a
+    // link that dies for good after that must still release the process.
+    //
+    // What is left here is the one direction that has to happen in the foreground:
+    // the background-collection switch, which must take effect at once rather than
+    // at the next connection - turned off it releases the process now, turned back
+    // on over a link that is already up it protects that link rather than the next
+    // one. Both happen while the user is looking at the settings screen, so this is
+    // still a foreground start. connectRequested is enough of a guard on its own:
+    // the container clears it the moment attempts cease, so it is never true over a
+    // connection that has already been given up on.
     LaunchedEffect(backgroundCollection) {
-        when {
-            !backgroundCollection -> {
-                MeshForegroundService.stop(appContext)
-                container.onForegroundServiceStopped()
-            }
-
-            // The last clause is what keeps a rotation quiet: this effect re-runs on
-            // the fresh composition, and re-starting a service that is already up
-            // would reset its notification back to the generic body.
-            connectRequested && linkAlive && !container.foregroundServiceActive -> {
-                MeshForegroundService.start(appContext)
-                container.onForegroundServiceStarted()
-            }
+        if (backgroundCollection && connectRequested) {
+            container.startForegroundService()
+        } else if (!backgroundCollection) {
+            container.stopForegroundService()
         }
     }
 
@@ -250,20 +229,15 @@ private fun MeshRelayContent(
             // Disconnected, and tying the service to the state would shut it down
             // for exactly the length of each backoff - that is, precisely when the
             // process needs protecting.
-            connectRequested = true
-            if (backgroundCollection) {
-                MeshForegroundService.start(appContext)
-                container.onForegroundServiceStarted()
-            }
-            container.connectionManager.connect(device.address)
+            if (backgroundCollection) container.startForegroundService()
+            container.requestConnect(device.address)
         },
         onDisconnect = {
-            connectRequested = false
-            scope.launch {
-                container.connectionManager.disconnect()
-                MeshForegroundService.stop(appContext)
-                container.onForegroundServiceStopped()
-            }
+            // The intent is withdrawn now, not when the suspending disconnect
+            // finishes: the scanner is gated on it, and the container's own watcher
+            // will stop the service when the state lands on a final Disconnected.
+            container.requestDisconnect()
+            scope.launch { container.connectionManager.disconnect() }
         },
     )
 }

@@ -1,8 +1,5 @@
 package com.cerocoder.meshrelay.ui.common
 
-import android.content.Context
-import android.content.Intent
-import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -12,7 +9,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
-import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
@@ -24,8 +21,9 @@ import java.util.Locale
 
 /**
  * One line describing where a node is, plus small buttons for the external
- * map links [PositionLineText] can't build itself since it never sees a
- * `Context`. Ports `render_position_oneline` (mesh_stats.py:1747-1800) and
+ * map links [PositionLineText] cannot open itself, being a plain function with
+ * no composition to reach a uri handler from. Ports
+ * `render_position_oneline` (mesh_stats.py:1747-1800) and
  * the map links appended after it (mesh_stats.py:1868-1872, plus the
  * Meshview link at mesh_stats.py:1793-1794) as one flowing text line with
  * the links underneath as buttons, rather than more text appended to it.
@@ -44,7 +42,16 @@ fun PositionLine(
     val strings = resolvePositionStrings()
     val nowMillis = LocalRelativeClock.current
     val parts = remember(info, nowMillis, strings) { PositionLineText.parts(info, nowMillis, strings) }
-    val context = LocalContext.current
+    // LocalUriHandler, not LocalContext.startActivity. LocalizedApp provides a
+    // createConfigurationContext result as LocalContext whenever a language other
+    // than the system one is chosen, and that is a plain ContextImpl rather than
+    // an Activity: starting an activity from it without FLAG_ACTIVITY_NEW_TASK
+    // throws on targetSdk 36, so every map link here would crash - but only after
+    // the user had picked a language. The uri handler is immune: Compose builds
+    // AndroidUriHandler from the ComposeView's own context, which stays the
+    // activity no matter what LocalContext is overridden with further down the
+    // tree.
+    val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         val line = listOfNotNull(parts.coordinates, parts.distance, parts.altitude, parts.source)
@@ -58,25 +65,21 @@ fun PositionLine(
         if ((lat != null && lon != null) || meshviewUrl != null) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (lat != null && lon != null) {
-                    TextButton(onClick = { openUrl(context, MapLinks.googleMaps(lat, lon)) }) {
+                    TextButton(onClick = { uriHandler.openUri(MapLinks.googleMaps(lat, lon)) }) {
                         Text(stringResource(R.string.node_open_google_maps))
                     }
-                    TextButton(onClick = { openUrl(context, MapLinks.openStreetMap(lat, lon)) }) {
+                    TextButton(onClick = { uriHandler.openUri(MapLinks.openStreetMap(lat, lon)) }) {
                         Text(stringResource(R.string.node_open_osm))
                     }
                 }
                 if (meshviewUrl != null) {
-                    TextButton(onClick = { openUrl(context, MapLinks.meshview(meshviewUrl, nodeNum)) }) {
+                    TextButton(onClick = { uriHandler.openUri(MapLinks.meshview(meshviewUrl, nodeNum)) }) {
                         Text(stringResource(R.string.node_open_meshview))
                     }
                 }
             }
         }
     }
-}
-
-private fun openUrl(context: Context, url: String) {
-    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
 }
 
 /**
