@@ -1,13 +1,36 @@
 package com.cerocoder.meshrelay.ui.common
 
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import java.time.Instant
+import java.time.LocalDateTime
 import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private fun stats(vararg values: Float) = values.fold(SignalStats.EMPTY) { acc, v -> acc.plus(v) }
+
+/**
+ * Independently reconstructs what [StatsFormat.nodeDatabaseLastHeard] should
+ * produce for [epochSeconds]/[locale]/[zone], built here from the same public
+ * `java.time` primitives rather than pinned to a literal string. CLDR locale
+ * data is not part of this project's contract - it changed between the JDK 17
+ * this suite was checked against locally and the JDK 21 CI actually runs on
+ * (most visibly, `en-US` gained a narrow no-break space before AM/PM) - so a
+ * hardcoded expected string from either JVM breaks on the other. Comparing
+ * against this reference instead pins the wiring (locale in, zone in,
+ * [FormatStyle.MEDIUM] used) while letting the running JVM's own CLDR data
+ * decide the exact glyphs on both sides of the assertion.
+ */
+private fun referenceLastHeard(epochSeconds: Int, locale: Locale, zone: ZoneId): String {
+    val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
+    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale).format(localDateTime)
+}
 
 class StatsFormatTest {
 
@@ -261,43 +284,68 @@ class StatsFormatTest {
     }
 
     @Test
-    fun `nodeDatabaseLastHeard renders an absolute local date-time, not a relative age`() {
-        // 1_756_219_512 is 2025-08-26T16:45:12+02:00 in Europe/Madrid (CEST) -
-        // verified against real java.time.format.DateTimeFormatter output
-        // (OpenJDK 17) before writing this assertion, not derived by hand.
-        // Kills a mutant that reintroduces a relative "n ago" style rendering
-        // (mesh_stats.py:1891 is the one field in this app that must not).
-        assertEquals(
-            "Aug 26, 2025, 4:45:12 PM",
-            StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, ZoneId.of("Europe/Madrid")),
-        )
+    fun `nodeDatabaseLastHeard renders an absolute date, not a relative age`() {
+        // Not pinned to a literal rendering - see referenceLastHeard's own
+        // KDoc for why (CLDR output differs between the JDK 17 this was
+        // checked against locally and the JDK 21 CI runs on). This only pins
+        // that the result is an absolute calendar date: it must contain the
+        // four-digit year, which no relative "n ago"/"Xs ago" rendering
+        // (what AgeText produces elsewhere in this app) ever would, and must
+        // not contain the word "ago" itself. Kills a mutant that reintroduces
+        // relative, AgeText-style output for this one field (mesh_stats.py:
+        // 1891 is the field that must render absolutely, not relatively).
+        val result = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, ZoneId.of("Europe/Madrid"))
+        assertTrue("expected a non-blank result, got <$result>", result.isNotBlank())
+        assertTrue("expected the year 2025 in <$result>", result.contains("2025"))
+        assertTrue("expected no relative-age wording in <$result>", !result.contains("ago"))
     }
 
     @Test
     fun `nodeDatabaseLastHeard follows the given locale, not a fixed one`() {
-        // Same instant as above, es-ES: day-before-month order, no comma
-        // separator, lower-case three-letter month, 24-hour clock - all four
-        // differences are locale data DateTimeFormatter.ofLocalizedDateTime
-        // resolves itself; nothing here hand-builds a pattern string.
-        assertEquals(
-            "26 ago 2025 16:45:12",
-            StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale("es", "ES"), ZoneId.of("Europe/Madrid")),
-        )
+        // Not pinned to literal en-US/es-ES strings - same CLDR-portability
+        // reason as above. Instead this pins two properties that hold on any
+        // CLDR version: (1) the function's output for each locale matches an
+        // independently built reference using the same public
+        // DateTimeFormatter.ofLocalizedDateTime API (so a mutant that ignores
+        // the locale, or picks the wrong FormatStyle, produces a mismatch
+        // against at least one of the two references); (2) the two locales'
+        // outputs are non-blank and differ from each other - en-US and es-ES
+        // diverge in word order, month spelling and clock format on every
+        // JDK this project has run on, so a mutant hardcoding one locale
+        // collapses this to a tautology-proof equality instead.
+        val zone = ZoneId.of("Europe/Madrid")
+        val enUs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, zone)
+        val esEs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale("es", "ES"), zone)
+
+        assertEquals(referenceLastHeard(1_756_219_512, Locale.US, zone), enUs)
+        assertEquals(referenceLastHeard(1_756_219_512, Locale("es", "ES"), zone), esEs)
+
+        assertTrue("expected a non-blank en-US result, got <$enUs>", enUs.isNotBlank())
+        assertTrue("expected a non-blank es-ES result, got <$esEs>", esEs.isNotBlank())
+        assertNotEquals(enUs, esEs)
     }
 
     @Test
     fun `nodeDatabaseLastHeard follows the given zone, not a fixed one`() {
-        // 1_735_689_600 is 2025-01-01T00:00:00Z exactly. Madrid is UTC+1 in
-        // January (standard time, no DST), so the same instant must print a
-        // different hour under each zone - proof this isn't silently reading
-        // the JVM's default zone regardless of the [zone] argument.
-        assertEquals(
-            "Jan 1, 2025, 12:00:00 AM",
-            StatsFormat.nodeDatabaseLastHeard(1_735_689_600, Locale.US, ZoneId.of("UTC")),
-        )
-        assertEquals(
-            "Jan 1, 2025, 1:00:00 AM",
-            StatsFormat.nodeDatabaseLastHeard(1_735_689_600, Locale.US, ZoneId.of("Europe/Madrid")),
-        )
+        // Not pinned to literal UTC/Europe-Madrid strings - same
+        // CLDR-portability reason as the two tests above. 1_735_689_600 is
+        // 2025-01-01T00:00:00Z exactly; Madrid is UTC+1 in January (standard
+        // time, no DST), so the same instant must print a different hour
+        // under each zone. As with the locale test above, this pins both
+        // that each output matches an independently built reference (so a
+        // mutant that ignores [zone] or converts it wrong is caught against
+        // at least one reference) and that the two zones' outputs are
+        // non-blank and differ from each other, rather than merely
+        // asserting inequality between two values that could both be blank.
+        val locale = Locale.US
+        val utc = StatsFormat.nodeDatabaseLastHeard(1_735_689_600, locale, ZoneId.of("UTC"))
+        val madrid = StatsFormat.nodeDatabaseLastHeard(1_735_689_600, locale, ZoneId.of("Europe/Madrid"))
+
+        assertEquals(referenceLastHeard(1_735_689_600, locale, ZoneId.of("UTC")), utc)
+        assertEquals(referenceLastHeard(1_735_689_600, locale, ZoneId.of("Europe/Madrid")), madrid)
+
+        assertTrue("expected a non-blank UTC result, got <$utc>", utc.isNotBlank())
+        assertTrue("expected a non-blank Europe/Madrid result, got <$madrid>", madrid.isNotBlank())
+        assertNotEquals(utc, madrid)
     }
 }
