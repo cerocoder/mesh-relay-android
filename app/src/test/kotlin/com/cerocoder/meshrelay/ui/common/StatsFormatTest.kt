@@ -1,6 +1,7 @@
 package com.cerocoder.meshrelay.ui.common
 
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import java.time.ZoneId
 import java.util.Locale
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
@@ -210,5 +211,61 @@ class StatsFormatTest {
         // divisors (3_600 and 60) would report this as 0d 15h 0m instead of
         // 0d 0h 15m.
         assertEquals(StatsFormat.UptimeParts(0, 0, 15), StatsFormat.uptimeParts(900))
+    }
+
+    @Test
+    fun `candidateIndex wraps the index in brackets`() {
+        assertEquals("[1]", StatsFormat.candidateIndex(1, Locale.US))
+        assertEquals("[12]", StatsFormat.candidateIndex(12, Locale.US))
+    }
+
+    @Test
+    fun `candidateIndex follows the given locale, not a fixed one`() {
+        // Digits only, no decimal separator to diverge on - but still routed
+        // through String.format(locale, ...), not a bare interpolation, on the
+        // same terms as every other formatter in this object.
+        assertEquals("[3]", StatsFormat.candidateIndex(3, Locale.US))
+        assertEquals("[3]", StatsFormat.candidateIndex(3, Locale("es", "ES")))
+    }
+
+    @Test
+    fun `nodeDatabaseLastHeard renders an absolute local date-time, not a relative age`() {
+        // 1_756_219_512 is 2025-08-26T16:45:12+02:00 in Europe/Madrid (CEST) -
+        // verified against real java.time.format.DateTimeFormatter output
+        // (OpenJDK 17) before writing this assertion, not derived by hand.
+        // Kills a mutant that reintroduces a relative "n ago" style rendering
+        // (mesh_stats.py:1891 is the one field in this app that must not).
+        assertEquals(
+            "Aug 26, 2025, 4:45:12 PM",
+            StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, ZoneId.of("Europe/Madrid")),
+        )
+    }
+
+    @Test
+    fun `nodeDatabaseLastHeard follows the given locale, not a fixed one`() {
+        // Same instant as above, es-ES: day-before-month order, no comma
+        // separator, lower-case three-letter month, 24-hour clock - all four
+        // differences are locale data DateTimeFormatter.ofLocalizedDateTime
+        // resolves itself; nothing here hand-builds a pattern string.
+        assertEquals(
+            "26 ago 2025 16:45:12",
+            StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale("es", "ES"), ZoneId.of("Europe/Madrid")),
+        )
+    }
+
+    @Test
+    fun `nodeDatabaseLastHeard follows the given zone, not a fixed one`() {
+        // 1_735_689_600 is 2025-01-01T00:00:00Z exactly. Madrid is UTC+1 in
+        // January (standard time, no DST), so the same instant must print a
+        // different hour under each zone - proof this isn't silently reading
+        // the JVM's default zone regardless of the [zone] argument.
+        assertEquals(
+            "Jan 1, 2025, 12:00:00 AM",
+            StatsFormat.nodeDatabaseLastHeard(1_735_689_600, Locale.US, ZoneId.of("UTC")),
+        )
+        assertEquals(
+            "Jan 1, 2025, 1:00:00 AM",
+            StatsFormat.nodeDatabaseLastHeard(1_735_689_600, Locale.US, ZoneId.of("Europe/Madrid")),
+        )
     }
 }

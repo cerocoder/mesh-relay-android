@@ -33,6 +33,7 @@
     <string name="format_db_header">DB(%1$d) · %2$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$dd %2$dh %3$dm</string>
+    <string name="format_last_heard_db">%1$s (hora local)</string>
 
     <!-- Ages -->
     <string name="age_1m">1m</string>

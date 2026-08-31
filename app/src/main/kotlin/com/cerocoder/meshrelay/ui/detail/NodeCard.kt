@@ -28,7 +28,6 @@ import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.model.LocationInfo
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
-import com.cerocoder.meshrelay.ui.common.AgeLabel
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.common.PositionLine
@@ -95,7 +94,7 @@ fun NodeCard(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 if (index != null) {
-                    Text(text = "[$index]", style = MaterialTheme.typography.bodySmall)
+                    Text(text = StatsFormat.candidateIndex(index, locale), style = MaterialTheme.typography.bodySmall)
                 }
                 NodeIdText(nodeNum = record.num)
                 Spacer(modifier = Modifier.weight(1f))
@@ -139,15 +138,28 @@ fun NodeCard(
                 )
             }
 
-            // Relative, like every other "when" on this app's other screens - see
-            // AgeLabel's own KDoc - rather than the original's absolute
-            // `%Y-%m-%d %H:%M:%S` (mesh_stats.py:1891), which no other screen here
-            // uses either.
+            // Absolute, unlike every other "when" in this app - the one deliberate
+            // exception. mesh_stats.py:1891 renders this exact field ("Last Heard in
+            // DB") as an absolute `%Y-%m-%d %H:%M:%S`, while :1639-1648's *live*
+            // last-packet age (what AgeLabel ports elsewhere in this app) renders as
+            // clock time plus "Xs ago" - the original itself draws this line between
+            // a session age (never more than hours old) and a database timestamp
+            // (which can be weeks old, well past anything AgeText's buckets cover).
+            // StatsFormat.nodeDatabaseLastHeard does the conversion and the
+            // locale-aware formatting, in the device's own zone (ZoneId.systemDefault,
+            // matching the original's naive datetime.fromtimestamp); nothing here does
+            // arithmetic on the raw epoch-seconds value. format_last_heard_db appends
+            // "(local time)" to the rendered value itself, not just a code comment -
+            // the ambiguity ("is this UTC or local?") is exactly what a user
+            // cross-checking against another Meshtastic tool would otherwise ask.
             record.lastHeardEpochSeconds?.let { epochSeconds ->
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-                    Text(text = stringResource(R.string.node_last_heard_db), style = MaterialTheme.typography.bodyMedium)
-                    AgeLabel(atMillis = epochSeconds.toLong() * 1000L)
-                }
+                LabelValueRow(
+                    label = stringResource(R.string.node_last_heard_db),
+                    value = stringResource(
+                        R.string.format_last_heard_db,
+                        StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale),
+                    ),
+                )
             }
 
             firmwareVersion?.let { firmware ->
@@ -257,14 +269,17 @@ private fun displayLocale(): Locale {
 
 /**
  * Supplies a stable "now" to [LocalRelativeClock] for previews - without it,
- * this composition local defaults to `0L`, which would make the "last heard"
- * row's [AgeLabel] read every real, recent timestamp below as if it were in
- * the future and render `Never` for all of them. Mirrors the identical
- * private helper every screen-level preview in this app already carries -
+ * this composition local defaults to `0L`, and [PositionLine] (called
+ * directly by [NodeCard], not through a screen that would otherwise provide
+ * one) computes its own source-aged text
+ * ([com.cerocoder.meshrelay.ui.common.PositionLineText.parts]'s
+ * `AgeBucket.of(nowMillis - atMillis)`) against that instead of a real clock -
+ * every real timestamp below would then look like it arrived before `1970`
+ * and land in [com.cerocoder.meshrelay.stats.AgeBucket.UNKNOWN] ("??"),
+ * regardless of how fresh it actually is. Mirrors the identical private
+ * helper every screen-level preview in this app already carries -
  * [com.cerocoder.meshrelay.ui.relays.RelayListScreen]'s copy documents the
- * full reasoning - needed here because, unlike `RelayCard`/`NeighbourCard`,
- * this file's previews call [NodeCard] directly rather than through a screen
- * that already provides one.
+ * full reasoning.
  */
 @Composable
 private fun PreviewClock(content: @Composable () -> Unit) {

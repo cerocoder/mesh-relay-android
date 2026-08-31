@@ -1,6 +1,11 @@
 package com.cerocoder.meshrelay.ui.common
 
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import java.time.Instant
+import java.time.LocalDateTime
+import java.time.ZoneId
+import java.time.format.DateTimeFormatter
+import java.time.format.FormatStyle
 import java.util.Locale
 
 /**
@@ -157,5 +162,55 @@ object StatsFormat {
         val hours = afterDays / 3_600
         val minutes = (afterDays % 3_600) / 60
         return UptimeParts(days, hours, minutes)
+    }
+
+    /**
+     * `"[n]"` - a matching-node candidate's position in its list
+     * (`NodeCard`'s own `index` parameter), locale-aware on the same terms
+     * every other function here is: small today, but a plain `"[$index]"`
+     * interpolation would render Arabic-Indic digits for a future locale this
+     * app does not yet ship while every numeric reading beside it in the same
+     * card went through `String.format(locale, ...)`. The brackets themselves
+     * are structural notation, not translatable prose - the same treatment
+     * [PositionLineText]'s direction separator and
+     * [com.cerocoder.meshrelay.ui.relays.RelayCard]'s own `hexWithMatchCount`
+     * get - so this stays a formatter here rather than a string resource: two
+     * locale files would gain an entry neither translation ever changes.
+     */
+    fun candidateIndex(index: Int, locale: Locale): String = String.format(locale, "[%d]", index)
+
+    /**
+     * A node database timestamp (`NodeRecord.lastHeardEpochSeconds`) as an
+     * absolute, locale-ordered local date and time. Ports the `%Y-%m-%d
+     * %H:%M:%S` mesh_stats.py:1891 builds via `datetime.fromtimestamp(ts)` -
+     * but locale-aware rather than the original's fixed ISO-like pattern: a
+     * Spanish reader expects day-before-month, which
+     * [DateTimeFormatter.ofLocalizedDateTime] resolves from [locale] instead
+     * of a hardcoded pattern string. [FormatStyle.MEDIUM] is the style used -
+     * verified against real `java.time` output (OpenJDK 17) rather than
+     * assumed: it is the shortest built-in style that still includes seconds
+     * (matching the original's `%S`), and unlike [FormatStyle.LONG]/`FULL` it
+     * formats a plain [LocalDateTime] without throwing
+     * `DateTimeException: Unable to extract ZoneId from temporal` - those two
+     * styles print a zone name, which requires a zone-aware temporal
+     * ([java.time.ZonedDateTime]) this function deliberately does not carry
+     * past formatting (see below).
+     *
+     * This is the one field in this app that renders an absolute time rather
+     * than a relative [AgeLabel] age - see `NodeCard`'s own KDoc for why: a
+     * database entry, unlike every session-scoped signal history elsewhere in
+     * this app, can genuinely be weeks old, and `AgeText` has no week/month
+     * bucket because it was built for ages that never exceed a few hours.
+     *
+     * [zone] defaults to [ZoneId.systemDefault] - the device's own configured
+     * zone - matching the original's `datetime.fromtimestamp`, which reads
+     * naive *local* time, not UTC. Exposed as a parameter (rather than read
+     * directly in the body) purely so a test can pin a fixed zone instead of
+     * depending on whatever zone happens to run the test JVM; every real
+     * caller leaves it at its default.
+     */
+    fun nodeDatabaseLastHeard(epochSeconds: Int, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {
+        val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
+        return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale).format(localDateTime)
     }
 }
