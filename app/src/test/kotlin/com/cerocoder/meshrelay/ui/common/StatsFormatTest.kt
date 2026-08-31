@@ -221,11 +221,21 @@ class StatsFormatTest {
 
     @Test
     fun `candidateIndex follows the given locale, not a fixed one`() {
-        // Digits only, no decimal separator to diverge on - but still routed
-        // through String.format(locale, ...), not a bare interpolation, on the
-        // same terms as every other formatter in this object.
+        // en/es-ES pin the ordinary path this app actually ships - but a bare
+        // %d on a small integer renders identically under both, so neither
+        // assertion can fail against a mutant that hardcodes Locale.US inside
+        // candidateIndex and ignores the parameter entirely.
         assertEquals("[3]", StatsFormat.candidateIndex(3, Locale.US))
         assertEquals("[3]", StatsFormat.candidateIndex(3, Locale("es", "ES")))
+
+        // ar-EG is not a locale this app ships - it appears here solely
+        // because its digits genuinely diverge (Arabic-Indic, not
+        // ASCII), which is what actually kills the hardcoded-locale mutant
+        // the two assertions above cannot touch. Verified against real
+        // String.format(Locale("ar","EG"), "[%d]", 3) output (OpenJDK 17)
+        // before writing this assertion: "[٣]", i.e. '[' + U+0663
+        // (ARABIC-INDIC DIGIT THREE) + ']', no direction marks.
+        assertEquals("[٣]", StatsFormat.candidateIndex(3, Locale("ar", "EG")))
     }
 
     @Test
