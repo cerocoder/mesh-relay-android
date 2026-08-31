@@ -29,11 +29,31 @@ object MapLinks {
         String.format(Locale.ROOT, OPEN_STREET_MAP_TEMPLATE, lat, lon)
 
     /**
-     * [baseUrl] is a setting typed by hand in Settings. A trailing slash
-     * there would double up with the leading slash in the template below and
-     * produce a link that 404s - which reads as a broken feature, not the
-     * typo it actually is - so it is trimmed before use.
+     * [baseUrl] is a setting typed by hand in Settings, with no validation on the
+     * way in. Two of the ways that shows up are corrected here rather than at the
+     * point of entry, so the repair lives in one tested place instead of being
+     * spread between Settings and every call site:
+     *
+     * - A trailing slash would double up with the leading slash in the template
+     *   below and produce a link that 404s - which reads as a broken feature, not
+     *   the typo it actually is - so it is trimmed before use.
+     * - A missing scheme (`meshview.meshtastic.es` rather than
+     *   `https://meshview.meshtastic.es`) produces a URI with no scheme, which
+     *   matches no activity: [android.content.Intent] resolution throws
+     *   `ActivityNotFoundException` rather than failing gracefully. `https://` is
+     *   assumed for anything that does not already declare a scheme; an
+     *   already-schemed URL, `http://` included, is left exactly as typed - this
+     *   function corrects an absent scheme, it does not second-guess one that is
+     *   merely unencrypted.
      */
-    fun meshview(baseUrl: String, nodeNum: Int): String =
-        String.format(Locale.ROOT, MESHVIEW_NODE_TEMPLATE, baseUrl.trimEnd('/'), nodeNum)
+    fun meshview(baseUrl: String, nodeNum: Int): String {
+        val trimmed = baseUrl.trimEnd('/')
+        val withScheme = if (SCHEME_PATTERN.containsMatchIn(trimmed)) trimmed else "https://$trimmed"
+        return String.format(Locale.ROOT, MESHVIEW_NODE_TEMPLATE, withScheme, nodeNum)
+    }
+
+    // A scheme plus "://" at the very start, e.g. "https://", "http://" - deliberately
+    // narrow rather than a full URI-scheme grammar, since the only two values this
+    // has ever seen are http and https.
+    private val SCHEME_PATTERN = Regex("^[a-zA-Z][a-zA-Z0-9+.-]*://")
 }
