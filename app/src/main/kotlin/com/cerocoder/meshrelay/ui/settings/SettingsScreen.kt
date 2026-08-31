@@ -248,15 +248,23 @@ fun SettingsScreen(
         }
     }
 
-    // Same shape as MatchingNodesTab's own clear-all dialog: title/body come
-    // from the shared action_clear_skipped_confirm_* pair, the confirm button
-    // reuses this screen's own trigger label rather than introducing a third
-    // piece of clear-all wording, and dismissing never mutates anything.
+    // Same dialog shape as MatchingNodesTab's own clear-all confirmation, but
+    // NOT its string pair: action_clear_skipped_confirm_title/body say "for
+    // this relay", which is only true there. This screen's clear-all is
+    // global - every skipped node, for every relay - so it gets its own
+    // settings_clear_all_skipped_confirm_title/body instead. A dialog whose
+    // text understates what the button actually does is worse than no
+    // dialog: it reads as a safeguard while giving false reassurance about
+    // the blast radius, and skip decisions are judgement work accumulated
+    // relay by relay across a survey - not something to lose by surprise.
+    // The confirm button still reuses this screen's own trigger label rather
+    // than introducing a third piece of clear-all wording; dismissing never
+    // mutates anything.
     if (clearAllDialogVisible) {
         AlertDialog(
             onDismissRequest = { clearAllDialogVisible = false },
-            title = { Text(stringResource(R.string.action_clear_skipped_confirm_title)) },
-            text = { Text(stringResource(R.string.action_clear_skipped_confirm_body)) },
+            title = { Text(stringResource(R.string.settings_clear_all_skipped_confirm_title)) },
+            text = { Text(stringResource(R.string.settings_clear_all_skipped_confirm_body)) },
             confirmButton = {
                 TextButton(
                     onClick = {

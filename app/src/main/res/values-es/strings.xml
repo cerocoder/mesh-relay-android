@@ -201,6 +201,8 @@
     <string name="settings_skipped_nodes">Nodos descartados</string>
     <string name="settings_skipped_nodes_empty">No hay nodos descartados</string>
     <string name="settings_clear_all_skipped">Borrar todos los nodos descartados</string>
+    <string name="settings_clear_all_skipped_confirm_title">¿Borrar todos los nodos descartados?</string>
+    <string name="settings_clear_all_skipped_confirm_body">Esto borra la lista de descartados de todos los repetidores, no solo de uno. Esos nodos volverán a considerarse candidatos en cualquier repetidor.</string>
     <string name="settings_about">Acerca de</string>
     <string name="settings_version">Versión</string>
     <string name="settings_licence">Licencia</string>

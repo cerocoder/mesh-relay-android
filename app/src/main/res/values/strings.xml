@@ -201,6 +201,8 @@
     <string name="settings_skipped_nodes">Skipped nodes</string>
     <string name="settings_skipped_nodes_empty">No skipped nodes</string>
     <string name="settings_clear_all_skipped">Clear all skipped nodes</string>
+    <string name="settings_clear_all_skipped_confirm_title">Clear all skipped nodes?</string>
+    <string name="settings_clear_all_skipped_confirm_body">This clears the skip list for every relay, not just one. All of those nodes become candidates again, everywhere.</string>
     <string name="settings_about">About</string>
     <string name="settings_version">Version</string>
     <string name="settings_licence">Licence</string>
