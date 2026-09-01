@@ -22,6 +22,14 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
+    <!-- Optional, and this must be said explicitly: ACCESS_FINE_LOCATION implies a
+         *required* android.hardware.location.gps feature, which would filter this app
+         off any device with no GNSS chip on a store listing. The code already means
+         optional - AndroidPhoneLocationSource treats a missing GPS provider as
+         survivable and falls through to NETWORK_PROVIDER - so the manifest must say so
+         too. -->
+    <uses-feature android:name="android.hardware.location.gps" android:required="false" />
+
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 

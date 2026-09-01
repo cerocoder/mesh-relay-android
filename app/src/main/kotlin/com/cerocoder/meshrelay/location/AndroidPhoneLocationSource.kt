@@ -64,6 +64,18 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
 
     // The permission is checked immediately above every call, by availability
     // .granted(); lint cannot see through the helper.
+    //
+    // @Synchronized, with stop() below, because two callers genuinely race:
+    // AppContainer's settings collector calls start()/stop() from the application
+    // scope's Dispatchers.Default, while MainActivity's permission callback calls
+    // refreshLocationUpdates() - which also reaches start()/stop() - on the main
+    // thread. `listening` being a plain var makes "if (listening) return; ...;
+    // listening = true" a check-then-act, not one atomic read; @Volatile alone
+    // would not close that window. Left open, stop() can read listening == false
+    // while a start() is still in flight, return without calling removeUpdates,
+    // and then have start() set listening = true - leaving the GNSS running after
+    // the user switched the setting off.
+    @Synchronized
     @SuppressLint("MissingPermission")
     override fun start() {
         if (listening) return
@@ -92,6 +104,7 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
         listening = requested
     }
 
+    @Synchronized
     override fun stop() {
         if (!listening) return
         manager?.removeUpdates(listener)

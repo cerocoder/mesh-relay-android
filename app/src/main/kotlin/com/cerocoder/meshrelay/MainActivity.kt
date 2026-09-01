@@ -179,7 +179,12 @@ private fun MeshRelayContent(
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions(),
-    ) { readiness = container.availability.check() }
+    ) {
+        readiness = container.availability.check()
+        // A location grant does not change BleReadiness, so nothing else here
+        // would notice it.
+        container.refreshLocationUpdates()
+    }
 
     // Bluetooth, location and - from Android 13 - notifications, asked for in one
     // dialog sequence at first connect. Location is not part of BleReadiness: a

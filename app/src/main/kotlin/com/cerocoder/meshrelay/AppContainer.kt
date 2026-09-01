@@ -8,10 +8,14 @@ import com.cerocoder.meshrelay.ble.nordic.BleScannerImpl
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.connection.RadioConnectionManager
 import com.cerocoder.meshrelay.emulator.Scenarios
+import com.cerocoder.meshrelay.location.AndroidPhoneLocationSource
+import com.cerocoder.meshrelay.location.LocationAvailability
+import com.cerocoder.meshrelay.location.PhoneLocationSource
 import com.cerocoder.meshrelay.service.MeshForegroundService
 import com.cerocoder.meshrelay.settings.AndroidSettingsStore
 import com.cerocoder.meshrelay.settings.SettingsRepository
 import com.cerocoder.meshrelay.stats.MeshStatsEngine
+import com.cerocoder.meshrelay.stats.PositionMode
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.transport.RadioTransportFactory
@@ -22,8 +26,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlin.concurrent.Volatile
@@ -59,10 +67,33 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
 
     val connectionManager = RadioConnectionManager(factory, scope, SystemTimeSource)
 
+    /** Permission state for the phone's own position, for the activity's request. */
+    val locationAvailability = LocationAvailability(context)
+
+    private val phoneLocation: PhoneLocationSource = AndroidPhoneLocationSource(context)
+
+    /**
+     * The setting as the engine's own vocabulary. Derived rather than pushed, so
+     * there is one source of truth (the repository) and no chance of the two
+     * disagreeing after a settings write that failed to notify.
+     *
+     * `Eagerly`, not `WhileSubscribed`: the engine subscribes for the life of the
+     * process and there is nothing to stop.
+     */
+    private val positionMode: StateFlow<PositionMode> = settings.settings
+        .map { if (it.usePhoneLocation) PositionMode.PHONE else PositionMode.NODE }
+        .stateIn(
+            scope,
+            SharingStarted.Eagerly,
+            if (settings.settings.value.usePhoneLocation) PositionMode.PHONE else PositionMode.NODE,
+        )
+
     val engine = MeshStatsEngine(
         scope = scope,
         skippedRelayNodes = settings.skippedRelayNodes,
         initialSortMode = settings.settings.value.defaultSortMode,
+        positionMode = positionMode,
+        phoneFix = phoneLocation.fix,
     )
 
     /** Demo devices in debug builds only; real ones come from the scanner. */
@@ -151,6 +182,16 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
             }
         }
 
+        // The switch is the escape hatch, so it stops the updates rather than
+        // merely ignoring them: with it off, this app asks the platform for
+        // nothing and costs no battery beyond the BLE link.
+        scope.launch {
+            settings.settings
+                .map { it.usePhoneLocation }
+                .distinctUntilChanged()
+                .collect { on -> if (on) phoneLocation.start() else phoneLocation.stop() }
+        }
+
         // The notification carries counters, not a snapshot: it is the one thing
         // that still updates with the screen off, and building a snapshot for it
         // would give back exactly the saving that subscription-scoped sharing buys.
@@ -175,6 +216,18 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     fun clearSkippedForRelay(relayByte: Int) = settings.clearSkippedForRelay(relayByte)
 
     fun clearAllSkippedNodes() = settings.clearAllSkippedNodes()
+
+    /**
+     * Re-apply the location decision after a permission dialog.
+     *
+     * `start()` is a no-op while the permission is missing, and the first launch
+     * asks for it *after* the container has already been built - so without this
+     * the source would sit idle until the next process start even though the user
+     * had just granted it.
+     */
+    fun refreshLocationUpdates() {
+        if (settings.settings.value.usePhoneLocation) phoneLocation.start() else phoneLocation.stop()
+    }
 
     /**
      * Record the user's intent to be connected, and act on it.
