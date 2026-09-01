@@ -273,8 +273,8 @@ status strip names the mode that was chosen.
 **Silent-failure watch:** a mis-keyed sort still produces *an* order and looks fine at a glance —
 only the card figures prove it.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: **2026-09-01, Galaxy (1080x2340, density 450), node 49bf + demos**  Result: **PASS**
+  Notes: Read off `uiautomator dump`, live node. Relays / Known nodes: `0x4b` (5 known nodes), `0x30` (1), `0x68` (1) - descending, matching the per-card figures. Relays / Latest packet: `0x4b` 28sec ago, `0x6f` 51sec ago. Both modes present in the menu, seven entries in all. Neighbours / Latest packet applied and named in the strip.
 
 ### C4. Known nodes on Neighbours falls back, and says so — *added with the sort-modes work*
 **Do:** Choose **Known nodes** on Relays (or set it as the default sort in Settings), then switch
@@ -285,8 +285,8 @@ mode that was chosen.
 **Silent-failure watch:** this is the one case where the strip and the list can disagree. A strip
 saying "Known nodes" over a packet-count order is the defect, and it looks like a working screen.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: **2026-09-01, Galaxy (1080x2340, density 450), node 49bf + demos**  Result: **PASS**
+  Notes: Known nodes chosen on Relays, then the Neighbours tab. Its sort menu lists six entries and **Known nodes is not among them**; the ticked entry is `Packet count`; the strip reads `Sort by  Packet count`. Strip, tick and order all agree on the mode that actually ran.
 
 ### C5. The My node tab, all three states — *added with the My node work*
 **Do:** Open **My node** / **Mi nodo** on a live connection. Then reach the other two states: kill
@@ -298,8 +298,8 @@ other node to measure from. Before its NodeInfo arrives: the "has not sent its o
 message. Before the handshake: "Local node unknown" / "Nodo local desconocido".
 **Also confirm:** neither list screen shows the local-node block any more.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: **2026-09-01, Galaxy (1080x2340, density 450), node 49bf + demos**  Result: **PASS (two states observed, one unreachable by hand)**
+  Notes: Live node, populated: `!5ead49bf`, `M - PQP78`, `49bf`, `CLIENT_BASE`, `HELTEC_MESH_NODE_T114`, `40.331281, -3.750738`, `648 m`, `Src: DB:5min`, Google Maps / OpenStreetMap / Meshview, `Last heard`, `Uptime 8days 12hrs 23min`, `Restarts 0`, four telemetry rows - and **no distance figure**, which is the `from = null` claim and is only provable against a node that has coordinates. No `Sort` in `content-desc`, only Pausar/Mas. No-node-info state seen in Spanish on the 200-node and Zona Centro demos: "Este nodo aun no ha enviado sus datos...". **The third state (`Local node unknown`) was not reachable by hand:** `localNodeNum` is set from the `my_info` handshake frame and never cleared, and `Screen.Main` is only pushed once the connection reports Connected - so on this build the branch is correct but unvisitable. It has a preview; leaving it in place is right, and it stays defensive rather than dead. Local-node block confirmed **gone** from both lists: on the Relays and Neighbours screens the first card now begins at y=556 where it began at y=938 before - about 135 dp of list returned on the screen that had the least.
 
 ### C6. The three-count status strip at a large font scale, in Spanish — *added with the My node work*
 **Do:** Set the system font scale to its largest, the language to Español, and open **Mi nodo**
@@ -310,8 +310,8 @@ onto a second line rather than clipping or pushing anything off the edge.
 **Silent-failure watch:** this is the F-3 shape. A screenshot at the default font scale in English
 will not show it.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: **2026-09-01, Galaxy (1080x2340, density 450), node 49bf + demos**  Result: **PASS**
+  Notes: Espanol, font scale 1.3, paused, Zona Centro demo. Line 1 `Total 52  Repetidos 36  Directos 16`, ending at x=909 of 1080; line 2 `Pausado` - the badge **wrapped** instead of clipping or pushing a count off the edge. The Relays strip wrapped the same way, with `Ordenar por / Numero de paquetes` moving to a second line. This is the FlowRow doing what it was put there for; a `Row` would have shown the F-3 failure here.
 
 ---
 

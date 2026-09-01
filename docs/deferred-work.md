@@ -134,3 +134,11 @@ These are not follow-ups. They are the state of the branch.
 - **Hardware acceptance.** `docs/acceptance-checklist.md` — 28 items, none run. CI proves the code
   compiles and the tests pass; nothing in this branch has ever talked to a radio. The BLE
   handshake, the demo-to-live transition, and every gauge against real SNR are unverified.
+
+- **Sort modes / My node (2026-09-01)** — `MyNodeScreen`'s `Local node unknown` branch is correct
+  but not reachable by hand. `localNodeNum` is set from the `my_info` handshake frame and never
+  cleared, and `Screen.Main` is only pushed once the connection reports Connected, so by the time
+  the tab exists the number is always known. Left in place with its preview rather than deleted:
+  it is the honest reading of a nullable field, and a transport that completes a handshake without
+  `my_info` would land on it. If it is ever to be *tested*, a demo transport that omits `my_info`
+  is what would do it.
