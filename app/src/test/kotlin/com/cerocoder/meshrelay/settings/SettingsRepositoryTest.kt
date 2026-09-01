@@ -40,6 +40,22 @@ class SettingsRepositoryTest {
         assertEquals("https://meshview.meshtastic.es", settings.meshviewUrl)
         assertEquals(false, settings.keepScreenOn)
         assertEquals(true, settings.backgroundCollection)
+        // On by default: the phone is what the surveyor is carrying, and the node's
+        // position is the coarser answer. Off is the escape hatch, not the norm.
+        assertEquals(true, settings.usePhoneLocation)
+    }
+
+    @Test
+    fun `use phone location persists both ways`() {
+        // Both directions, because a default of true means "off" is the only value a
+        // write can actually be seen to carry: a store that dropped the write would
+        // still read back true and pass a one-directional test.
+        val store = FakeStore()
+        repo(store).update { it.copy(usePhoneLocation = false) }
+        assertEquals(false, repo(store).settings.value.usePhoneLocation)
+
+        repo(store).update { it.copy(usePhoneLocation = true) }
+        assertEquals(true, repo(store).settings.value.usePhoneLocation)
     }
 
     @Test

@@ -10,4 +10,11 @@ data class AppSettings(
     val meshviewUrl: String = "https://meshview.meshtastic.es",
     val keepScreenOn: Boolean = false,
     val backgroundCollection: Boolean = true,
+    /**
+     * Stamp each measurement with the phone's own fix rather than with the local
+     * node's position. On by default: the phone is what the surveyor is carrying,
+     * and the node's position is the coarser answer. Off stops the location
+     * updates rather than merely ignoring them.
+     */
+    val usePhoneLocation: Boolean = true,
 )

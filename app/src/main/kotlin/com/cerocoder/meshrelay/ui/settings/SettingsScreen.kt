@@ -192,6 +192,26 @@ fun SettingsScreen(
                 )
             }
 
+            item(key = "use-phone-location") {
+                SwitchRow(
+                    label = stringResource(R.string.settings_use_phone_location),
+                    checked = settings.usePhoneLocation,
+                    onCheckedChange = { checked ->
+                        onUpdate { current -> current.copy(usePhoneLocation = checked) }
+                    },
+                )
+            }
+            item(key = "use-phone-location-summary") {
+                Text(
+                    text = stringResource(R.string.settings_use_phone_location_summary),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
             item(key = "skipped-header") {
                 SectionHeader(stringResource(R.string.settings_skipped_nodes))
             }
@@ -319,8 +339,9 @@ private fun RadioOptionRow(
     }
 }
 
-/** A label and a trailing `Switch` sharing a row, for the two plain on/off
- *  settings ([AppSettings.keepScreenOn], [AppSettings.backgroundCollection]). */
+/** A label and a trailing `Switch` sharing a row, for the plain on/off settings
+ *  ([AppSettings.keepScreenOn], [AppSettings.backgroundCollection],
+ *  [AppSettings.usePhoneLocation]). */
 @Composable
 private fun SwitchRow(
     label: String,

@@ -15,6 +15,7 @@ private const val KEY_DEFAULT_SORT_MODE = "default_sort_mode"
 private const val KEY_MESHVIEW_URL = "meshview_url"
 private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
 private const val KEY_BACKGROUND_COLLECTION = "background_collection"
+private const val KEY_USE_PHONE_LOCATION = "use_phone_location"
 private const val KEY_SKIPPED_RELAY_NODES = "skipped_relay_nodes"
 
 /**
@@ -138,6 +139,7 @@ class SettingsRepository(private val store: SettingsStore) {
             bools = mapOf(
                 KEY_KEEP_SCREEN_ON to settingsSnapshot.keepScreenOn,
                 KEY_BACKGROUND_COLLECTION to settingsSnapshot.backgroundCollection,
+                KEY_USE_PHONE_LOCATION to settingsSnapshot.usePhoneLocation,
             ),
             sets = mapOf(
                 KEY_SKIPPED_RELAY_NODES to skippedSnapshot.map { NodeId.format(it) }.toSet(),
@@ -154,6 +156,7 @@ class SettingsRepository(private val store: SettingsStore) {
             meshviewUrl = store.getString(KEY_MESHVIEW_URL, defaults.meshviewUrl),
             keepScreenOn = store.getBoolean(KEY_KEEP_SCREEN_ON, defaults.keepScreenOn),
             backgroundCollection = store.getBoolean(KEY_BACKGROUND_COLLECTION, defaults.backgroundCollection),
+            usePhoneLocation = store.getBoolean(KEY_USE_PHONE_LOCATION, defaults.usePhoneLocation),
         )
     }
 

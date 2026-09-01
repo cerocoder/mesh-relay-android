@@ -208,6 +208,8 @@
     <string name="settings_keep_screen_on">Keep screen on</string>
     <string name="settings_background_collection">Collect in background</string>
     <string name="settings_background_collection_summary">Keep collecting while the app is in the background. Without it, Android suspends the app and the survey stops.</string>
+    <string name="settings_use_phone_location">Use phone location</string>
+    <string name="settings_use_phone_location_summary">Stamp each measurement with the phone\'s own position. Turned off, the local node\'s position is used instead and the phone\'s GPS is not switched on.</string>
     <string name="settings_skipped_nodes">Skipped nodes</string>
     <string name="settings_skipped_nodes_empty">No skipped nodes</string>
     <string name="settings_clear_all_skipped">Clear all skipped nodes</string>

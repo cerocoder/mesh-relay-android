@@ -208,6 +208,8 @@
     <string name="settings_keep_screen_on">Mantener la pantalla encendida</string>
     <string name="settings_background_collection">Recopilar en segundo plano</string>
     <string name="settings_background_collection_summary">Sigue recopilando datos mientras la aplicación está en segundo plano. Sin esto, Android suspende la aplicación y la recopilación se detiene.</string>
+    <string name="settings_use_phone_location">Usar la ubicación del teléfono</string>
+    <string name="settings_use_phone_location_summary">Marca cada medición con la posición del propio teléfono. Si se desactiva, se usa la posición del nodo local y no se enciende el GPS del teléfono.</string>
     <string name="settings_skipped_nodes">Nodos descartados</string>
     <string name="settings_skipped_nodes_empty">No hay nodos descartados</string>
     <string name="settings_clear_all_skipped">Borrar todos los nodos descartados</string>
