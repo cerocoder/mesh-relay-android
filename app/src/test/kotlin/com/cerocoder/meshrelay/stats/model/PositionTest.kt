@@ -106,4 +106,36 @@ class PositionTest {
         assertEquals(5L, history.reports.first().atMillis)
         assertTrue(history.last!!.atMillis == (PositionHistory.MAX_REPORTS + 4).toLong())
     }
+
+    @Test
+    fun `a stamped position round-trips through the scaled integer form`() {
+        // Getafe, the mesh this app was built for. Seven decimal places is the
+        // protobuf's own resolution, so nothing here should lose a digit.
+        val stamped = StampedPosition.fromDegrees(40.3057734, -3.7325611, PositionOrigin.PHONE)
+        assertEquals(403057734, stamped.latI)
+        assertEquals(-37325611, stamped.lonI)
+        assertEquals(40.3057734, stamped.latitude, 1e-9)
+        assertEquals(-3.7325611, stamped.longitude, 1e-9)
+        assertEquals(PositionOrigin.PHONE, stamped.origin)
+    }
+
+    @Test
+    fun `the extremes of the coordinate system stay inside an Int`() {
+        // The whole reason the scaled form is four bytes rather than eight: 180
+        // degrees scales to 1.8e9, and Int tops out at 2.147e9. One degree more of
+        // headroom than the coordinate system has.
+        assertEquals(900000000, StampedPosition.fromDegrees(90.0, 180.0, PositionOrigin.NODE).latI)
+        assertEquals(1800000000, StampedPosition.fromDegrees(90.0, 180.0, PositionOrigin.NODE).lonI)
+        assertEquals(-1800000000, StampedPosition.fromDegrees(-90.0, -180.0, PositionOrigin.NODE).lonI)
+    }
+
+    @Test
+    fun `an origin survives the byte it is stored as, and zero is not an origin`() {
+        // Zero is the "no position" marker in SignalSeriesBuffer's source array, so it
+        // must never decode to a real origin - that is what makes latI/lonI safe to
+        // leave at their default when a sample has no position at all.
+        PositionOrigin.entries.forEach { assertEquals(it, PositionOrigin.ofCode(it.code)) }
+        assertNull(PositionOrigin.ofCode(PositionOrigin.NONE))
+        assertNull(PositionOrigin.ofCode(99.toByte()))
+    }
 }
