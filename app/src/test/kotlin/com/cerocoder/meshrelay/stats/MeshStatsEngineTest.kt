@@ -1,6 +1,9 @@
 package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Counters
+import com.cerocoder.meshrelay.stats.model.PositionOrigin
+import com.cerocoder.meshrelay.stats.model.SignalSeries
+import com.cerocoder.meshrelay.stats.model.StampedPosition
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -21,8 +24,10 @@ import org.junit.Test
 import org.meshtastic.proto.Data
 import org.meshtastic.proto.FromRadio
 import org.meshtastic.proto.MeshPacket
+import org.meshtastic.proto.MyNodeInfo
 import org.meshtastic.proto.NodeInfo
 import org.meshtastic.proto.PortNum
+import org.meshtastic.proto.Position
 import org.meshtastic.proto.User
 import kotlin.time.Duration.Companion.minutes
 
@@ -48,6 +53,29 @@ private fun relayed(
 private fun direct(from: Int = SENDER, at: Long = 1_000L) = TimestampedFrame(
     rxMillis = at,
     frame = FromRadio(packet = MeshPacket(from = from, relay_node = 0, rx_snr = -3f, rx_rssi = -80)),
+)
+
+/** A POSITION_APP packet from [from], carrying both coordinates and an altitude -
+ *  PositionHistory.best returns only reports that have both. */
+private fun positionFrame(from: Int, latI: Int, lonI: Int, at: Long = 1_000L) = TimestampedFrame(
+    rxMillis = at,
+    frame = FromRadio(
+        packet = MeshPacket(
+            from = from, relay_node = 0, rx_snr = -3f, rx_rssi = -80,
+            decoded = Data(
+                portnum = PortNum.POSITION_APP,
+                payload = ByteString.of(
+                    *Position(latitude_i = latI, longitude_i = lonI, altitude = 600).encode(),
+                ),
+            ),
+        ),
+    ),
+)
+
+/** The handshake frame that tells the engine which node is ours. */
+private fun myInfoFrame(num: Int) = TimestampedFrame(
+    rxMillis = 1_000L,
+    frame = FromRadio(my_info = MyNodeInfo(my_node_num = num)),
 )
 
 /** One node database entry, as the radio hands it over during the handshake. */
@@ -178,6 +206,16 @@ class MeshStatsEngineTest {
         val seen = mutableListOf<StatsSnapshot>()
         backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
             subject.snapshot.collect { seen += it }
+        }
+        return seen
+    }
+
+    /** Subscribes to [MeshStatsEngine.series] the same unconfined way
+     *  [collectSnapshots] subscribes to the snapshot, and for the same reason. */
+    private fun TestScope.collectSeries(subject: MeshStatsEngine): List<SignalSeries?> {
+        val seen = mutableListOf<SignalSeries?>()
+        backgroundScope.launch(UnconfinedTestDispatcher(testScheduler)) {
+            subject.series.collect { seen += it }
         }
         return seen
     }
@@ -563,5 +601,172 @@ class MeshStatsEngineTest {
     fun `every other mode is unchanged for neighbours`() {
         SortMode.entries.filter { it != SortMode.KNOWN_NODES }
             .forEach { assertEquals(it, it.forNeighbours()) }
+    }
+
+    @Test
+    fun `measurements are collected with nobody watching`() = runTest(StandardTestDispatcher()) {
+        // Spec requirement 14: the series exists from the first packet, whether or not
+        // a chart is open. A chart opened an hour into a survey must show that hour.
+        val subject = engine(backgroundScope)
+        subject.attach(flowOf(relayed(), relayed(), relayed()))
+        runCurrent()
+
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        runCurrent()
+
+        assertEquals(3, seen.last()?.size)
+    }
+
+    @Test
+    fun `a neighbour's measurements land under a neighbour key`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Neighbour(SENDER))
+        subject.attach(flowOf(direct(), direct()))
+        runCurrent()
+
+        assertEquals(2, seen.last()?.size)
+        assertEquals(-80f, seen.last()?.rssi(0)!!, 0.0001f)
+        assertEquals(-3f, seen.last()?.snr(1)!!, 0.0001f)
+    }
+
+    @Test
+    fun `nothing is published while nothing is subscribed`() = runTest(StandardTestDispatcher()) {
+        // The same rule the snapshot follows. A chart's 125 KB must not be copied for
+        // a screen that is not on.
+        val subject = engine(backgroundScope)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(relayed()))
+        runCurrent()
+
+        assertNull(subject.series.value)
+    }
+
+    @Test
+    fun `phone mode stamps the phone's fix`() = runTest(StandardTestDispatcher()) {
+        val fix = MutableStateFlow<StampedPosition?>(
+            StampedPosition.fromDegrees(40.3057734, -3.7325611, PositionOrigin.PHONE),
+        )
+        val subject = MeshStatsEngine(
+            backgroundScope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = MutableStateFlow(PositionMode.PHONE), phoneFix = fix,
+        ) { 1_000L }
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        runCurrent()
+
+        subject.attach(flowOf(relayed()))
+        runCurrent()
+
+        assertEquals(PositionOrigin.PHONE, seen.last()?.positionOf(0)?.origin)
+        assertEquals(403057734, seen.last()?.positionOf(0)?.latI)
+    }
+
+    @Test
+    fun `phone mode falls back to the node when no fix has arrived`() = runTest(StandardTestDispatcher()) {
+        // Spec section 6.3: a blank globe for the first minute of every session is
+        // worse than a slightly-less-precise pin, and the origin flag keeps it honest.
+        val subject = MeshStatsEngine(
+            backgroundScope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = MutableStateFlow(PositionMode.PHONE),
+            phoneFix = MutableStateFlow(null),
+        ) { 1_000L }
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231), relayed()))
+        runCurrent()
+
+        assertEquals(PositionOrigin.NODE, seen.last()?.positionOf(0)?.origin)
+        assertEquals(398628316, seen.last()?.positionOf(0)?.latI)
+    }
+
+    @Test
+    fun `node mode never falls back to the phone`() = runTest(StandardTestDispatcher()) {
+        // Turning the setting off is a request that the phone's GPS not be used.
+        // Quietly using it anyway would break that request; a sample with no position
+        // is the honest answer.
+        val subject = MeshStatsEngine(
+            backgroundScope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = MutableStateFlow(PositionMode.NODE),
+            phoneFix = MutableStateFlow(
+                StampedPosition.fromDegrees(40.3057734, -3.7325611, PositionOrigin.PHONE),
+            ),
+        ) { 1_000L }
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(relayed()))
+        runCurrent()
+
+        assertNull(seen.last()?.positionOf(0))
+    }
+
+    @Test
+    fun `a packet with no decodable signal adds no measurement`() = runTest(StandardTestDispatcher()) {
+        // The chart's crosshair reports both values with no "not available" case,
+        // which is only true because a measurement is never opened without both.
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(
+            flowOf(
+                TimestampedFrame(
+                    rxMillis = 1_000L,
+                    frame = FromRadio(
+                        packet = MeshPacket(from = SENDER, relay_node = 0x69, hop_start = 3, hop_limit = 1),
+                    ),
+                ),
+            ),
+        )
+        runCurrent()
+
+        assertEquals(0, seen.last()?.size ?: 0)
+    }
+
+    @Test
+    fun `reset clears the series with the statistics`() = runTest(StandardTestDispatcher()) {
+        // A chart outliving a reset would be showing a session that no longer exists.
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(relayed(), relayed()))
+        runCurrent()
+        assertEquals(2, seen.last()?.size)
+
+        subject.reset()
+        runCurrent()
+
+        assertEquals(0, seen.last()?.size ?: 0)
+    }
+
+    @Test
+    fun `watching nothing drops the published series at once`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(relayed()))
+        runCurrent()
+        assertEquals(1, seen.last()?.size)
+
+        subject.watchSeries(null)
+        runCurrent()
+
+        assertNull(seen.last())
+    }
+
+    @Test
+    fun `switching the watched subject replaces the published series`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(flowOf(relayed(), relayed(), direct()))
+        runCurrent()
+        assertEquals(2, seen.last()?.size)
+
+        subject.watchSeries(SeriesKey.Neighbour(SENDER))
+        runCurrent()
+
+        // One, not three: the neighbour's own series, not the relay's left behind.
+        assertEquals(1, seen.last()?.size)
     }
 }

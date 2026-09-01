@@ -62,13 +62,7 @@ class NodeDirectorySnapshot(
     }
 
     /** Where this device is, as far as the mesh has told it. */
-    fun localPosition(): LatLon? {
-        val num = localNodeNum ?: return null
-        val info = locationInfo(num, from = null)
-        val lat = info.lat ?: return null
-        val lon = info.lon ?: return null
-        return LatLon(lat, lon)
-    }
+    fun localPosition(): LatLon? = localPositionOf(localNodeNum, positionsByNode, nodes)
 
     /**
      * Where [nodeNum] is relative to [from]. Ports get_node_location_info,

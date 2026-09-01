@@ -64,6 +64,7 @@ private val ILLESCAS_ZERO = 0xA1001B00.toInt()
 private val BARE_NODE = 0xA1004459.toInt()
 private val PINTO = 0xA100119C.toInt()
 private val LOCAL_NODE = 0xA1FFEE01.toInt()
+private const val SENDER = 0x9e75f1a4.toInt()
 
 // Only its presence reaches NodeRecord.hasPublicKey, so the bytes are arbitrary;
 // a real Curve25519 key would be 32 of them.
@@ -637,5 +638,30 @@ class NodeDirectoryTest {
         val local = directory.snapshot(emptySet()).localPosition()!!
         assertEquals(MADRID_LOCAL.lat, local.lat, 1e-9)
         assertEquals(MADRID_LOCAL.lon, local.lon, 1e-9)
+    }
+
+    @Test
+    fun `the directory and its snapshot agree on where we are`() {
+        // Two callers, one precedence rule. The engine asks the directory per packet
+        // (a snapshot copies every map); the screens ask the snapshot. They must not
+        // drift, and a live report must beat the database entry in both.
+        val directory = NodeDirectory(TimeSource { 5_000L })
+        directory.setLocalNodeNum(SENDER)
+        directory.applyNodeInfo(
+            NodeInfo(
+                num = SENDER,
+                position = Position(latitude_i = 398628316, longitude_i = -40273231, altitude = 600),
+            ),
+        )
+        assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
+
+        directory.applyPosition(SENDER, Position(latitude_i = 403057734, longitude_i = -37325611, altitude = 610))
+        assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
+        assertEquals(40.3057734, directory.localPosition()!!.lat, 1e-7)
+    }
+
+    @Test
+    fun `with no local node number there is no local position`() {
+        assertNull(NodeDirectory(TimeSource { 5_000L }).localPosition())
     }
 }

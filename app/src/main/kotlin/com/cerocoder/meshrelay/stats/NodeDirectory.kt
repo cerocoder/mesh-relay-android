@@ -1,10 +1,12 @@
 package com.cerocoder.meshrelay.stats
 
+import com.cerocoder.meshrelay.stats.model.LatLon
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionReport
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
+import com.cerocoder.meshrelay.stats.model.localPositionOf
 import org.meshtastic.proto.NodeInfo
 import org.meshtastic.proto.Position
 import org.meshtastic.proto.Telemetry
@@ -157,6 +159,16 @@ class NodeDirectory(private val time: TimeSource) {
         positions.clear()
         telemetryRecords.clear()
     }
+
+    /**
+     * Where this device is, without building a snapshot to ask.
+     *
+     * The engine calls this once per measurement, and `snapshot()` copies every map
+     * in the directory - which is why it is taken once per batch there, and not per
+     * packet. The precedence rule itself is [localPositionOf]'s, shared with the
+     * snapshot.
+     */
+    fun localPosition(): LatLon? = localPositionOf(localNodeNum, positions, nodes)
 
     /**
      * The one value that leaves this coroutine. Every map is copied, so the

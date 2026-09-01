@@ -3,9 +3,12 @@ package com.cerocoder.meshrelay.stats
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.RemoteNodeStats
+import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.stats.model.StampedPosition
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -43,6 +46,8 @@ class MeshStatsEngine(
     private val scope: CoroutineScope,
     skippedRelayNodes: StateFlow<Set<Int>>,
     initialSortMode: SortMode,
+    positionMode: StateFlow<PositionMode> = MutableStateFlow(PositionMode.PHONE),
+    phoneFix: StateFlow<StampedPosition?> = MutableStateFlow(null),
     time: TimeSource = SystemTimeSource,
 ) {
 
@@ -51,6 +56,9 @@ class MeshStatsEngine(
         data class SetPaused(val paused: Boolean) : Command
         data class SetSort(val mode: SortMode) : Command
         data class SetSkipped(val skipped: Set<Int>) : Command
+        data class SetPositionMode(val mode: PositionMode) : Command
+        data class SetPhoneFix(val fix: StampedPosition?) : Command
+        data class WatchSeries(val key: SeriesKey?) : Command
         data object Reset : Command
 
         /**
@@ -84,6 +92,44 @@ class MeshStatsEngine(
     private var lastPacketAtMillis: Long? = null
     private var lastRelayedPacketAtMillis: Long? = null
 
+    // One buffer per subject, from the first packet, whether or not a chart is open
+    // (requirement 14). LinkedHashMap for the same reason relays and neighbours are:
+    // a stable order between rebuilds.
+    private val seriesBuffers = LinkedHashMap<SeriesKey, SignalSeriesBuffer>()
+
+    // The two inputs the interface owns, arriving as commands so they land on this
+    // coroutine rather than racing it - exactly as skippedRelayNodes already does.
+    private var positionModeState = PositionMode.PHONE
+    private var phoneFixState: StampedPosition? = null
+
+    // Which subject's chart is open, or null. At most one at a time: this is a
+    // full-screen destination.
+    private var watchedSeries: SeriesKey? = null
+
+    // Bumped by every reset. The publish guard needs it because totalAppended alone
+    // is ambiguous across a reset: a reset plus the same number of packets again, in
+    // one drained batch, would look identical to no change at all.
+    private var resetEpoch = 0
+
+    // What was last put on the wire, so an unchanged buffer is not re-copied. At mesh
+    // traffic rates the alternative copies 125 KB and recomposes the chart several
+    // times a second because some *other* relay heard a packet.
+    private var publishedKey: SeriesKey? = null
+    private var publishedEpoch = -1
+    private var publishedTotal = -1L
+
+    private val _series = MutableStateFlow<SignalSeries?>(null)
+
+    /**
+     * The watched subject's measurements, or null when nothing is watched.
+     *
+     * A channel of its own rather than a field on [StatsSnapshot]: widening the
+     * snapshot would copy every subject's series several times a second for the list
+     * screens, which need none of it. This copies one subject's 125 KB, and only
+     * while a chart is open.
+     */
+    val series: StateFlow<SignalSeries?> = _series.asStateFlow()
+
     // Not stateIn(WhileSubscribed): the build has to happen on the coroutine that
     // owns the state, and a shared upstream flow would run it on whichever coroutine
     // stateIn starts - the one thing this class is built to prevent. The property
@@ -111,10 +157,24 @@ class MeshStatsEngine(
             // other, so it lands on the owning coroutine rather than racing it.
             launch { skippedRelayNodes.collect { commands.send(Command.SetSkipped(it)) } }
 
+            launch { positionMode.collect { commands.send(Command.SetPositionMode(it)) } }
+            launch { phoneFix.collect { commands.send(Command.SetPhoneFix(it)) } }
+
             // A screen that has just opened must not see EMPTY while the engine
             // already holds an afternoon of statistics.
             launch {
                 _snapshot.subscriptionCount
+                    .map { it > 0 }
+                    .distinctUntilChanged()
+                    .collect { watched -> if (watched) commands.send(Command.Refresh) }
+            }
+
+            // The same "a screen that has just opened must not see nothing" rule the
+            // snapshot follows. Without it, opening a chart on a quiet relay races: the
+            // WatchSeries command can be applied before the collector has subscribed, the
+            // publish is skipped, and with no further packets the chart stays blank forever.
+            launch {
+                _series.subscriptionCount
                     .map { it > 0 }
                     .distinctUntilChanged()
                     .collect { watched -> if (watched) commands.send(Command.Refresh) }
@@ -142,6 +202,7 @@ class MeshStatsEngine(
                     refreshRelayNames(view)
                     _snapshot.value = buildSnapshot(view)
                 }
+                publishWatchedSeries()
             }
         }
     }
@@ -153,6 +214,9 @@ class MeshStatsEngine(
     fun setSortMode(mode: SortMode) { commands.trySend(Command.SetSort(mode)) }
     fun reset() { commands.trySend(Command.Reset) }
 
+    /** Open a chart on [key], or pass null when it closes. */
+    fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
+
     private fun apply(command: Command) {
         when (command) {
             is Command.Frame -> handleFrame(command.frame)
@@ -162,6 +226,17 @@ class MeshStatsEngine(
             // hands it on to the interface, which holds it for as long as a
             // composition lives.
             is Command.SetSkipped -> skipped = command.skipped.toSet()
+            is Command.SetPositionMode -> positionModeState = command.mode
+            is Command.SetPhoneFix -> phoneFixState = command.fix
+            is Command.WatchSeries -> {
+                watchedSeries = command.key
+                // Dropped here rather than at the next build: a closed chart's series must
+                // not be held for as long as the process lives, and a *different* subject's
+                // series must never be what the next chart draws for one frame.
+                if (command.key == null) _series.value = null
+                publishedKey = null
+                publishedTotal = -1L
+            }
             Command.Reset -> resetStatistics()
             Command.Refresh -> Unit
         }
@@ -288,6 +363,15 @@ class MeshStatsEngine(
             lastPacketAtMillis = atMillis,
             fromNodeStats = existing.fromNodeStats + (relayed.fromNode to remote),
         )
+
+        // Guarded by the same signal != null test that already guards the statistics: a
+        // measurement exists only when the packet carried decodable signal information,
+        // which is what lets the crosshair report both values with no "not available"
+        // case.
+        if (signal != null) {
+            seriesBuffers.getOrPut(SeriesKey.Relay(relayed.relayByte)) { SignalSeriesBuffer() }
+                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+        }
     }
 
     /** Ports the direct branch of on_receive, mesh_stats.py:1044-1058. */
@@ -302,6 +386,70 @@ class MeshStatsEngine(
             packetCount = existing.packetCount + 1,
             lastPacketAtMillis = atMillis,
         )
+
+        // Same guard, same reason as foldRelayed.
+        if (signal != null) {
+            seriesBuffers.getOrPut(SeriesKey.Neighbour(direct.fromNode)) { SignalSeriesBuffer() }
+                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+        }
+    }
+
+    /**
+     * Where the observer was, for the measurement being folded right now
+     * (requirement 16: captured at fold time, never searched for afterwards).
+     *
+     * | Mode  | First choice | Fallback           | Neither |
+     * | PHONE | the phone fix| the node's position| null    |
+     * | NODE  | the node's position | none         | null    |
+     *
+     * PHONE falls back because a blank globe for the first minute of every session -
+     * before the first fix lands, or after the permission was refused - is worse than
+     * a slightly-less-precise pin, and the origin flag recorded with the sample keeps
+     * it honest. NODE does not fall back, because turning the setting off is a
+     * request that the phone's GPS not be used, and quietly using it anyway would
+     * break that request.
+     */
+    private fun positionForSample(): StampedPosition? = when (positionModeState) {
+        PositionMode.PHONE -> phoneFixState ?: nodePosition()
+        PositionMode.NODE -> nodePosition()
+    }
+
+    private fun nodePosition(): StampedPosition? {
+        val local = directory.localPosition() ?: return null
+        return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE)
+    }
+
+    /**
+     * Publishes the watched subject's measurements, if anyone is looking and if
+     * anything changed.
+     *
+     * Two gates, not one. `subscriptionCount` is the same rule the snapshot follows:
+     * nothing subscribed means nothing built. The change check is what stops a
+     * packet heard on some other relay from copying this one's arrays and
+     * recomposing its chart; `totalAppended` moves on every append and only on an
+     * append, so it is exact at every fill level - unlike `size`, which stops moving
+     * once the ring saturates.
+     *
+     * `totalAppended` alone is not enough to guard on, though: `resetStatistics`
+     * clears [seriesBuffers], so a fresh buffer restarts its `totalAppended` at 0 -
+     * and the command loop drains every queued command before building. A `Reset`
+     * plus the same number of packets again, arriving in the same drained batch,
+     * would take `totalAppended` from N to 0 back to N with entirely different
+     * contents, and a guard over key and total alone would see no change at all and
+     * leave the chart drawing the session that was just reset away. [resetEpoch] -
+     * bumped by every reset - breaks that tie.
+     */
+    private fun publishWatchedSeries() {
+        val key = watchedSeries ?: return
+        if (_series.subscriptionCount.value == 0) return
+        val buffer = seriesBuffers[key]
+        val total = buffer?.totalAppended ?: 0L
+        val epoch = resetEpoch
+        if (key == publishedKey && epoch == publishedEpoch && total == publishedTotal) return
+        publishedKey = key
+        publishedEpoch = epoch
+        publishedTotal = total
+        _series.value = buffer?.snapshot() ?: SignalSeries.EMPTY
     }
 
     /**
@@ -314,6 +462,8 @@ class MeshStatsEngine(
     private fun resetStatistics() {
         relays.clear()
         neighbours.clear()
+        seriesBuffers.clear()
+        resetEpoch++
         counterState = Counters.EMPTY
         lastPacketAtMillis = null
         lastRelayedPacketAtMillis = null
