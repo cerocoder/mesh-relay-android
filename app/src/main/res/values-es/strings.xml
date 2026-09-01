@@ -81,6 +81,7 @@
     <!-- Navigation -->
     <string name="nav_relays">Repetidores</string>
     <string name="nav_neighbours">Vecinos</string>
+    <string name="nav_my_node">Mi nodo</string>
 
     <!-- Actions -->
     <string name="action_pause">Pausar</string>
@@ -286,4 +287,7 @@
         <item quantity="one">%d nodo descartado</item>
         <item quantity="other">%d nodos descartados</item>
     </plurals>
+
+    <!-- My node -->
+    <string name="my_node_no_info">Este nodo aún no ha enviado sus datos. Llegarán con su próximo paquete de información de nodo, o en la próxima recarga de la base de datos.</string>
 </resources>

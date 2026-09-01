@@ -9,6 +9,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -44,6 +45,7 @@ import com.cerocoder.meshrelay.ui.detail.NodeCard
 import com.cerocoder.meshrelay.ui.detail.RemoteNodeScreen
 import com.cerocoder.meshrelay.ui.detail.RemoteNodesTab
 import com.cerocoder.meshrelay.ui.devices.DeviceListScreen
+import com.cerocoder.meshrelay.ui.mynode.MyNodeScreen
 import com.cerocoder.meshrelay.ui.nav.BackStack
 import com.cerocoder.meshrelay.ui.nav.DetailSubject
 import com.cerocoder.meshrelay.ui.nav.MainTab
@@ -205,7 +207,9 @@ fun MeshRelayNavHost(
  * worse than a dull one. `Share` is the core set's one glyph showing nodes
  * joined by links, which is what a relay is; nothing in the set says
  * "directly-heard node", so the neighbours tab takes a plain list glyph, which
- * claims nothing its label does not.
+ * claims nothing its label does not. `Person` is the core set's glyph for an
+ * identity, and the My node tab is this device's own identity - the one node in
+ * the mesh that is not somebody else.
  */
 @Composable
 private fun MainScaffold(
@@ -237,6 +241,12 @@ private fun MainScaffold(
                     icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
                     label = { Text(stringResource(R.string.nav_neighbours)) },
                 )
+                NavigationBarItem(
+                    selected = tab == MainTab.MY_NODE,
+                    onClick = { backStack.selectTab(MainTab.MY_NODE) },
+                    icon = { Icon(Icons.Filled.Person, contentDescription = null) },
+                    label = { Text(stringResource(R.string.nav_my_node)) },
+                )
             }
         },
     ) { innerPadding ->
@@ -265,6 +275,17 @@ private fun MainScaffold(
                 meshviewUrl = meshviewUrl,
                 onOpenNeighbour = { nodeNum -> backStack.push(Screen.Detail(DetailSubject.Neighbour(nodeNum))) },
                 onSetSortMode = { mode -> container.engine.setSortMode(mode) },
+                onSetGaugeMode = { mode -> container.settings.update { it.copy(gaugeMode = mode) } },
+                onTogglePause = { container.engine.setPaused(!snapshot.paused) },
+                onReset = { container.engine.reset() },
+                onOpenSettings = { backStack.push(Screen.Settings) },
+                modifier = Modifier.padding(innerPadding),
+            )
+
+            MainTab.MY_NODE -> MyNodeScreen(
+                snapshot = snapshot,
+                meshviewUrl = meshviewUrl,
+                gaugeMode = settings.gaugeMode,
                 onSetGaugeMode = { mode -> container.settings.update { it.copy(gaugeMode = mode) } },
                 onTogglePause = { container.engine.setPaused(!snapshot.paused) },
                 onReset = { container.engine.reset() },

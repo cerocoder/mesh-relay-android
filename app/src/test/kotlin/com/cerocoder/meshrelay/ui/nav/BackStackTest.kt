@@ -113,6 +113,7 @@ class BackStackTest {
             Screen.Devices,
             Screen.Main(MainTab.RELAYS),
             Screen.Main(MainTab.NEIGHBOURS),
+            Screen.Main(MainTab.MY_NODE),
             Screen.Settings,
             Screen.Detail(DetailSubject.Relay(0x69)),
             Screen.Detail(DetailSubject.Neighbour(0x9e75f1a4.toInt())),

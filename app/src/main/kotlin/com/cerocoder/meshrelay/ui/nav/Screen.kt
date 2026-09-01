@@ -1,6 +1,12 @@
 package com.cerocoder.meshrelay.ui.nav
 
-enum class MainTab { RELAYS, NEIGHBOURS }
+/**
+ * The bottom bar's tabs, in the order they are drawn: ordinal is tab order, and
+ * [backStackSaver] encodes the ordinal, so an entry may be appended but not
+ * reordered without invalidating a saved stack. [MY_NODE] is last so that Relays
+ * stays the landing tab after a handshake.
+ */
+enum class MainTab { RELAYS, NEIGHBOURS, MY_NODE }
 
 /**
  * What a detail screen is about.
