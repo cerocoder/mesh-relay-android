@@ -1,7 +1,6 @@
 package com.cerocoder.meshrelay.ui.neighbours
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -10,35 +9,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,12 +26,11 @@ import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.AgeText
 import com.cerocoder.meshrelay.stats.RelativeAge
 import com.cerocoder.meshrelay.stats.SortMode
-import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
+import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
-import com.cerocoder.meshrelay.ui.common.PositionLine
+import com.cerocoder.meshrelay.ui.common.StatsTopBar
 import com.cerocoder.meshrelay.ui.preview.SampleData
-import com.cerocoder.meshrelay.ui.relays.SortModeLabels
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
 /**
@@ -64,15 +42,17 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * in between, while the relay screen is everything forwarded through one.
  *
  * Stateless by design, on the same terms as the relay screen: every value shown
- * is a parameter, every action a lambda the caller supplies, and the only local
- * state is the two transient bits of UI chrome (sort menu, reset confirmation)
- * that never need to survive a recomposition elsewhere.
+ * is a parameter, every action a lambda the caller supplies, and no local state
+ * at all - the sort menu and the reset confirmation moved into the shared
+ * [com.cerocoder.meshrelay.ui.common.StatsTopBar] along with the app bar itself.
  *
  * Differences from the relay screen, all because a neighbour is a known node
  * identity rather than a one-byte guess:
  * - No node-database reload action, no reload spinner and no connection state
  *   parameter - the neighbour list is built from live traffic, not a database
- *   fetch, so there is nothing here for a reload to refresh.
+ *   fetch, so there is nothing here for a reload to refresh. That is what the
+ *   omitted `reload` argument to [com.cerocoder.meshrelay.ui.common.StatsTopBar]
+ *   says: the item is left out of the menu rather than shown disabled.
  * - The header's traffic line reports [com.cerocoder.meshrelay.stats.model.Counters.totalDirectPackets]
  *   under [R.string.neighbours_status_direct] ("Direct"), not the relay
  *   screen's separate Total/Relayed counts (mesh_stats.py:1674-1675's
@@ -80,7 +60,6 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * - [NeighbourCard] is keyed by node identity - id plus short name - with no
  *   match-count bracket and no ambiguity gate on its position.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun NeighbourListScreen(
     snapshot: StatsSnapshot,
@@ -94,83 +73,19 @@ fun NeighbourListScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-    var resetDialogVisible by remember { mutableStateOf(false) }
-
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.neighbours_title)) },
-                actions = {
-                    val sortDescription = stringResource(R.string.action_sort)
-                    Box {
-                        IconButton(
-                            onClick = { sortMenuExpanded = true },
-                            modifier = Modifier.semantics { contentDescription = sortDescription },
-                        ) {
-                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                        }
-                        DropdownMenu(
-                            expanded = sortMenuExpanded,
-                            onDismissRequest = { sortMenuExpanded = false },
-                        ) {
-                            SortMode.entries.forEach { mode ->
-                                val selected = mode == snapshot.sortMode
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = stringResource(SortModeLabels.labelOf(mode)),
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    },
-                                    leadingIcon = if (selected) {
-                                        { Icon(Icons.Filled.Check, contentDescription = null) }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = {
-                                        sortMenuExpanded = false
-                                        onSetSortMode(mode)
-                                    },
-                                )
-                            }
-                        }
-                    }
-
-                    // No core icon distinguishes "simple" from "complex" gauge
-                    // display without misrepresenting what the action does, so
-                    // this stays a labelled toggle rather than a guessed icon -
-                    // same reasoning as the relay screen's identical control.
-                    TextButton(
-                        onClick = {
-                            val next = if (gaugeMode == GaugeMode.SIMPLE) GaugeMode.COMPLEX else GaugeMode.SIMPLE
-                            onSetGaugeMode(next)
-                        },
-                    ) {
-                        Text(
-                            stringResource(
-                                if (gaugeMode == GaugeMode.SIMPLE) R.string.gauge_simple else R.string.gauge_complex,
-                            ),
-                        )
-                    }
-
-                    // Icons.Filled.Pause is not in material-icons-core (only
-                    // PlayArrow is), and showing PlayArrow for "pause" while
-                    // running would claim the opposite of what tapping it does,
-                    // so both states of this toggle stay a labelled TextButton.
-                    TextButton(onClick = onTogglePause) {
-                        Text(stringResource(if (snapshot.paused) R.string.action_resume else R.string.action_pause))
-                    }
-
-                    IconButton(onClick = { resetDialogVisible = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_reset))
-                    }
-
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings))
-                    }
-                },
+            StatsTopBar(
+                title = stringResource(R.string.neighbours_title),
+                sortMode = snapshot.sortMode,
+                onSetSortMode = onSetSortMode,
+                gaugeMode = gaugeMode,
+                onSetGaugeMode = onSetGaugeMode,
+                paused = snapshot.paused,
+                onTogglePause = onTogglePause,
+                onReset = onReset,
+                onOpenSettings = onOpenSettings,
             )
         },
     ) { innerPadding ->
@@ -209,29 +124,6 @@ fun NeighbourListScreen(
                 }
             }
         }
-    }
-
-    if (resetDialogVisible) {
-        AlertDialog(
-            onDismissRequest = { resetDialogVisible = false },
-            title = { Text(stringResource(R.string.action_reset_confirm_title)) },
-            text = { Text(stringResource(R.string.action_reset_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        resetDialogVisible = false
-                        onReset()
-                    },
-                ) {
-                    Text(stringResource(R.string.action_reset))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetDialogVisible = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-        )
     }
 }
 
@@ -324,55 +216,6 @@ private fun dbLoadTimeText(loadedAtMillis: Long?, nowMillis: Long): String {
         is RelativeAge.Minutes -> stringResource(R.string.format_ago_minutes, age.minutes, age.seconds)
         is RelativeAge.Hours -> stringResource(R.string.format_ago_hours, age.hours, age.minutes)
         RelativeAge.Never -> stringResource(R.string.common_never)
-    }
-}
-
-/**
- * This device's own line, above the neighbour list: short name plus its position
- * with no distance figure (there is no "self" to measure a distance from), or
- * [R.string.relays_local_node_unknown] before the node database has told this app
- * its own node number at all. Ports `render_my_info`, mesh_stats.py:1319-1346 -
- * called unconditionally by `render_header` regardless of `neighbours_mode`, so it
- * belongs on this screen exactly as it does on the relay screen.
- *
- * Mirrors [com.cerocoder.meshrelay.ui.relays.RelayListScreen]'s private function of
- * the same name; that one is not public, so this is a second, independent copy.
- */
-@Composable
-private fun LocalNodeLine(
-    directory: NodeDirectorySnapshot,
-    meshviewUrl: String?,
-    modifier: Modifier = Modifier,
-) {
-    val localNodeNum = directory.localNodeNum
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        if (localNodeNum == null) {
-            Text(
-                text = stringResource(R.string.relays_local_node_unknown),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.relays_local_node),
-                style = MaterialTheme.typography.labelMedium,
-            )
-            // The node database can know this node's number without ever having
-            // heard its own User message - shortName is "" then, not null, and
-            // isNotEmpty() (rather than a null check) is what hides it correctly.
-            val shortName = directory.shortName(localNodeNum)
-            if (shortName.isNotEmpty()) {
-                Text(text = shortName, style = MaterialTheme.typography.bodyMedium)
-            }
-            PositionLine(
-                info = directory.locationInfo(localNodeNum, from = null),
-                nodeNum = localNodeNum,
-                meshviewUrl = meshviewUrl,
-            )
-        }
     }
 }
 

@@ -53,7 +53,7 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  *
  * Every readiness-driven and connection-driven text lookup below routes
  * through a `when` that returns a value (not `Unit`), the same technique
- * [com.cerocoder.meshrelay.ui.relays.SortModeLabels.labelOf] already uses -
+ * [com.cerocoder.meshrelay.ui.common.SortModeLabels.labelOf] already uses -
  * a missing branch is then a compile error, not a silently swallowed future
  * state, which a `when` used only for its side effects would not catch.
  *

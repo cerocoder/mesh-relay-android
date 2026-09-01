@@ -9,6 +9,11 @@ it.
 
 Nothing here is fixed unless its entry says so.
 
+**F-1 to F-4 were fixed as one wave on 2026-09-01**; each entry keeps its original finding
+verbatim and ends with a note saying what was done. None of the four has been re-checked on the
+phone yet - the fixes are CI-verified only, which is exactly the kind of verification that missed
+all four in the first place.
+
 **Entry template**
 
 ```
@@ -41,9 +46,23 @@ Nothing here is fixed unless its entry says so.
   `action_pause` is `Pausar` against `Pause` — a longer title competing for space with a wider
   action row. This was observed under English only. Check `es` before calling any fix done.
 - **Severity:** cosmetic
-- **Status:** open — deliberately not fixed; collecting issues first
+- **Status:** fixed — see the fix note below.
 
-**Note for whoever fixes it:** resist shrinking the font. The bar is overloaded, which is the
+**Fixed:** the note below was followed rather than the symptom. The bar now carries three actions,
+not six, and both list screens draw it from one shared composable,
+`ui/common/StatsTopBar.kt`, instead of two near-identical copies. Sort and pause stay in the bar,
+being the two used while watching traffic; gauge style, the database reload, reset and settings
+moved into an overflow menu, which is also where a seventh action goes rather than back onto the
+bar. Pause is now an icon: `material-icons-core` has `PlayArrow` and no `Pause`, so the running
+half of the toggle is a hand-authored drawable (`res/drawable/ic_action_pause.xml`) rather than the
+word it used to be — the word was half the width problem. The reset confirmation moved into the
+shared bar too, so the screens hold no local state at all now.
+
+Spanish is still unverified on hardware, but the arithmetic is no longer close: three icon buttons
+take about 144 dp of the 384 dp width, against 352 dp before, so `Repetidores` has more than twice
+the room `Relays` failed to fit in.
+
+**Note for whoever fixed it:** resist shrinking the font. The bar is overloaded, which is the
 actual defect: six actions is past what a `TopAppBar` title can survive. Moving the two text
 buttons into the sort menu's overflow, or onto the content area as a filter row, fixes the cause.
 Constraining the title fixes the symptom and leaves the next added action to break it again.
@@ -111,7 +130,7 @@ Recorded so absence of a finding is not mistaken for a passing result.
   file and launching: dead every time, recoverable only by clearing app data. The owner's install
   was restored to `SYSTEM` over adb after this test.
 - **Severity:** broken - crash on use, with a latent unrecoverable state
-- **Status:** open - deliberately not fixed; collecting issues first
+- **Status:** fixed - `LocalizedContext` in `ui/LocalizedApp.kt`, plus the persistence change below.
 
 **Notes for whoever fixes it.** The i18n mechanism itself is sound and `LocalConfiguration` still
 needs providing - the per-card `displayLocale()` helpers read it for number formatting. What must
@@ -128,6 +147,26 @@ test, which this project does not currently have; adding the first one is part o
 
 Also fix the persistence race while here: a setting whose application can crash the process must
 not be written asynchronously, or a crash mid-write leaves an install that cannot start.
+
+**What was done.** The first of the two directions above: `withLocale` now returns
+`LocalizedContext`, a `ContextWrapper` around the context it was built from, overriding only
+`getResources`, `getAssets` and `getTheme`. Owner-walking terminates at the activity again, because
+the chain is intact; everything else - `startActivity`, `getSystemService` - is `ContextWrapper`'s
+own delegation. `AppCompatDelegate.setApplicationLocales` was not taken: it needs `appcompat`, a
+dependency this project has deliberately stayed off.
+
+The persistence race is fixed too, and by deletion rather than by a lock: `SettingsRepository.persist`
+no longer posts to `ioScope`, it calls the store on the caller's thread.
+`SharedPreferences.Editor.apply()` is itself the platform's non-blocking write and is documented as
+safe from the main thread, so the coroutine hop bought nothing and cost a window in which a setting
+was on screen but not yet in the editor. `SettingsRepository` no longer takes a `CoroutineScope`.
+
+**On the test.** Not added, and this is a gap, not an oversight. The failure needs a real `Activity`
+in a composition; the project has no instrumented tests and no Robolectric, and CI has no emulator.
+What guards it instead is a type: `withLocale` declares its return as `ContextWrapper`, so changing
+it back to a bare `createConfigurationContext` fails to compile rather than compiling silently and
+bricking the app again. That is narrower than a test - it cannot catch a *different* context being
+provided somewhere else - and a first Robolectric test remains owed.
 
 ---
 
@@ -204,9 +243,20 @@ not be written asynchronously, or a crash mid-write leaves an install that canno
   with no warning. Any fix must be judged on whether the label is *readable* on a positioned node,
   not merely on whether the row stops overflowing.
 - **Severity:** broken - the app's primary screen shows about one relay at a time
-- **Status:** open - deliberately not fixed; collecting issues first
+- **Status:** fixed - `FlowRow` in `ui/common/PositionLine.kt`, plus shorter labels.
 
-**Notes for whoever fixes it.** The row needs to stop assuming three labelled buttons fit on one
+**What was done.** Both halves of the note below. The links row is a `FlowRow`, so a third button
+that does not fit moves to a second line instead of being squeezed to a character's width - that is
+the fix, and it holds at any font scale, in any language, on any width. The labels were shortened
+as well, from "Open in Google Maps" / "Open in OpenStreetMap" / "Open in Meshview" to the service
+names alone, in both locales: not as the fix but so that the common case does not wrap at all. Under
+a button, "Google Maps" already reads as "open in Google Maps". This also settles the clipping
+measured on the second call site, where OpenStreetMap lost 66 px of its label with only two links
+in the row.
+
+All four callers get it, since all four go through `PositionLine`.
+
+**Notes for whoever fixed it.** The row needs to stop assuming three labelled buttons fit on one
 line. `FlowRow` (`androidx.compose.foundation.layout`, already available) is the smallest change
 and wraps to a second line on narrow screens. Shortening the labels only moves the threshold - a
 larger font scale or a narrower device brings it straight back, and Spanish labels are longer
@@ -256,4 +306,13 @@ carrying text would likely find the third instance before a user does.
   separator. The separate `relays_local_node_unknown` branch, for no local node at all, is
   untouched by this.
 - **Severity:** cosmetic / layout economy
-- **Status:** open - filed, not implemented
+- **Status:** fixed - `ui/common/LocalNodeLine.kt`.
+
+**What was done.** Extracted rather than edited twice, as the note above asked: one
+`LocalNodeLine` in `ui/common`, called by both screens, with the label and the name as siblings in
+a spaced `Row`. Siblings rather than one concatenated string is what makes the empty-`shortName`
+case degrade correctly - the label stands alone, with no separator left dangling after it. The
+`relays_local_node_unknown` branch is untouched.
+
+`SortModeLabels` moved from `ui/relays` to `ui/common` in the same pass, since the shared app bar
+builds the sort menu for both screens and a common component should not import from `ui/relays`.

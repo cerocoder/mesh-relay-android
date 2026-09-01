@@ -1,45 +1,21 @@
 package com.cerocoder.meshrelay.ui.relays
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -47,10 +23,11 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SortMode
-import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
+import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
-import com.cerocoder.meshrelay.ui.common.PositionLine
+import com.cerocoder.meshrelay.ui.common.ReloadAction
+import com.cerocoder.meshrelay.ui.common.StatsTopBar
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
@@ -59,21 +36,14 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * (mesh_stats.py:1661-1719) plus the relay table it introduces
  * (mesh_stats.py:1348-1522). Stateless by design: every value it shows is a
  * parameter, every action it can trigger is a lambda the caller supplies, and
- * it holds no state of its own beyond the two transient bits of local UI chrome
- * (whether the sort menu or the reset confirmation is open) that never need to
- * survive a recomposition elsewhere.
+ * it now holds no state of its own at all: the transient UI chrome it used to
+ * own - the sort menu and the reset confirmation - moved into
+ * [com.cerocoder.meshrelay.ui.common.StatsTopBar] along with the app bar itself.
  *
- * Icon set note: `material3` does not itself transitively provide `Icons.*`
- * (it vendors a handful of icons internally under its own `internal` package
- * instead of depending on `material-icons-core`) - see
- * `app/build.gradle.kts` for the BOM-managed dependency added to cover this,
- * and this task's report for the full finding. Only the small core icon set
- * is used here, never `material-icons-extended`. Two actions - gauge mode and
- * pause/resume - have no icon in that core set that would not misrepresent
- * what they do, so they stay labelled [TextButton]s; every other action is an
- * [IconButton].
+ * The app bar is shared with the neighbour list rather than written twice; see
+ * [com.cerocoder.meshrelay.ui.common.StatsTopBar] for what is in it and why it
+ * carries three actions rather than the six this screen used to show.
  */
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun RelayListScreen(
     snapshot: StatsSnapshot,
@@ -90,9 +60,6 @@ fun RelayListScreen(
     onOpenSettings: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    var sortMenuExpanded by remember { mutableStateOf(false) }
-    var resetDialogVisible by remember { mutableStateOf(false) }
-
     // The reload flag is allowed to outlive a dropped connection by design (so a
     // reconnect can pick the same reload back up); gating on the flag alone
     // would spin the indicator over a dead link.
@@ -101,89 +68,17 @@ fun RelayListScreen(
     Scaffold(
         modifier = modifier,
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(R.string.relays_title)) },
-                actions = {
-                    val sortDescription = stringResource(R.string.action_sort)
-                    Box {
-                        IconButton(
-                            onClick = { sortMenuExpanded = true },
-                            modifier = Modifier.semantics { contentDescription = sortDescription },
-                        ) {
-                            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                        }
-                        DropdownMenu(
-                            expanded = sortMenuExpanded,
-                            onDismissRequest = { sortMenuExpanded = false },
-                        ) {
-                            SortMode.entries.forEach { mode ->
-                                val selected = mode == snapshot.sortMode
-                                DropdownMenuItem(
-                                    text = {
-                                        Text(
-                                            text = stringResource(SortModeLabels.labelOf(mode)),
-                                            fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                        )
-                                    },
-                                    leadingIcon = if (selected) {
-                                        { Icon(Icons.Filled.Check, contentDescription = null) }
-                                    } else {
-                                        null
-                                    },
-                                    onClick = {
-                                        sortMenuExpanded = false
-                                        onSetSortMode(mode)
-                                    },
-                                )
-                            }
-                        }
-                    }
-
-                    // No core icon distinguishes "simple" from "complex" gauge
-                    // display without misrepresenting what the action does, so
-                    // this stays a labelled toggle rather than a guessed icon.
-                    TextButton(
-                        onClick = {
-                            val next = if (gaugeMode == GaugeMode.SIMPLE) GaugeMode.COMPLEX else GaugeMode.SIMPLE
-                            onSetGaugeMode(next)
-                        },
-                    ) {
-                        Text(
-                            stringResource(
-                                if (gaugeMode == GaugeMode.SIMPLE) R.string.gauge_simple else R.string.gauge_complex,
-                            ),
-                        )
-                    }
-
-                    // Icons.Filled.Pause is not in material-icons-core (only
-                    // PlayArrow is), and showing PlayArrow for "pause" while
-                    // running would claim the opposite of what tapping it does,
-                    // so both states of this toggle stay a labelled TextButton.
-                    TextButton(onClick = onTogglePause) {
-                        Text(stringResource(if (snapshot.paused) R.string.action_resume else R.string.action_pause))
-                    }
-
-                    IconButton(onClick = { resetDialogVisible = true }) {
-                        Icon(Icons.Filled.Delete, contentDescription = stringResource(R.string.action_reset))
-                    }
-
-                    val reloadDescription = stringResource(R.string.action_reload_db)
-                    IconButton(
-                        onClick = onReloadNodeDb,
-                        enabled = !isReloading,
-                        modifier = Modifier.semantics { contentDescription = reloadDescription },
-                    ) {
-                        if (isReloading) {
-                            CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
-                        } else {
-                            Icon(Icons.Filled.Refresh, contentDescription = null)
-                        }
-                    }
-
-                    IconButton(onClick = onOpenSettings) {
-                        Icon(Icons.Filled.Settings, contentDescription = stringResource(R.string.action_settings))
-                    }
-                },
+            StatsTopBar(
+                title = stringResource(R.string.relays_title),
+                sortMode = snapshot.sortMode,
+                onSetSortMode = onSetSortMode,
+                gaugeMode = gaugeMode,
+                onSetGaugeMode = onSetGaugeMode,
+                paused = snapshot.paused,
+                onTogglePause = onTogglePause,
+                onReset = onReset,
+                onOpenSettings = onOpenSettings,
+                reload = ReloadAction(inProgress = isReloading, onReload = onReloadNodeDb),
             )
         },
     ) { innerPadding ->
@@ -231,73 +126,6 @@ fun RelayListScreen(
                     }
                 }
             }
-        }
-    }
-
-    if (resetDialogVisible) {
-        AlertDialog(
-            onDismissRequest = { resetDialogVisible = false },
-            title = { Text(stringResource(R.string.action_reset_confirm_title)) },
-            text = { Text(stringResource(R.string.action_reset_confirm_body)) },
-            confirmButton = {
-                TextButton(
-                    onClick = {
-                        resetDialogVisible = false
-                        onReset()
-                    },
-                ) {
-                    Text(stringResource(R.string.action_reset))
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetDialogVisible = false }) {
-                    Text(stringResource(R.string.common_cancel))
-                }
-            },
-        )
-    }
-}
-
-/**
- * This device's own line, above the relay list: short name plus its position
- * with no distance figure (there is no "self" to measure a distance from), or
- * [R.string.relays_local_node_unknown] before the node database has told this
- * app its own node number at all. Ports `render_my_info`, mesh_stats.py:1319-1346.
- */
-@Composable
-private fun LocalNodeLine(
-    directory: NodeDirectorySnapshot,
-    meshviewUrl: String?,
-    modifier: Modifier = Modifier,
-) {
-    val localNodeNum = directory.localNodeNum
-    Column(
-        modifier = modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 4.dp),
-    ) {
-        if (localNodeNum == null) {
-            Text(
-                text = stringResource(R.string.relays_local_node_unknown),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-        } else {
-            Text(
-                text = stringResource(R.string.relays_local_node),
-                style = MaterialTheme.typography.labelMedium,
-            )
-            // The node database can know this node's number without ever having
-            // heard its own User message - shortName is "" then, not null, and
-            // isNotEmpty() (rather than a null check) is what hides it correctly.
-            val shortName = directory.shortName(localNodeNum)
-            if (shortName.isNotEmpty()) {
-                Text(text = shortName, style = MaterialTheme.typography.bodyMedium)
-            }
-            PositionLine(
-                info = directory.locationInfo(localNodeNum, from = null),
-                nodeNum = localNodeNum,
-                meshviewUrl = meshviewUrl,
-            )
         }
     }
 }

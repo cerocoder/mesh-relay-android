@@ -55,7 +55,7 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     /** Finding nodes over the air. */
     val scanner: BleScanner = BleScannerImpl()
 
-    val settings = SettingsRepository(AndroidSettingsStore(context), scope)
+    val settings = SettingsRepository(AndroidSettingsStore(context))
 
     private val factory: RadioTransportFactory = RadioTransportFactoryImpl(scope, isDebugBuild, context)
 

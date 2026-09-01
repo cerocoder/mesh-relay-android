@@ -1,0 +1,13 @@
+<!-- Pause: two filled bars. Hand-authored for this project - material-icons-core
+     carries PlayArrow but no Pause, and showing PlayArrow while running would
+     claim the opposite of what tapping it does. Filled rather than stroked, to
+     sit alongside the filled core icons in the same app bar (the stroked
+     ic_field_* set marks data, not actions). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp"
+    android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M7,5 L10.2,5 L10.2,19 L7,19 Z"
+        android:fillColor="#FF000000"/>
+    <path android:pathData="M13.8,5 L17,5 L17,19 L13.8,19 Z"
+        android:fillColor="#FF000000"/>
+</vector>

@@ -3,11 +3,9 @@ package com.cerocoder.meshrelay.settings
 import android.content.Context
 import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.NodeId
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.launch
 
 private const val PREFS_NAME = "mesh_relay"
 
@@ -57,16 +55,12 @@ class AndroidSettingsStore(context: Context) : SettingsStore {
 /**
  * Reads [store] once, at construction, into in-memory [MutableStateFlow]s;
  * nothing on a screen ever touches disk. [update] and the skip-list mutators
- * change the flow synchronously - so a toggle is visible before its write
- * reaches storage - and then launch that write on [ioScope].
+ * change the flow and hand the new state to [store] before returning.
  *
  * Statistics deliberately do not live here: a measurement session is a
  * snapshot, and this is the only part of the app meant to survive a restart.
  */
-class SettingsRepository(
-    private val store: SettingsStore,
-    private val ioScope: CoroutineScope,
-) {
+class SettingsRepository(private val store: SettingsStore) {
 
     private val _settings = MutableStateFlow(readSettings())
     val settings: StateFlow<AppSettings> = _settings.asStateFlow()
@@ -118,27 +112,37 @@ class SettingsRepository(
         persist()
     }
 
-    /** Snapshots the current in-memory state and writes it on [ioScope]. */
+    /**
+     * Hands the current in-memory state to [store], on the caller's thread.
+     *
+     * This used to be `ioScope.launch { ... }`, and the coroutine hop was a loss
+     * window with nothing to gain: [AndroidSettingsStore] ends in
+     * `SharedPreferences.Editor.apply()`, which is itself the platform's
+     * non-blocking write and is documented as safe to call from the main thread.
+     * All the hop added was a stretch of time in which a setting had been changed
+     * on screen but was not yet in the editor - and if the process ended inside
+     * it, the change was simply gone. It cost an install once (field issue F-2:
+     * whether a crashing language setting survived a restart came down to which
+     * side of this hop the process died on).
+     */
     private fun persist() {
         val settingsSnapshot = _settings.value
         val skippedSnapshot = _skippedRelayNodes.value
-        ioScope.launch {
-            store.put(
-                strings = mapOf(
-                    KEY_LANGUAGE to settingsSnapshot.language.name,
-                    KEY_GAUGE_MODE to settingsSnapshot.gaugeMode.name,
-                    KEY_DEFAULT_SORT_MODE to settingsSnapshot.defaultSortMode.name,
-                    KEY_MESHVIEW_URL to settingsSnapshot.meshviewUrl,
-                ),
-                bools = mapOf(
-                    KEY_KEEP_SCREEN_ON to settingsSnapshot.keepScreenOn,
-                    KEY_BACKGROUND_COLLECTION to settingsSnapshot.backgroundCollection,
-                ),
-                sets = mapOf(
-                    KEY_SKIPPED_RELAY_NODES to skippedSnapshot.map { NodeId.format(it) }.toSet(),
-                ),
-            )
-        }
+        store.put(
+            strings = mapOf(
+                KEY_LANGUAGE to settingsSnapshot.language.name,
+                KEY_GAUGE_MODE to settingsSnapshot.gaugeMode.name,
+                KEY_DEFAULT_SORT_MODE to settingsSnapshot.defaultSortMode.name,
+                KEY_MESHVIEW_URL to settingsSnapshot.meshviewUrl,
+            ),
+            bools = mapOf(
+                KEY_KEEP_SCREEN_ON to settingsSnapshot.keepScreenOn,
+                KEY_BACKGROUND_COLLECTION to settingsSnapshot.backgroundCollection,
+            ),
+            sets = mapOf(
+                KEY_SKIPPED_RELAY_NODES to skippedSnapshot.map { NodeId.format(it) }.toSet(),
+            ),
+        )
     }
 
     private fun readSettings(): AppSettings {

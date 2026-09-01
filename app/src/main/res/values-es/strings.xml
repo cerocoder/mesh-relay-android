@@ -88,6 +88,8 @@
     <string name="action_reset_confirm_body">Borra todas las estadísticas de repetidores y vecinos recogidas. La base de nodos y la lista de descartados se conservan.</string>
     <string name="action_reload_db">Recargar base de nodos</string>
     <string name="action_sort">Ordenar</string>
+    <string name="action_more">Más</string>
+    <string name="action_gauges">Indicadores</string>
     <string name="action_gauge_mode">Modo de indicador</string>
     <string name="action_settings">Ajustes</string>
     <string name="action_back">Atrás</string>
@@ -175,9 +177,9 @@
     <string name="node_no_matching_body">Ningún nodo de la base de nodos termina en este byte. Puede que el repetidor aún no haya difundido su información de nodo.</string>
     <string name="node_not_in_db_title">No está en la base de nodos</string>
     <string name="node_not_in_db_body">Este nodo se ha recibido directamente, pero aún no ha enviado sus datos. Llegarán con su próximo paquete de información de nodo, o al recargar la base de nodos.</string>
-    <string name="node_open_google_maps">Abrir en Google Maps</string>
-    <string name="node_open_osm">Abrir en OpenStreetMap</string>
-    <string name="node_open_meshview">Abrir en Meshview</string>
+    <string name="node_open_google_maps">Google Maps</string>
+    <string name="node_open_osm">OpenStreetMap</string>
+    <string name="node_open_meshview">Meshview</string>
 
     <!-- Remote nodes -->
     <string name="remote_title">Nodos remotos conocidos</string>

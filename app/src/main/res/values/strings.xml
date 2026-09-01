@@ -88,6 +88,8 @@
     <string name="action_reset_confirm_body">Clear all collected relay and neighbour statistics. The node database and the skip-list are kept.</string>
     <string name="action_reload_db">Reload node database</string>
     <string name="action_sort">Sort</string>
+    <string name="action_more">More</string>
+    <string name="action_gauges">Gauges</string>
     <string name="action_gauge_mode">Gauge mode</string>
     <string name="action_settings">Settings</string>
     <string name="action_back">Back</string>
@@ -175,9 +177,9 @@
     <string name="node_no_matching_body">No node in the database ends with this byte. The relay may not have broadcast its node info yet.</string>
     <string name="node_not_in_db_title">Not in the node database</string>
     <string name="node_not_in_db_body">This node has been heard directly, but has not sent its details yet. They arrive with its next node info packet, or on the next database reload.</string>
-    <string name="node_open_google_maps">Open in Google Maps</string>
-    <string name="node_open_osm">Open in OpenStreetMap</string>
-    <string name="node_open_meshview">Open in Meshview</string>
+    <string name="node_open_google_maps">Google Maps</string>
+    <string name="node_open_osm">OpenStreetMap</string>
+    <string name="node_open_meshview">Meshview</string>
 
     <!-- Remote nodes -->
     <string name="remote_title">Known remote nodes</string>

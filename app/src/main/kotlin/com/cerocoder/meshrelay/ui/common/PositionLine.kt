@@ -3,6 +3,7 @@ package com.cerocoder.meshrelay.ui.common
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
@@ -45,15 +46,14 @@ fun PositionLine(
     val strings = resolvePositionStrings()
     val nowMillis = LocalRelativeClock.current
     val parts = remember(info, nowMillis, strings) { PositionLineText.parts(info, nowMillis, strings) }
-    // LocalUriHandler, not LocalContext.startActivity. LocalizedApp provides a
-    // createConfigurationContext result as LocalContext whenever a language other
-    // than the system one is chosen, and that is a plain ContextImpl rather than
-    // an Activity: starting an activity from it without FLAG_ACTIVITY_NEW_TASK
-    // throws on targetSdk 36, so every map link here would crash - but only after
-    // the user had picked a language. The uri handler is immune: Compose builds
-    // AndroidUriHandler from the ComposeView's own context, which stays the
-    // activity no matter what LocalContext is overridden with further down the
-    // tree.
+    // LocalUriHandler, not LocalContext.startActivity. Compose builds
+    // AndroidUriHandler from the ComposeView's own context, so it opens links
+    // against the activity whatever LocalContext has been overridden with further
+    // down the tree - which LocalizedApp does override, once a language other than
+    // the system one is chosen. That override is a ContextWrapper around the
+    // activity now (see LocalizedContext), so startActivity would in fact work
+    // again; the uri handler stays because it is the narrower tool for the job and
+    // does not depend on that being true.
     val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -96,7 +96,19 @@ fun PositionLine(
         val lat = info.lat
         val lon = info.lon
         if ((lat != null && lon != null) || meshviewUrl != null) {
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            // FlowRow, not Row, and this is field issue F-3 rather than a
+            // preference. A positioned node offers three links at once, and a plain
+            // Row hands each child its measured width until the space runs out and
+            // then squeezes whatever is left: on a 1080 px phone the first two took
+            // 901 px between them and Meshview was measured at 111 px, which is
+            // narrower than one of its words. It did not clip - it wrapped, to about
+            // a character a line, and grew 958 px tall. On the relay screen that
+            // pushed the list (the weight(1f) sibling) down to a 128 px slit, and on
+            // a node card it rendered no label glyph at all: an invisible but still
+            // clickable strip where the action should have been. The links are also
+            // the widest text this app lays out and the ones that grow most in
+            // Spanish, so they need a container that can take a second line.
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (lat != null && lon != null) {
                     TextButton(onClick = { uriHandler.openUri(MapLinks.googleMaps(lat, lon)) }) {
                         Text(stringResource(R.string.node_open_google_maps))

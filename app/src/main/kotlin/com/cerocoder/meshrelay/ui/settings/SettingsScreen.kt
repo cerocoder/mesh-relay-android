@@ -44,7 +44,7 @@ import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.preview.SampleData
-import com.cerocoder.meshrelay.ui.relays.SortModeLabels
+import com.cerocoder.meshrelay.ui.common.SortModeLabels
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
 /**

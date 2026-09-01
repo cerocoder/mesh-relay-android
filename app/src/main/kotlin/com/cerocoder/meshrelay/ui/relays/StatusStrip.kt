@@ -17,6 +17,7 @@ import com.cerocoder.meshrelay.stats.AgeText
 import com.cerocoder.meshrelay.stats.RelativeAge
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
+import com.cerocoder.meshrelay.ui.common.SortModeLabels
 
 /**
  * The header block above the relay list: the node database line (ports the

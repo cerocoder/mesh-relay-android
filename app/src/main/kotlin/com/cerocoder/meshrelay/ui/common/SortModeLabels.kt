@@ -1,4 +1,4 @@
-package com.cerocoder.meshrelay.ui.relays
+package com.cerocoder.meshrelay.ui.common
 
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.SortMode
@@ -6,7 +6,9 @@ import com.cerocoder.meshrelay.stats.SortMode
 /**
  * The string resource for each [SortMode], one lookup table shared by the relay
  * list's own sort menu (Task 22) and the settings screen's default-sort picker
- * (Task 28) so the two never drift apart on wording.
+ * (Task 28) so the two never drift apart on wording. It lives in `ui/common`
+ * rather than `ui/relays` because [StatsTopBar], which builds the sort menu for
+ * both list screens, is common too.
  */
 object SortModeLabels {
     fun labelOf(mode: SortMode): Int = when (mode) {
