@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.common
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -8,6 +9,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalUriHandler
@@ -55,22 +57,40 @@ fun PositionLine(
     val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        // One row per field, each marked by its own glyph, rather than the four
+        // parts joined into a single sentence. Joined, "697 m Src: current:30min"
+        // put a distance in metres directly against an age in minutes and left
+        // the reader to work out which unit belonged to which number. A row per
+        // field also cannot overflow the way one long line does.
+        //
         // bodySmall is this app's monospace style (see Type.kt). Node ids, short
         // names and the per-node counts beside this line all use it, and a
         // position rendered in the default proportional body style reads as a
         // different kind of content sitting inside the same card.
-        val line = listOfNotNull(parts.coordinates, parts.distance, parts.altitude)
+        val coordinates = listOfNotNull(parts.coordinates, parts.distance)
             .joinToString(separator = " ")
-        if (line.isNotEmpty()) {
-            Text(text = line, style = MaterialTheme.typography.bodySmall)
+        if (coordinates.isNotEmpty()) {
+            FieldRow(
+                icon = R.drawable.ic_field_coordinates,
+                contentDescription = stringResource(R.string.node_coordinates),
+                text = coordinates,
+            )
         }
-
-        // The source and its age go on their own line rather than trailing the
-        // measurements. Run together, "697 m Src: current:30min" puts a distance
-        // in metres directly against an age in minutes, and the reader has to
-        // work out which unit belongs to which number.
+        parts.altitude?.let { altitude ->
+            FieldRow(
+                icon = R.drawable.ic_field_altitude,
+                contentDescription = stringResource(R.string.node_altitude),
+                text = altitude,
+            )
+        }
+        // The same globe as the coordinates: this names where those coordinates
+        // came from, so it belongs with them rather than in a category of its own.
         parts.source?.let { source ->
-            Text(text = source, style = MaterialTheme.typography.bodySmall)
+            FieldRow(
+                icon = R.drawable.ic_field_coordinates,
+                contentDescription = stringResource(R.string.node_position_source),
+                text = source,
+            )
         }
 
         val lat = info.lat
@@ -147,4 +167,20 @@ internal fun resolvePositionStrings(): PositionStrings {
             PositionSource.CURRENT to stringResource(R.string.source_current),
         ),
     )
+}
+
+/** One position field: its glyph, then its value. */
+@Composable
+private fun FieldRow(
+    @DrawableRes icon: Int,
+    contentDescription: String?,
+    text: String,
+) {
+    Row(
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        FieldIcon(icon = icon, contentDescription = contentDescription)
+        Text(text = text, style = MaterialTheme.typography.bodySmall)
+    }
 }

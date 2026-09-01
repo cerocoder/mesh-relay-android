@@ -159,6 +159,9 @@
     <string name="node_short_name">Nombre corto</string>
     <string name="node_role">Rol</string>
     <string name="node_hardware">Hardware</string>
+    <string name="node_coordinates">Coordenadas</string>
+    <string name="node_altitude">Altitud</string>
+    <string name="node_position_source">Origen de la posición</string>
     <string name="node_position">Posición</string>
     <string name="node_last_snr_db">Último SNR</string>
     <string name="node_last_heard_db">Visto por última vez</string>

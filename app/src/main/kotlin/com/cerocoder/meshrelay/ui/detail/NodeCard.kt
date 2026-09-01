@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.detail
 
+import androidx.annotation.DrawableRes
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,6 +29,7 @@ import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.model.LocationInfo
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
+import com.cerocoder.meshrelay.ui.common.FieldIcon
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.common.PositionLine
@@ -155,6 +157,7 @@ fun NodeCard(
             record.lastHeardEpochSeconds?.let { epochSeconds ->
                 LabelValueRow(
                     label = stringResource(R.string.node_last_heard_db),
+                    icon = R.drawable.ic_field_last_heard,
                     value = stringResource(
                         R.string.format_last_heard_db,
                         StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale),
@@ -170,10 +173,12 @@ fun NodeCard(
                 val uptime = StatsFormat.uptimeParts(telemetry.lastUptimeSeconds)
                 LabelValueRow(
                     label = stringResource(R.string.node_uptime),
+                    icon = R.drawable.ic_field_uptime,
                     value = stringResource(R.string.format_uptime, uptime.days, uptime.hours, uptime.minutes),
                 )
                 LabelValueRow(
                     label = stringResource(R.string.node_restarts),
+                    icon = R.drawable.ic_field_restarts,
                     value = telemetry.observedRestartCount.toString(),
                 )
             }
@@ -199,6 +204,7 @@ fun NodeCard(
 
             LabelValueRow(
                 label = stringResource(R.string.node_public_key_present),
+                icon = R.drawable.ic_field_public_key,
                 value = stringResource(if (record.hasPublicKey) R.string.common_yes else R.string.common_no),
             )
         }
@@ -248,12 +254,29 @@ private val firmwareVersion: String? = null
  *  `SummaryRow` of the same shape - that one is not public, so this is a
  *  second, independent copy. */
 @Composable
-private fun LabelValueRow(label: String, value: String, modifier: Modifier = Modifier) {
+private fun LabelValueRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    @DrawableRes icon: Int? = null,
+) {
     Row(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(6.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            // contentDescription is null on purpose: [label] sits immediately
+            // beside the glyph and already names the field, so describing the
+            // icon too would have a screen reader say it twice.
+            if (icon != null) {
+                FieldIcon(icon = icon, contentDescription = null)
+            }
+            Text(text = label, style = MaterialTheme.typography.bodyMedium)
+        }
         Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
 }
