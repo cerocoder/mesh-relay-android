@@ -386,3 +386,61 @@ already did, through `AppContainer.notificationContext`).
 Then the path that used to be fatal, driven through the UI rather than the preference file:
 Settings -> English -> the whole app switches with no crash and the same process id, Settings ->
 System default -> switches back. The install was left on `SYSTEM`, as it was found.
+
+---
+
+## F-6 - relay and neighbour cards jump between positions, and the code claims an animation it does not have
+
+- **Found:** 2026-09-01, Samsung SM-S721B, build `23ecdf3` from CI run `33495104837`, connected to
+  the real node. Raised by the owner after the F-1 to F-5 wave: "look like an ordering now is
+  performed on the main screen".
+- **Where:** `app/src/main/kotlin/com/cerocoder/meshrelay/ui/relays/RelayListScreen.kt:101-103` and
+  `app/src/main/kotlin/com/cerocoder/meshrelay/ui/neighbours/NeighbourListScreen.kt:113-115`.
+- **The ordering itself is correct, and is not new.** Checked in both modes on hardware:
+
+  ```
+  Sort by Packet count   4 / 4 / 2 packets, descending
+  Sort by Node name      03bb, 0x32, 0x4b, 0xa5, 0xab, 0xf5, RPST, TG80
+  ```
+
+  The second is exactly the ascending byte-wise order of `nodeName.ifEmpty { hexId }`, unnamed
+  relays included - `'0'` (0x30) sorts before `'R'`, so every `0x..` fallback lands ahead of every
+  real name. That is not a defect: `MeshStatsEngine.sortedRelays` is a faithful port of
+  `get_sorted_nodes` (mesh_stats.py:1120-1140), whose name branch is the same raw string sort with
+  the same hex-id fallback. Ties are stable in both - `LinkedHashMap` plus a stable `sortedBy` here,
+  an insertion-ordered `dict` plus a stable `list.sort` there - so equal rows keep first-seen order
+  and do not swap between snapshots.
+
+  What changed is only that it can be *seen*. Until F-3 was fixed the relay list was a 128 px slit
+  showing two thirds of one card, and a sort is invisible with one row.
+- **What is actually wrong:** both `LazyColumn`s carry a comment saying
+
+  > Keyed on relayByte, not list index, so re-sorting animates items into their new position
+  > instead of rebuilding every row.
+
+  and neither animates anything. A key preserves an item's *identity* across recompositions, which
+  is what stops the row being rebuilt; placement animation is a separate opt-in,
+  `Modifier.animateItem()` on the item content, and it appears nowhere in this project (`grep
+  animateItem` returns nothing). So a card that changes rank teleports.
+- **Why it matters more than it reads.** Under `PACKETS`, the default and the mode this app starts
+  in, the sort key changes on *every relayed packet* - 128 of them in the 26 minutes this screen was
+  observed. Each one can flip two adjacent cards. On the terminal tool that is invisible: it redraws
+  a whole table into a curses window and movement between frames is what a table does. On a touch
+  screen a card can move between the moment it is read and the moment it is tapped, and the tap then
+  opens a different relay's detail screen. The list is now tall enough to show three or more cards,
+  so there is real distance for a card to travel.
+- **Severity:** degraded - no data is wrong, but the primary screen moves under the finger, and a
+  comment documents behaviour the code does not implement
+- **Status:** open - filed, not implemented
+
+**Notes for whoever fixes it.** Two separate things, and the second is the interesting one:
+
+1. `Modifier.animateItem()` on the item content in both lists, and correct the two comments either
+   way. A comment claiming an animation that is not there is worse than no comment - it is what
+   would stop the next reader from looking.
+2. Whether a live re-sort is right for this screen at all. Animating a card that moves every second
+   makes the movement prettier, not less disruptive. Worth weighing: re-sort only when the sort mode
+   changes or the user pulls to refresh, keeping the live figures updating in place; or keep the
+   live sort but suppress reordering while the list is scrolled away from the top. The original's
+   behaviour is not automatically the right answer here - it was designed for a redrawn terminal
+   table with no touch targets in it.
