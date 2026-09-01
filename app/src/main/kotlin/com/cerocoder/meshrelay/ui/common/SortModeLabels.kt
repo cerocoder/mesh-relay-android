@@ -17,5 +17,7 @@ object SortModeLabels {
         SortMode.AVG_SNR -> R.string.sort_avg_snr
         SortMode.AVG_RSSI -> R.string.sort_avg_rssi
         SortMode.NAME -> R.string.sort_name
+        SortMode.KNOWN_NODES -> R.string.sort_known_nodes
+        SortMode.LATEST_PACKET -> R.string.sort_latest_packet
     }
 }

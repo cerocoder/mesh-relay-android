@@ -68,6 +68,8 @@
     <string name="sort_avg_snr">Avg SNR</string>
     <string name="sort_avg_rssi">Avg RSSI</string>
     <string name="sort_name">Node name</string>
+    <string name="sort_known_nodes">Known nodes</string>
+    <string name="sort_latest_packet">Latest packet</string>
 
     <!-- Gauge -->
     <string name="gauge_mode">Gauge mode</string>

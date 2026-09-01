@@ -358,6 +358,8 @@ class MeshStatsEngine(
             SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr) }
             SortMode.AVG_RSSI -> values.sortedByDescending { rank(it.rssi) }
             SortMode.NAME -> values.sortedBy { it.nodeName.ifEmpty { it.hexId } }
+            SortMode.KNOWN_NODES -> values.sortedByDescending { it.knownNodesCount }
+            SortMode.LATEST_PACKET -> values.sortedByDescending { it.lastPacketAtMillis }
         }
     }
 
@@ -365,7 +367,7 @@ class MeshStatsEngine(
     private fun sortedNeighbours(view: NodeDirectorySnapshot): List<NeighbourStats> {
         val values = neighbours.values.toList()
         val total = counterState.totalDirectPackets
-        return when (sortMode) {
+        return when (sortMode.forNeighbours()) {
             SortMode.PACKETS -> values.sortedByDescending { it.packetCount }
             SortMode.PERCENT -> values.sortedByDescending { share(it.packetCount, total) }
             SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr.stats) }
@@ -375,6 +377,11 @@ class MeshStatsEngine(
             SortMode.NAME -> values.sortedBy {
                 view.shortName(it.nodeNum).ifEmpty { NodeId.format(it.nodeNum) }
             }
+            SortMode.LATEST_PACKET -> values.sortedByDescending { it.lastPacketAtMillis }
+            // forNeighbours() has already mapped this away; the branch exists because
+            // the `when` is exhaustive over the enum and a silent `else` would swallow
+            // the next mode someone adds.
+            SortMode.KNOWN_NODES -> values.sortedByDescending { it.packetCount }
         }
     }
 

@@ -68,6 +68,8 @@
     <string name="sort_avg_snr">SNR medio</string>
     <string name="sort_avg_rssi">RSSI medio</string>
     <string name="sort_name">Nombre del nodo</string>
+    <string name="sort_known_nodes">Nodos conocidos</string>
+    <string name="sort_latest_packet">Último paquete</string>
 
     <!-- Gauge -->
     <string name="gauge_mode">Modo de indicador</string>
