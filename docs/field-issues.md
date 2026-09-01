@@ -216,3 +216,44 @@ scale, not just at default.
 Worth pairing with F-1: both are the same mistake in different places - a horizontal row given
 more content than it can hold, with no wrap and no measurement. A sweep for unbounded `Row`s
 carrying text would likely find the third instance before a user does.
+
+---
+
+## F-4 — "Local node" and the node's name should share one line
+
+- **Requested:** 2026-09-01 by the owner, after seeing the header on hardware:
+  "the 'Local node' text on the main screen should [be] in the same line as local node name
+  (49bf in my case)".
+- **Where:** `app/src/main/kotlin/com/cerocoder/meshrelay/ui/relays/RelayListScreen.kt:268`
+  (`LocalNodeLine`) **and** `app/src/main/kotlin/com/cerocoder/meshrelay/ui/neighbours/NeighbourListScreen.kt:342`
+  (a second, independent copy of the same composable).
+- **What it does now:** the label and the name stack, costing a line for a two-word caption:
+
+  ```
+  Local node
+  49bf
+  (globe) 40.330942, -3.750708
+  ```
+
+  Wanted:
+
+  ```
+  Local node  49bf
+  (globe) 40.330942, -3.750708
+  ```
+
+- **Why it is worth doing:** the Relays screen has less vertical room than anything else in the
+  app - see F-3, where the relay list is down to a 128 px slit - and this is a whole line spent on
+  a caption. It also reads better: the label names the value beside it rather than hovering above
+  it, matching the `LabelValueRow` pattern the node card already uses everywhere.
+- **Both copies must change.** `LocalNodeLine` exists twice, verbatim, on two screens. Changing
+  one leaves the Relays and Neighbours headers looking different from each other. This is one of
+  the duplicated helpers already recorded in `deferred-work.md`; a fix here is the natural moment
+  to extract it into `ui/common/` instead of editing the same code twice.
+- **Two states to keep working.** `shortName` is `""` - not null - when the database knows this
+  node's number but has never heard its own User message, and the current code hides the name with
+  `isNotEmpty()`. On one line that must degrade to the label alone, not to a label with a dangling
+  separator. The separate `relays_local_node_unknown` branch, for no local node at all, is
+  untouched by this.
+- **Severity:** cosmetic / layout economy
+- **Status:** open - filed, not implemented
