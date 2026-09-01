@@ -260,8 +260,8 @@ New package `location/`, three files:
   plus `fun start()` / `fun stop()`. Plain-JVM, so the engine wiring is testable
   without a device.
 - **`AndroidPhoneLocationSource`** — platform `LocationManager`, `GPS_PROVIDER`
-  and `NETWORK_PROVIDER`, throttled to 60 s / 100 m. Latest fix only; no history,
-  because §5 stores the position with the sample instead.
+  and `NETWORK_PROVIDER`, requested at **10 s / 10 m** (see §7.1). Latest fix only;
+  no history, because §5 stores the position with the sample instead.
 - **`LocationAvailability`** — the permission array and the granted check, in the
   shape `BluetoothAvailability` already established.
 
@@ -272,14 +272,43 @@ scans are not used to derive location, which remains true.
 
 **Two consequences, stated rather than buried.** This changes the application's
 permission set, which is visible on any store or F-Droid-style listing. And
-continuous location costs battery on a device already holding a BLE link; the
-60 s / 100 m throttle is the mitigation, and the setting is the escape hatch.
+continuous location costs battery on a device already holding a BLE link — at the
+rate chosen in §7.1 the GNSS stays warm, which is the price of the resolution this
+tool needs. The *Use phone location* switch is the escape hatch, and turning it off
+stops the updates rather than merely ignoring them.
 
 Permissions are requested at first connect, alongside the Bluetooth ones. A
 refusal is not an error: the setting stays on, no fix ever arrives, and every
 sample falls back to the node under §6.3.
 
-### 7.1 Setting
+### 7.1 Update rate
+
+`requestLocationUpdates` takes a minimum time and a minimum distance, and both
+gate every delivery: a fix arrives no sooner than `minTime` after the last one,
+**and** only once the phone has moved at least `minDistance`. A phone on a table
+therefore produces no updates at all, which is right — it has not moved.
+
+Only `minTime` is a battery lever. `minDistance` filters after the GNSS has already
+computed a fix, so it suppresses a callback, not the radio; it is a de-duplication
+rule, not a power saving. `minTime` is what lets the platform power the GNSS down
+between fixes, at its own discretion and with wide variation between vendors.
+
+**Default: `minTime` 10 s, `minDistance` 10 m**, as two named constants in
+`AndroidPhoneLocationSource`.
+
+The reason is the use this application is put to. The question being asked in the
+field is *where exactly was I standing when this relay read −92 dBm*, asked while
+walking a ridge to place a repeater. At walking pace, roughly 1.4 m/s, 10 m is
+about seven seconds — so measurements taken a few paces apart get distinct pins.
+A coarser 100 m would stamp a whole hillside of measurements with one coordinate
+and drop one pin for all of them, which would answer a different and less useful
+question. The cost is that the GNSS stays warm rather than duty-cycling.
+
+Constants rather than a setting: they can become one later with no restructuring,
+and a rate control is more surface to build, test and translate than a value most
+users would set once. Should the field say otherwise, that is the change to make.
+
+### 7.2 Setting
 
 `AppSettings.usePhoneLocation: Boolean = true`, persisted by the existing
 repository, edited by a switch in `SettingsScreen`. `AppContainer` starts and stops
