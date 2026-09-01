@@ -48,6 +48,7 @@ object ChartGeometry {
     /** The series index this row draws. Storage is oldest-first; rows are newest-first. */
     fun indexOfRow(row: Int, size: Int): Int = size - 1 - row
 
+    /** The height the whole series would occupy if every row were drawn at once. */
     fun contentHeightPx(size: Int, pxPerSample: Float): Float = size * pxPerSample
 
     /** How far the chart can be scrolled before the oldest measurement reaches the bottom. */
@@ -69,13 +70,33 @@ object ChartGeometry {
     fun yOf(row: Int, scrollPx: Float, pxPerSample: Float): Float = row * pxPerSample - scrollPx
 
     /**
+     * Absorbs the float cancellation in [yOf]'s subtract-then-add round trip.
+     *
+     * `yOf` computes `row * pxPerSample - scrollPx` and `rowAt` undoes it by
+     * adding `scrollPx` back; in IEEE-754 those two operations do not cancel
+     * exactly unless `pxPerSample` is a power of two. The relative error is
+     * about 1e-7 of `row`, so at the 5000-sample ceiling
+     * (`SignalSeriesBuffer.MAX_SAMPLES`) it reaches ~5e-4 of a row. A thousandth
+     * of a row covers that with a factor of two in hand, and is itself far below
+     * one pixel at any scale this chart draws.
+     */
+    private const val ROW_EPSILON = 1e-3f
+
+    /**
      * Which row a touch at [y] landed on. Not clamped: the caller knows the size
      * and clamps, and then draws the crosshair at [yOf] of the clamped row - so
      * the line and the numbers beside it always describe the same measurement,
      * even when the touch was below the last one.
+     *
+     * Adds [ROW_EPSILON] before flooring. Without it, this is not an exact
+     * inverse of [yOf] at a fractional [pxPerSample]: `yOf` computes
+     * `row * pxPerSample - scrollPx`, and undoing that by adding `scrollPx` back
+     * and dividing does not cancel exactly in IEEE-754 unless `pxPerSample` is a
+     * power of two, so the quotient can land a hair under the intended row and
+     * floor to one row short of it.
      */
     fun rowAt(y: Float, scrollPx: Float, pxPerSample: Float): Int =
-        floor((y + scrollPx) / pxPerSample).toInt()
+        floor((y + scrollPx) / pxPerSample + ROW_EPSILON).toInt()
 
     /**
      * Where a value sits along the track, as a fraction in `0f..1f`.

@@ -62,6 +62,10 @@ class ChartGeometryTest {
     @Test
     fun `the newest measurement is at the top when scrolled to the start`() {
         assertEquals(0f, ChartGeometry.yOf(0, scrollPx = 0f, pxPerSample = 1f), 0.0001f)
+        // Pins the sign of the axis: a flipped implementation
+        // (`scrollPx - row * pxPerSample`) also passes the assertion above, since
+        // 0 - 0 is 0 either way. A non-zero scroll is what tells them apart.
+        assertEquals(-120f, ChartGeometry.yOf(0, scrollPx = 120f, pxPerSample = 1f), 0.0001f)
     }
 
     @Test
@@ -111,6 +115,15 @@ class ChartGeometryTest {
 
     @Test
     fun `no data at all falls back to the fixed range`() {
+        // This does not isolate the `!stats.hasData` guard from the degenerate-span
+        // guard below it: SignalStats.EMPTY has minVal = +Infinity and
+        // maxVal = -Infinity, so `maxVal - minVal <= 0f` is already true and would
+        // catch this case even if the hasData check were deleted. There is no way
+        // to isolate them through the public API - the only mutator is `plus`,
+        // which always increments count, so a SignalStats with hasData == false
+        // and a positive min/max span cannot be constructed. Both guards are
+        // exercised together here; only the degenerate-span guard is uniquely
+        // exercised (by `a degenerate span falls back to the fixed range`, above).
         val range = ChartGeometry.scaleRange(SignalStats.EMPTY, autoScale = true, SignalScales.SNR_MIN, SignalScales.SNR_MAX)
         assertEquals(SignalScales.SNR_MIN, range.min, 0.0001f)
         assertEquals(SignalScales.SNR_MAX, range.max, 0.0001f)
@@ -144,6 +157,19 @@ class ChartGeometryTest {
         assertEquals(8f, ChartGeometry.yOf(row = 2, scrollPx = 0f, pxPerSample = 4f), 0.0001f)
         assertEquals(2, ChartGeometry.rowAt(y = 8f, scrollPx = 0f, pxPerSample = 4f))
         assertEquals(20f, ChartGeometry.anchorAfterAppend(10f, appended = 100, pxPerSample = 0.1f), 0.0001f)
+    }
+
+    @Test
+    fun `y and row are inverses at a fractional scale coefficient too`() {
+        // Requirement 13 says the coefficient may be a fraction, and 0.1 is the
+        // example the spec gives. A non-zero scroll is essential: at scrollPx == 0
+        // there is nothing to cancel, which is why the existing coefficient test
+        // did not catch this.
+        val p = 0.1f
+        val scroll = 0.3f
+        for (row in listOf(0, 1, 13, 26, 499, 4999)) {
+            assertEquals(row, ChartGeometry.rowAt(ChartGeometry.yOf(row, scroll, p), scroll, p))
+        }
     }
 
     @Test
