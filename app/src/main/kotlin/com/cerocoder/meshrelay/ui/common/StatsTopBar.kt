@@ -45,6 +45,21 @@ import com.cerocoder.meshrelay.stats.SortMode
 data class ReloadAction(val inProgress: Boolean, val onReload: () -> Unit)
 
 /**
+ * The sort control, or `null` on a screen that sorts nothing (My node).
+ *
+ * [available] is per-screen rather than always `SortMode.entries`: the neighbour
+ * list leaves out [SortMode.KNOWN_NODES], which counts something a neighbour does
+ * not have. [mode] is what the menu ticks, and on the neighbour list it is the
+ * mode *after* [SortMode.forNeighbours] - so when an unofferable mode arrives from
+ * the relay screen, the tick and the strip agree with the order actually applied.
+ */
+data class SortAction(
+    val mode: SortMode,
+    val available: List<SortMode>,
+    val onSet: (SortMode) -> Unit,
+)
+
+/**
  * The app bar shared by the relay and neighbour lists.
  *
  * One composable rather than the two near-identical copies these screens carried
@@ -70,8 +85,7 @@ data class ReloadAction(val inProgress: Boolean, val onReload: () -> Unit)
 @Composable
 fun StatsTopBar(
     title: String,
-    sortMode: SortMode,
-    onSetSortMode: (SortMode) -> Unit,
+    sort: SortAction?,
     gaugeMode: GaugeMode,
     onSetGaugeMode: (GaugeMode) -> Unit,
     paused: Boolean,
@@ -89,37 +103,39 @@ fun StatsTopBar(
         modifier = modifier,
         title = { Text(title) },
         actions = {
-            val sortDescription = stringResource(R.string.action_sort)
-            Box {
-                IconButton(
-                    onClick = { sortMenuExpanded = true },
-                    modifier = Modifier.semantics { contentDescription = sortDescription },
-                ) {
-                    Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                }
-                DropdownMenu(
-                    expanded = sortMenuExpanded,
-                    onDismissRequest = { sortMenuExpanded = false },
-                ) {
-                    SortMode.entries.forEach { mode ->
-                        val selected = mode == sortMode
-                        DropdownMenuItem(
-                            text = {
-                                Text(
-                                    text = stringResource(SortModeLabels.labelOf(mode)),
-                                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                                )
-                            },
-                            leadingIcon = if (selected) {
-                                { Icon(Icons.Filled.Check, contentDescription = null) }
-                            } else {
-                                null
-                            },
-                            onClick = {
-                                sortMenuExpanded = false
-                                onSetSortMode(mode)
-                            },
-                        )
+            if (sort != null) {
+                val sortDescription = stringResource(R.string.action_sort)
+                Box {
+                    IconButton(
+                        onClick = { sortMenuExpanded = true },
+                        modifier = Modifier.semantics { contentDescription = sortDescription },
+                    ) {
+                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+                    }
+                    DropdownMenu(
+                        expanded = sortMenuExpanded,
+                        onDismissRequest = { sortMenuExpanded = false },
+                    ) {
+                        sort.available.forEach { mode ->
+                            val selected = mode == sort.mode
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        text = stringResource(SortModeLabels.labelOf(mode)),
+                                        fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
+                                    )
+                                },
+                                leadingIcon = if (selected) {
+                                    { Icon(Icons.Filled.Check, contentDescription = null) }
+                                } else {
+                                    null
+                                },
+                                onClick = {
+                                    sortMenuExpanded = false
+                                    sort.onSet(mode)
+                                },
+                            )
+                        }
                     }
                 }
             }

@@ -27,6 +27,7 @@ import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.ReloadAction
+import com.cerocoder.meshrelay.ui.common.SortAction
 import com.cerocoder.meshrelay.ui.common.StatsTopBar
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
@@ -70,8 +71,7 @@ fun RelayListScreen(
         topBar = {
             StatsTopBar(
                 title = stringResource(R.string.relays_title),
-                sortMode = snapshot.sortMode,
-                onSetSortMode = onSetSortMode,
+                sort = SortAction(snapshot.sortMode, SortMode.entries, onSetSortMode),
                 gaugeMode = gaugeMode,
                 onSetGaugeMode = onSetGaugeMode,
                 paused = snapshot.paused,

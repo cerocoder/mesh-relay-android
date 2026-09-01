@@ -29,6 +29,7 @@ import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
+import com.cerocoder.meshrelay.ui.common.SortAction
 import com.cerocoder.meshrelay.ui.common.SortModeLabels
 import com.cerocoder.meshrelay.ui.common.StatsTopBar
 import com.cerocoder.meshrelay.ui.preview.SampleData
@@ -79,8 +80,13 @@ fun NeighbourListScreen(
         topBar = {
             StatsTopBar(
                 title = stringResource(R.string.neighbours_title),
-                sortMode = snapshot.sortMode,
-                onSetSortMode = onSetSortMode,
+                sort = SortAction(
+                    // The mode after forNeighbours(), so the tick in the menu names
+                    // the order this list actually applied.
+                    mode = snapshot.sortMode.forNeighbours(),
+                    available = SortMode.entries - SortMode.KNOWN_NODES,
+                    onSet = onSetSortMode,
+                ),
                 gaugeMode = gaugeMode,
                 onSetGaugeMode = onSetGaugeMode,
                 paused = snapshot.paused,
@@ -168,7 +174,10 @@ private fun NeighbourStatusStrip(snapshot: StatsSnapshot, modifier: Modifier = M
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(R.string.sort_label), style = MaterialTheme.typography.bodyMedium)
                 Text(
-                    text = stringResource(SortModeLabels.labelOf(snapshot.sortMode)),
+                    // The effective mode, not the requested one: KNOWN_NODES can
+                    // reach this screen and the list degrades it to PACKETS, so
+                    // naming the request here would claim a sort that never ran.
+                    text = stringResource(SortModeLabels.labelOf(snapshot.sortMode.forNeighbours())),
                     style = MaterialTheme.typography.bodyMedium,
                 )
             }
