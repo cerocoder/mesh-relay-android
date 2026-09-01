@@ -64,3 +64,67 @@ Recorded so absence of a finding is not mistaken for a passing result.
 - **Light theme.** The phone was in dark mode throughout.
 - **Rotation, split screen, and large display sizes / font scales.** Given F-1, layout under any
   of these is unknown.
+
+---
+
+## F-2 — choosing any language in Settings crashes the app, and can make it unlaunchable
+
+- **Found:** 2026-09-01, Samsung SM-S721B (Galaxy S24 FE, Android 16), build `50adb13` from CI
+  run `33477285981`, `app-debug`. Reported by the owner after selecting Spanish in Settings.
+- **Where:** `app/src/main/kotlin/com/cerocoder/meshrelay/ui/LocalizedApp.kt:52` (the
+  `LocalContext` override) crashing `app/src/main/kotlin/com/cerocoder/meshrelay/MainActivity.kt:145`
+  (`rememberLauncherForActivityResult`).
+- **What:**
+
+  ```
+  java.lang.IllegalStateException: No ActivityResultRegistryOwner was provided
+      via LocalActivityResultRegistryOwner
+    at androidx.activity.compose.ActivityResultRegistryKt.rememberLauncherForActivityResult
+    at com.cerocoder.meshrelay.MainActivityKt.MeshRelayContent(MainActivity.kt:145)
+    ...
+    at com.cerocoder.meshrelay.ui.LocalizedAppKt.LocalizedApp(LocalizedApp.kt:52)
+  ```
+
+  The process dies immediately. Observed twice in the owner's own session (PIDs 24940 and 30608),
+  then reproduced deliberately.
+- **NOT Spanish-specific.** Verified by setting `language` to `EN` directly in
+  `shared_prefs/mesh_relay.xml` and launching: identical crash. `localeFor` returns `null` only
+  for `SYSTEM`; every other value takes the wrapping path. So **English and Spanish both crash,
+  and only the `SYSTEM` default works.** Any report framing this as a Spanish bug is wrong.
+- **Why it happens:** `LocalizedApp` overrides `LocalContext` with `Context.withLocale(...)`,
+  which returns `createConfigurationContext(configuration)`. That is a **`ContextImpl`** - not a
+  `ContextWrapper` whose `baseContext` chain leads back to the Activity.
+  `rememberLauncherForActivityResult` resolves `LocalActivityResultRegistryOwner`, whose default
+  walks the `LocalContext` unwrapping `ContextWrapper`s in search of the Activity. It reaches a
+  `ContextImpl` on the first step, finds no owner, and throws.
+- **This is the second bug from the same root cause.** The first was found in the final wiring
+  pass: `PositionLine.openUrl` called `startActivity` on the same non-Activity context, so every
+  map and Meshview link died once a language was chosen. That was fixed at `31892ad` by switching
+  to `LocalUriHandler` - which fixed *that call site* and left the `LocalContext` override in
+  place. Anything else needing the Activity through `LocalContext` was still broken; the permission
+  launcher is the next one to surface. **Fix the override, not the third symptom.**
+- **How bad it really is:** worse than the owner's session showed. `SettingsRepository:125`
+  persists inside `ioScope.launch { ... apply() }`, so the write is asynchronous. In the observed
+  crash the process died before it landed and the file still read `SYSTEM`, so the app restarted
+  clean. That is a race, not a safeguard. When the write *does* land first, `MainActivity` crashes
+  on every launch and the app cannot be opened at all - confirmed by writing `EN` to the prefs
+  file and launching: dead every time, recoverable only by clearing app data. The owner's install
+  was restored to `SYSTEM` over adb after this test.
+- **Severity:** broken - crash on use, with a latent unrecoverable state
+- **Status:** open - deliberately not fixed; collecting issues first
+
+**Notes for whoever fixes it.** The i18n mechanism itself is sound and `LocalConfiguration` still
+needs providing - the per-card `displayLocale()` helpers read it for number formatting. What must
+change is overriding `LocalContext` with a context that has no path back to the Activity. Two
+directions worth weighing: wrap the Activity in a `ContextWrapper` carrying the localized
+resources, so owner-walking still terminates at the Activity; or drop the override and switch the
+app to `AppCompatDelegate.setApplicationLocales` / `android:localeConfig`, the platform's own
+per-app language support, which recreates the Activity properly and also puts the language in
+Android's system Settings.
+
+Whatever the fix, it needs a test that would have caught this - none of the 247 existing tests
+could, since the failure needs a real Activity in the composition. That points at an instrumented
+test, which this project does not currently have; adding the first one is part of the work.
+
+Also fix the persistence race while here: a setting whose application can crash the process must
+not be written asynchronously, or a crash mid-write leaves an install that cannot start.
