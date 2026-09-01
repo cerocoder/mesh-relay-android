@@ -169,6 +169,21 @@ not be written asynchronously, or a crash mid-write leaves an install that canno
   `NodeCard.kt:132`, `RemoteNodesTab.kt:263`. Any of them showing a node that has a position will
   overflow the same way; the relay list is merely where a `weight(1f)` sibling turns the overflow
   into an unusable screen. Check all four when fixing.
+- **Second call site confirmed on hardware (2026-09-01, same build).** On Relay `0x4b` ->
+  *Remote nodes*, node `!9932b1c0` / `MIK6`, `RemoteNodesTab.kt:263` overflows identically:
+
+  ```
+  View x=  57- 507  w=450  y=1560-1695   <- Open in Google Maps
+  View x= 530- 957  w=427  y=1560-1695   <- Open in OpenStreetMap
+  View x= 957-1057  w=100  y=1560-2205   <- Meshview: 100 px wide, 645 px tall
+  ```
+
+  The card itself is 1034 px of 1080 - a normal width. It is the 645 px-tall Meshview button
+  inside it that makes one remote node fill the whole screen. Note also that the OpenStreetMap
+  `Button` measures `x=530-1023` (493 px) inside a container ending at `x=957`: **66 px of its
+  label is already clipped before Meshview is laid out at all**, so the row is over-full even
+  with two links. That matters for the fix - shortening the Meshview label alone would leave
+  OpenStreetMap still truncated.
 - **Severity:** broken - the app's primary screen shows about one relay at a time
 - **Status:** open - deliberately not fixed; collecting issues first
 
