@@ -118,6 +118,23 @@ object ChartGeometry {
         floor((y + scrollPx) / pxPerSample + ROW_EPSILON).toInt()
 
     /**
+     * [rowAt], brought inside the series - the clamp its own documentation says
+     * the caller owes it.
+     *
+     * It lives here rather than at the one call site for the reason
+     * [clampScroll] does: `size - 1` is arithmetic, and a `@Composable` in this
+     * project does none. A touch below the last measurement resolves to the last
+     * measurement, and the crosshair is then drawn at [yOf] of *that* row, so the
+     * rule and the numbers beside it always describe the same measurement.
+     *
+     * Row `0` for an empty series, which no caller reaches: the screen renders
+     * its empty state instead of a crosshair. Answering `0` rather than `-1`
+     * keeps a defect from turning into a negative index.
+     */
+    fun rowAtClamped(y: Float, scrollPx: Float, pxPerSample: Float, size: Int): Int =
+        if (size <= 0) 0 else rowAt(y, scrollPx, pxPerSample).coerceIn(0, size - 1)
+
+    /**
      * Where a value sits along the track, as a fraction in `0f..1f`.
      *
      * [SignalScales.fraction], the same function the gauges use, so the chart and

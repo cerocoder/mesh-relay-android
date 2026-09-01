@@ -159,6 +159,16 @@
     <string name="detail_stat_count">Count</string>
     <string name="detail_no_signal_data">No signal data yet</string>
 
+    <!-- Graph -->
+    <string name="graph_title_relay">Relay %1$s graph</string>
+    <string name="graph_title_neighbour">Neighbour %1$s graph</string>
+    <string name="graph_freeze">Freeze</string>
+    <string name="graph_auto_scale">Auto scale</string>
+    <string name="graph_time">Time: %1$s</string>
+    <string name="graph_open_map">Open this measurement on a map</string>
+    <string name="graph_position_from_node">Open on a map — position from the node</string>
+    <string name="graph_position_from_phone">Open on a map — position from the phone</string>
+
     <!-- Node card -->
     <string name="node_long_name">Long name</string>
     <string name="node_short_name">Short name</string>

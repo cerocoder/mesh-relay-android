@@ -186,6 +186,19 @@ class ChartGeometryTest {
     }
 
     @Test
+    fun `a touch past the last measurement resolves to the last measurement`() {
+        // The crosshair is then drawn at yOf of this row, not at the touch's own
+        // height, so the rule and the numbers beside it cannot describe different
+        // measurements.
+        assertEquals(299, ChartGeometry.rowAtClamped(y = 9_999f, scrollPx = 0f, pxPerSample = 1f, size = 300))
+        assertEquals(0, ChartGeometry.rowAtClamped(y = -40f, scrollPx = 0f, pxPerSample = 1f, size = 300))
+        assertEquals(120, ChartGeometry.rowAtClamped(y = 20f, scrollPx = 100f, pxPerSample = 1f, size = 300))
+        // An empty series answers 0, not -1: no caller reaches it, and a defect
+        // must not become a negative index into the series.
+        assertEquals(0, ChartGeometry.rowAtClamped(y = 40f, scrollPx = 0f, pxPerSample = 1f, size = 0))
+    }
+
+    @Test
     fun `the label rows are the visible ones once there is a viewport`() {
         val labels = ChartGeometry.labelRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
         val visible = ChartGeometry.visibleRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)

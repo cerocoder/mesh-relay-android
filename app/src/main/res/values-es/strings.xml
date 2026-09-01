@@ -159,6 +159,16 @@
     <string name="detail_stat_count">Recuento</string>
     <string name="detail_no_signal_data">Aún no hay datos de señal</string>
 
+    <!-- Graph -->
+    <string name="graph_title_relay">Gráfica del repetidor %1$s</string>
+    <string name="graph_title_neighbour">Gráfica del vecino %1$s</string>
+    <string name="graph_freeze">Congelar</string>
+    <string name="graph_auto_scale">Escala automática</string>
+    <string name="graph_time">Hora: %1$s</string>
+    <string name="graph_open_map">Abrir esta medición en un mapa</string>
+    <string name="graph_position_from_node">Abrir en un mapa: posición del nodo</string>
+    <string name="graph_position_from_phone">Abrir en un mapa: posición del teléfono</string>
+
     <!-- Node card -->
     <string name="node_long_name">Nombre largo</string>
     <string name="node_short_name">Nombre corto</string>
