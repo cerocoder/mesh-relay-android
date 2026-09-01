@@ -25,23 +25,23 @@
     <string name="format_rssi_dbm">%1$s dBm</string>
     <string name="format_percent">%1$s%%</string>
     <string name="format_coordinates">%1$s, %2$s</string>
-    <string name="format_ago_seconds">%1$ds ago</string>
-    <string name="format_ago_minutes">%1$dm %2$02ds</string>
-    <string name="format_ago_hours">%1$dh %2$02dm</string>
+    <string name="format_ago_seconds">%1$dsec ago</string>
+    <string name="format_ago_minutes">%1$dmin %2$02dsec</string>
+    <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Src: %1$s</string>
     <string name="format_source_aged">Src: %1$s:%2$s</string>
     <string name="format_db_header">DB(%1$d) · %2$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
-    <string name="format_uptime">%1$dd %2$dh %3$dm</string>
+    <string name="format_uptime">%1$ddays %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (local time)</string>
 
     <!-- Ages -->
-    <string name="age_1m">1m</string>
-    <string name="age_5m">5m</string>
-    <string name="age_30m">30m</string>
-    <string name="age_1h">1h</string>
-    <string name="age_12h">12h</string>
-    <string name="age_1d">1d</string>
+    <string name="age_1m">1min</string>
+    <string name="age_5m">5min</string>
+    <string name="age_30m">30min</string>
+    <string name="age_1h">1hrs</string>
+    <string name="age_12h">12hrs</string>
+    <string name="age_1d">1days</string>
     <string name="age_1w">1w</string>
     <string name="age_1y">1y</string>
     <string name="age_unknown">\?\?</string>

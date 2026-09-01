@@ -3,6 +3,7 @@ package com.cerocoder.meshrelay.ui.common
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -54,10 +55,22 @@ fun PositionLine(
     val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        val line = listOfNotNull(parts.coordinates, parts.distance, parts.altitude, parts.source)
+        // bodySmall is this app's monospace style (see Type.kt). Node ids, short
+        // names and the per-node counts beside this line all use it, and a
+        // position rendered in the default proportional body style reads as a
+        // different kind of content sitting inside the same card.
+        val line = listOfNotNull(parts.coordinates, parts.distance, parts.altitude)
             .joinToString(separator = " ")
         if (line.isNotEmpty()) {
-            Text(text = line)
+            Text(text = line, style = MaterialTheme.typography.bodySmall)
+        }
+
+        // The source and its age go on their own line rather than trailing the
+        // measurements. Run together, "697 m Src: current:30min" puts a distance
+        // in metres directly against an age in minutes, and the reader has to
+        // work out which unit belongs to which number.
+        parts.source?.let { source ->
+            Text(text = source, style = MaterialTheme.typography.bodySmall)
         }
 
         val lat = info.lat
