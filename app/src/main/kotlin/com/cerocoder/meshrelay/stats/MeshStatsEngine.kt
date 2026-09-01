@@ -169,17 +169,6 @@ class MeshStatsEngine(
                     .collect { watched -> if (watched) commands.send(Command.Refresh) }
             }
 
-            // The same "a screen that has just opened must not see nothing" rule the
-            // snapshot follows. Without it, opening a chart on a quiet relay races: the
-            // WatchSeries command can be applied before the collector has subscribed, the
-            // publish is skipped, and with no further packets the chart stays blank forever.
-            launch {
-                _series.subscriptionCount
-                    .map { it > 0 }
-                    .distinctUntilChanged()
-                    .collect { watched -> if (watched) commands.send(Command.Refresh) }
-            }
-
             for (command in commands) {
                 apply(command)
                 // Drain whatever is already queued before building. A burst of thirty
@@ -420,15 +409,31 @@ class MeshStatsEngine(
     }
 
     /**
-     * Publishes the watched subject's measurements, if anyone is looking and if
-     * anything changed.
+     * Publishes the watched subject's measurements, if anything changed since the
+     * last publish.
      *
-     * Two gates, not one. `subscriptionCount` is the same rule the snapshot follows:
-     * nothing subscribed means nothing built. The change check is what stops a
-     * packet heard on some other relay from copying this one's arrays and
-     * recomposing its chart; `totalAppended` moves on every append and only on an
-     * append, so it is exact at every fill level - unlike `size`, which stops moving
-     * once the ring saturates.
+     * One gate, not two: `watchedSeries != null`. Spec section 6.4 names a second
+     * gate mirroring `_snapshot`'s - nothing subscribed to `series` means nothing
+     * published - and this deliberately does not have it; do not restore it.
+     * `_series.subscriptionCount` is a *conflating* StateFlow, and that is exactly
+     * the problem: a chart can unsubscribe and resubscribe (screen rotation, a
+     * quick back-and-forth) between two dispatches of the collector that used to
+     * watch it here, so the count moves 1 -> 0 -> 1 while that collector only ever
+     * observes the final 1 - `map { it > 0 }.distinctUntilChanged()` sees
+     * `true -> true` and emits nothing, no `Refresh` is sent, and on a quiet relay
+     * the chart is left showing a stale series indefinitely. The two gates were
+     * redundant to begin with: `watchedSeries` is non-null only while a chart is
+     * open, which is exactly when publishing is wanted, and every subscribe is
+     * already followed by a fresh build regardless, because `StateFlow` replays its
+     * latest value to a new collector and this function now keeps that value
+     * current on every batch whether or not anyone is listening. Dropping the
+     * count gate removes the class of defect structurally rather than depending on
+     * collector dispatch order in a later task.
+     *
+     * The change check is what stops a packet heard on some other relay from
+     * copying this one's arrays and recomposing its chart; `totalAppended` moves
+     * on every append and only on an append, so it is exact at every fill level -
+     * unlike `size`, which stops moving once the ring saturates.
      *
      * `totalAppended` alone is not enough to guard on, though: `resetStatistics`
      * clears [seriesBuffers], so a fresh buffer restarts its `totalAppended` at 0 -
@@ -441,7 +446,6 @@ class MeshStatsEngine(
      */
     private fun publishWatchedSeries() {
         val key = watchedSeries ?: return
-        if (_series.subscriptionCount.value == 0) return
         val buffer = seriesBuffers[key]
         val total = buffer?.totalAppended ?: 0L
         val epoch = resetEpoch

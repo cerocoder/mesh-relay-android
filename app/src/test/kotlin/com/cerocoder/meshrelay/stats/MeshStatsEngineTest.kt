@@ -632,15 +632,30 @@ class MeshStatsEngineTest {
     }
 
     @Test
-    fun `nothing is published while nothing is subscribed`() = runTest(StandardTestDispatcher()) {
-        // The same rule the snapshot follows. A chart's 125 KB must not be copied for
-        // a screen that is not on.
+    fun `nothing is published while nothing is watched`() = runTest(StandardTestDispatcher()) {
+        // publishWatchedSeries()'s one gate is watchedSeries != null - never called
+        // here - so the buffer fills but the series stays untouched.
+        val subject = engine(backgroundScope)
+        subject.attach(flowOf(relayed()))
+        runCurrent()
+
+        assertNull(subject.series.value)
+    }
+
+    @Test
+    fun `watching publishes even before the series has a subscriber`() = runTest(StandardTestDispatcher()) {
+        // publishWatchedSeries() used to have a second gate on
+        // _series.subscriptionCount, mirroring _snapshot's - see the fix report for
+        // why it was removed. This pins the removal: a watched subject's series is
+        // built and set as soon as it exists, whether or not a screen has
+        // subscribed to read it yet, so a later subscriber sees it immediately via
+        // StateFlow's replay rather than needing a Refresh command to arrive first.
         val subject = engine(backgroundScope)
         subject.watchSeries(SeriesKey.Relay(0x69))
         subject.attach(flowOf(relayed()))
         runCurrent()
 
-        assertNull(subject.series.value)
+        assertEquals(1, subject.series.value?.size)
     }
 
     @Test
@@ -738,6 +753,29 @@ class MeshStatsEngineTest {
 
         assertEquals(0, seen.last()?.size ?: 0)
     }
+
+    @Test
+    fun `a reset and the same number of packets again is not mistaken for no change`() =
+        runTest(StandardTestDispatcher()) {
+            // The ABA case the three-term guard exists for. With a (key, totalAppended)
+            // guard this fails on the second assertion: totalAppended goes 2 -> 0 -> 2
+            // inside one drained batch, the guard sees no change, and the chart keeps
+            // drawing the session that was reset away.
+            val subject = engine(backgroundScope)
+            val seen = collectSeries(subject)
+            subject.watchSeries(SeriesKey.Relay(0x69))
+            subject.attach(flowOf(relayed(at = 1_000L), relayed(at = 1_000L)))
+            runCurrent()
+            assertEquals(1_000L, seen.last()!!.atMillis(0))
+
+            // Producer queued but not yet run; the reset is enqueued ahead of its frames.
+            subject.attach(flowOf(relayed(at = 9_000L), relayed(at = 9_000L)))
+            subject.reset()
+            runCurrent()
+
+            assertEquals(2, seen.last()!!.size)
+            assertEquals(9_000L, seen.last()!!.atMillis(0))
+        }
 
     @Test
     fun `watching nothing drops the published series at once`() = runTest(StandardTestDispatcher()) {
