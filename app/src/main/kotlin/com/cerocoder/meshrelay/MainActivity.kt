@@ -29,8 +29,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.stats.SystemTimeSource
+import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.transport.DeviceListEntry
-import com.cerocoder.meshrelay.ui.LocalizedApp
 import com.cerocoder.meshrelay.ui.MeshRelayNavHost
 import com.cerocoder.meshrelay.ui.common.LocalAppResumed
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
@@ -61,6 +61,32 @@ class MainActivity : ComponentActivity() {
     private val resumedState = mutableStateOf(false)
 
     private val container: AppContainer get() = (application as MeshRelayApp).container
+
+    /**
+     * The language this activity's resources were built with, so the composition
+     * can tell a change from the value it starts with.
+     */
+    private var attachedLanguage: LanguageOption = LanguageOption.SYSTEM
+
+    /**
+     * The chosen language is applied here, under everything.
+     *
+     * `attachBaseContext` rather than a `LocalContext` override around the UI:
+     * every `Popup` and `Dialog` - so every dropdown menu and every confirmation
+     * - is its own `AbstractComposeView` and provides `LocalContext` afresh from
+     * its own window, shadowing whatever an ancestor provided. The app ran in
+     * Spanish with all of its menus in English (field issue F-5). A base context
+     * has nothing above it to be shadowed by.
+     *
+     * The language is read once, here. A change made later recreates the
+     * activity - see [onCreate] - which comes back through this method.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        attachedLanguage = (newBase.applicationContext as? MeshRelayApp)
+            ?.containerOrNull?.settings?.settings?.value?.language
+            ?: LanguageOption.SYSTEM
+        super.attachBaseContext(newBase.withChosenLanguage())
+    }
 
     override fun onResume() {
         super.onResume()
@@ -97,16 +123,24 @@ class MainActivity : ComponentActivity() {
                 onDispose { activityWindow.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) }
             }
 
-            LocalizedApp(settings.language) {
-                MeshRelayTheme {
-                    CompositionLocalProvider(LocalAppResumed provides resumed) {
-                        ProvideRelativeClock(SystemTimeSource) {
-                            MeshRelayContent(
-                                container = container,
-                                readinessState = readinessState,
-                                backgroundCollection = settings.backgroundCollection,
-                            )
-                        }
+            // A language chosen in Settings takes effect by rebuilding the
+            // activity, because that is what rebuilds its resources - see
+            // attachBaseContext for why the resources rather than a composition
+            // local. Nothing is lost: the navigation stack is rememberSaveable
+            // and everything with a longer life than a screen lives in
+            // AppContainer, which is exactly what a rotation already relies on.
+            LaunchedEffect(settings.language) {
+                if (settings.language != attachedLanguage) recreate()
+            }
+
+            MeshRelayTheme {
+                CompositionLocalProvider(LocalAppResumed provides resumed) {
+                    ProvideRelativeClock(SystemTimeSource) {
+                        MeshRelayContent(
+                            container = container,
+                            readinessState = readinessState,
+                            backgroundCollection = settings.backgroundCollection,
+                        )
                     }
                 }
             }
@@ -124,11 +158,11 @@ private fun MeshRelayContent(
     readinessState: MutableState<BleReadiness>,
     backgroundCollection: Boolean,
 ) {
-    // The application context, not LocalContext.current: LocalizedApp provides a
-    // locale-overridden wrapper there, and a fresh one of those appears every time
-    // the language changes. A broadcast receiver has to be unregistered against the
-    // very context instance it was registered on, so it takes the one context in
-    // this app that never changes identity.
+    // The application context, not LocalContext.current: a broadcast receiver has
+    // to be unregistered against the very context instance it was registered on,
+    // and LocalContext is the activity, which is replaced by every rotation and
+    // every language change. This is the one context in the app that never changes
+    // identity.
     val appContext = LocalContext.current.applicationContext
 
     val scope = rememberCoroutineScope()

@@ -46,14 +46,14 @@ fun PositionLine(
     val strings = resolvePositionStrings()
     val nowMillis = LocalRelativeClock.current
     val parts = remember(info, nowMillis, strings) { PositionLineText.parts(info, nowMillis, strings) }
-    // LocalUriHandler, not LocalContext.startActivity. Compose builds
-    // AndroidUriHandler from the ComposeView's own context, so it opens links
-    // against the activity whatever LocalContext has been overridden with further
-    // down the tree - which LocalizedApp does override, once a language other than
-    // the system one is chosen. That override is a ContextWrapper around the
-    // activity now (see LocalizedContext), so startActivity would in fact work
-    // again; the uri handler stays because it is the narrower tool for the job and
-    // does not depend on that being true.
+    // LocalUriHandler, not LocalContext.startActivity. It was once the only thing
+    // keeping these links alive: LocalContext used to be overridden with a
+    // createConfigurationContext result, which is not an activity, and starting an
+    // activity from it without FLAG_ACTIVITY_NEW_TASK throws on targetSdk 36. The
+    // language is applied in the activity's attachBaseContext now (see
+    // AppLocale.kt), so LocalContext is the activity again and startActivity would
+    // work - the uri handler stays because it is the narrower tool for opening a
+    // link and does not depend on that staying true.
     val uriHandler = LocalUriHandler.current
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -9,10 +9,10 @@ it.
 
 Nothing here is fixed unless its entry says so.
 
-**F-1 to F-4 were fixed as one wave on 2026-09-01**; each entry keeps its original finding
-verbatim and ends with a note saying what was done. None of the four has been re-checked on the
-phone yet - the fixes are CI-verified only, which is exactly the kind of verification that missed
-all four in the first place.
+**F-1 to F-5 were fixed as one wave on 2026-09-01**; each entry keeps its original finding
+verbatim and ends with a note saying what was done. F-5 was found *by* that wave: fixing the F-2
+crash was what first allowed the app to be run in Spanish at all, and the first Spanish screen
+showed the next defect underneath it.
 
 **Entry template**
 
@@ -148,12 +148,14 @@ test, which this project does not currently have; adding the first one is part o
 Also fix the persistence race while here: a setting whose application can crash the process must
 not be written asynchronously, or a crash mid-write leaves an install that cannot start.
 
-**What was done.** The first of the two directions above: `withLocale` now returns
-`LocalizedContext`, a `ContextWrapper` around the context it was built from, overriding only
-`getResources`, `getAssets` and `getTheme`. Owner-walking terminates at the activity again, because
-the chain is intact; everything else - `startActivity`, `getSystemService` - is `ContextWrapper`'s
-own delegation. `AppCompatDelegate.setApplicationLocales` was not taken: it needs `appcompat`, a
-dependency this project has deliberately stayed off.
+**What was done.** First the wrapper: `withLocale` returns `LocalizedContext`, a `ContextWrapper`
+around the context it was built from, overriding only `getResources`, `getAssets` and `getTheme`, so
+owner-walking terminates at the activity again. Then F-5 moved where it is applied - the composable
+that provided it as `LocalContext` is gone, and the locale is applied in `MainActivity.attachBaseContext`
+instead, which puts the crash out of reach entirely rather than merely surviving it. The wrapper
+stays because a `ContextImpl` under an activity's base context would be a trap for the next reader
+as much as it was for this one. `AppCompatDelegate.setApplicationLocales` was not taken: it needs
+`appcompat`, a dependency this project has deliberately stayed off.
 
 The persistence race is fixed too, and by deletion rather than by a lock: `SettingsRepository.persist`
 no longer posts to `ioScope`, it calls the store on the caller's thread.
@@ -167,6 +169,11 @@ What guards it instead is a type: `withLocale` declares its return as `ContextWr
 it back to a bare `createConfigurationContext` fails to compile rather than compiling silently and
 bricking the app again. That is narrower than a test - it cannot catch a *different* context being
 provided somewhere else - and a first Robolectric test remains owed.
+
+**Verified on the phone, 2026-09-01.** `language` set to `ES` in `shared_prefs` and the app
+launched: alive, no crash, and every screen in Spanish including the decimal commas
+(`40,330942`, `12,5%`) that come from `LocalConfiguration` rather than from a string resource. That
+is the exact state that used to kill the process on every launch.
 
 ---
 
@@ -316,3 +323,49 @@ case degrade correctly - the label stands alone, with no separator left dangling
 
 `SortModeLabels` moved from `ui/relays` to `ui/common` in the same pass, since the shared app bar
 builds the sort menu for both screens and a common component should not import from `ui/relays`.
+
+---
+
+## F-5 - the app runs in the chosen language but every menu and dialog stays in the system's
+
+- **Found:** 2026-09-01, Samsung SM-S721B, build `ee6b01f` from CI run `33494212291`, `app-debug`,
+  connected to the real node, `language` forced to `ES`. Found while verifying the F-1 to F-4 fix
+  wave - and only findable then, because until F-2 was fixed the app could not be run in a chosen
+  language at all.
+- **Where:** the old `ui/LocalizedApp.kt` - the `LocalContext` override, again, and this time not
+  for what it was but for how far it reached.
+- **What:** with Spanish chosen, the screen behind is fully Spanish and every popup is English.
+  Measured from the view hierarchy on one screen:
+
+  ```
+  app bar / cards (in the activity's window)   overflow + sort menus (in popup windows)
+    'Repetidores'                                'Gauges' / 'Complex'
+    'Nodo local'  'Ordenar por'                  'Reload node database'
+    'Número de paquetes'                         'Reset'  'Settings'
+    'Fuente: DB:1min'                            'Packet count'  'Percentage'  'Avg SNR'
+  ```
+
+  `Número de paquetes` in the status strip and `Packet count` in the sort menu are the *same string
+  resource*, rendered two ways on one screen.
+- **Why it happens:** `Popup` and `Dialog` each host their content in their own
+  `AbstractComposeView`, and every `AbstractComposeView` runs `ProvideAndroidCompositionLocals`,
+  which provides `LocalContext` from its own window's context. That shadows any `LocalContext` an
+  ancestor provided, however far up. So a composition-local override reaches the activity's window
+  and nothing else - and every dropdown menu, sort menu and confirmation dialog in this app is in a
+  window of its own.
+- **This is the same root cause a fourth time.** Map links (fixed at `31892ad`), the permission
+  launcher (F-2), and now every popup. Each time the treatment was the call site. The mechanism was
+  wrong: a composition local cannot carry a language, because composition is not what resolves
+  resources - a `Context` is, and windows get their own.
+- **Severity:** broken - a bilingual UI is arguably worse than an untranslated one, and it makes
+  the Spanish translation look unfinished when it is complete
+- **Status:** fixed - `MainActivity.attachBaseContext`.
+
+**What was done.** The locale is applied to the activity's base context, underneath every window
+the app opens, so there is nothing left above it to shadow it. `LocalizedApp` is deleted; what
+survives is `AppLocale.kt` with `localeFor`, `withLocale` and `LocalizedContext`. A language chosen
+in Settings now recreates the activity, because rebuilding its resources is what applying the
+locale means - the navigation stack is `rememberSaveable` and everything longer-lived is in
+`AppContainer`, which is what rotation already relies on. `MeshForegroundService` got the same
+override, so the notification's title and channel name follow the setting too (its body text
+already did, through `AppContainer.notificationContext`).

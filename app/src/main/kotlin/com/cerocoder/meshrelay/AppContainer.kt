@@ -16,8 +16,6 @@ import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.transport.RadioTransportFactory
 import com.cerocoder.meshrelay.transport.RadioTransportFactoryImpl
-import com.cerocoder.meshrelay.ui.localeFor
-import com.cerocoder.meshrelay.ui.withLocale
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -229,10 +227,10 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     /**
      * A context resolving strings in the language chosen in Settings.
      *
-     * The screens get theirs from `LocalizedApp`; this one is for the notification,
-     * which is built outside any composition. Read fresh each time rather than
-     * cached, so switching language takes effect on the next notification update
-     * instead of at the next launch.
+     * The activity gets its language in `attachBaseContext`; this one is for the
+     * notification text, which is built here rather than in the activity. Read
+     * fresh each time rather than cached, so switching language takes effect on
+     * the next notification update instead of at the next launch.
      */
     private fun notificationContext(): Context {
         val locale = localeFor(settings.settings.value.language) ?: return context

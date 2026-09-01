@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import com.cerocoder.meshrelay.MainActivity
 import com.cerocoder.meshrelay.R
+import com.cerocoder.meshrelay.withChosenLanguage
 
 /**
  * Keeps the process alive while the connection to the node is held.
@@ -21,6 +22,16 @@ import com.cerocoder.meshrelay.R
  * and the connection is dropped the moment the user leaves the app.
  */
 class MeshForegroundService : Service() {
+
+    /**
+     * The notification is user-visible text, so it honours the language chosen in
+     * Settings the same way the activity does. Read once per service instance;
+     * the service is short-lived relative to a language change and the next start
+     * picks up the new value.
+     */
+    override fun attachBaseContext(newBase: Context) {
+        super.attachBaseContext(newBase.withChosenLanguage())
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
