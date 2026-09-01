@@ -19,6 +19,8 @@ class BackStackTest {
 
     private val relayDetail = Screen.Detail(DetailSubject.Relay(0x69))
     private val neighbourDetail = Screen.Detail(DetailSubject.Neighbour(0x9e75f1a4.toInt()))
+    private val relayGraph = Screen.Graph(DetailSubject.Relay(0x69))
+    private val neighbourGraph = Screen.Graph(DetailSubject.Neighbour(0x9e75f1a4.toInt()))
 
     @Test
     fun `push and pop walk the stack`() {
@@ -135,6 +137,45 @@ class BackStackTest {
         assertEquals(all, restored!!.entries)
         assertEquals(Screen.RemoteNode(42, null), restored.current)
         assertTrue(restored.canGoBack)
+    }
+
+    @Test
+    fun `a graph screen survives being saved and restored, for both subjects`() {
+        // The chart is reached from a detail screen, so a rotation on it must come
+        // back to the same chart on the same subject - not to the device list.
+        val stack = BackStack(Screen.Devices)
+        stack.push(Screen.Main(MainTab.RELAYS))
+        stack.push(relayDetail)
+        stack.push(relayGraph)
+        stack.push(neighbourGraph)
+
+        val saved = with(backStackSaver) { SaverScope { true }.save(stack) }
+        assertNotNull(saved)
+        val restored = backStackSaver.restore(saved!!)
+        assertNotNull(restored)
+
+        assertEquals(
+            listOf(Screen.Devices, Screen.Main(MainTab.RELAYS), relayDetail, relayGraph, neighbourGraph),
+            restored!!.entries,
+        )
+    }
+
+    @Test
+    fun `a graph screen's subject is not confused with a detail screen's`() {
+        // The two subjects get their own tags, and so do the two destinations: a
+        // relay's argument is a byte and a neighbour's is a whole node number, and
+        // nothing about the numbers themselves tells the four cases apart.
+        val stack = BackStack(Screen.Devices)
+        stack.push(relayDetail)
+        stack.push(relayGraph)
+
+        val saved = with(backStackSaver) { SaverScope { true }.save(stack) }
+        assertNotNull(saved)
+        val restored = backStackSaver.restore(saved!!)
+        assertNotNull(restored)
+
+        assertEquals(relayDetail, restored!!.entries[1])
+        assertEquals(relayGraph, restored.entries[2])
     }
 
     @Test

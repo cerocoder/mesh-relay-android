@@ -193,6 +193,13 @@ fun MeshRelayNavHost(
             onOpenRelay = { relayByte -> backStack.push(Screen.Detail(DetailSubject.Relay(relayByte))) },
             modifier = modifier,
         )
+
+        // Task 12 replaces this with the real destination. Until then nothing
+        // pushes Screen.Graph, so the branch is unreachable - it exists because a
+        // non-exhaustive `when` statement over a sealed interface has been a
+        // compile error since Kotlin 1.7, and an `else` here would silently
+        // swallow the next destination someone adds instead.
+        is Screen.Graph -> Unit
     }
 }
 

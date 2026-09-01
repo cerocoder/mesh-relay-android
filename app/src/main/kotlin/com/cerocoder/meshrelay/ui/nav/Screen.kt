@@ -26,4 +26,13 @@ sealed interface Screen {
     data object Settings : Screen
     data class Detail(val subject: DetailSubject) : Screen
     data class RemoteNode(val nodeNum: Int, val viaRelayByte: Int?) : Screen
+
+    /**
+     * RSSI and SNR against time, for one relay or one neighbour.
+     *
+     * A full-screen destination rather than a third tab inside [Detail]: the tab
+     * would lose about 180 dp to the summary block and the tab row - the space the
+     * plot needs - and could carry neither its own title nor its own two switches.
+     */
+    data class Graph(val subject: DetailSubject) : Screen
 }

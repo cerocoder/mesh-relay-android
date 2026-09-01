@@ -96,6 +96,8 @@ private const val TAG_SETTINGS = 2
 private const val TAG_DETAIL_RELAY = 3
 private const val TAG_DETAIL_NEIGHBOUR = 4
 private const val TAG_REMOTE_NODE = 5
+private const val TAG_GRAPH_RELAY = 6
+private const val TAG_GRAPH_NEIGHBOUR = 7
 
 /**
  * [Screen.RemoteNode.viaRelayByte] is nullable and a relay byte never is: the
@@ -138,6 +140,10 @@ private fun encode(screen: Screen): List<Int> = when (screen) {
     }
     is Screen.RemoteNode ->
         listOf(TAG_REMOTE_NODE, screen.nodeNum, screen.viaRelayByte ?: NO_RELAY_BYTE)
+    is Screen.Graph -> when (val subject = screen.subject) {
+        is DetailSubject.Relay -> listOf(TAG_GRAPH_RELAY, subject.relayByte, 0)
+        is DetailSubject.Neighbour -> listOf(TAG_GRAPH_NEIGHBOUR, subject.nodeNum, 0)
+    }
 }
 
 /** `null` for anything this version cannot read - see [backStackSaver]. */
@@ -151,6 +157,8 @@ private fun decode(fields: List<Int>): Screen? {
         TAG_DETAIL_RELAY -> Screen.Detail(DetailSubject.Relay(first))
         TAG_DETAIL_NEIGHBOUR -> Screen.Detail(DetailSubject.Neighbour(first))
         TAG_REMOTE_NODE -> Screen.RemoteNode(first, second.takeIf { it != NO_RELAY_BYTE })
+        TAG_GRAPH_RELAY -> Screen.Graph(DetailSubject.Relay(first))
+        TAG_GRAPH_NEIGHBOUR -> Screen.Graph(DetailSubject.Neighbour(first))
         else -> null
     }
 }
