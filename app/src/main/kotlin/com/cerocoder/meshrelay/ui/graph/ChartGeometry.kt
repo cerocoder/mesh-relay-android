@@ -2,6 +2,7 @@ package com.cerocoder.meshrelay.ui.graph
 
 import com.cerocoder.meshrelay.stats.SignalScales
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import kotlin.math.ceil
 import kotlin.math.floor
 
 /**
@@ -67,21 +68,54 @@ object ChartGeometry {
     }
 
     /**
+     * The rows a reader can actually see at this offset: every row whose [yOf]
+     * falls inside the viewport, and no others.
+     *
+     * **Deliberately not [visibleRows].** That function answers a different
+     * question - which rows must be *drawn* - and its answer is wider, because a
+     * polyline segment joins two rows and the segments that leave the top of the
+     * viewport and enter the bottom start and end outside it. An overscan row is
+     * by definition not displayed.
+     *
+     * The bounds are `ceil`, not `floor`, and that is what makes this exact
+     * rather than approximately right. Row `r` is on screen exactly when
+     * `0 <= yOf(r) < viewportPx`, which is `scrollPx <= r * pxPerSample <
+     * scrollPx + viewportPx`: the first such row is the smallest integer at or
+     * above `scrollPx / pxPerSample`, and the last is the largest integer
+     * strictly below `(scrollPx + viewportPx) / pxPerSample`. Flooring both would
+     * name a row above the top edge whenever the scroll offset is fractional, and
+     * would name the row sitting exactly *on* the bottom edge - the first one off
+     * screen - every time the viewport is a whole number of rows tall, which at
+     * `pxPerSample == 1f` and an integer plot height is every time.
+     */
+    fun displayedRows(scrollPx: Float, viewportPx: Float, size: Int, pxPerSample: Float): RowWindow {
+        if (size <= 0 || pxPerSample <= 0f || viewportPx <= 0f) return RowWindow(0, -1)
+        val first = ceil(scrollPx / pxPerSample).toInt()
+        val last = ceil((scrollPx + viewportPx) / pxPerSample).toInt() - 1
+        return RowWindow(
+            firstRow = first.coerceIn(0, size - 1),
+            lastRow = last.coerceIn(0, size - 1),
+        )
+    }
+
+    /**
      * The two rows the screen's `Time` fields print: the newest measurement on
      * screen and the oldest.
      *
-     * [visibleRows] with one guarantee added - never empty while the series is
-     * not. On the very first composition the plot has not been measured yet
-     * (`onSizeChanged` has not run, so the viewport is still `0`) and
-     * [visibleRows] correctly answers "there is nothing to draw"; a label built
-     * from that window's `lastRow` would ask for row `-1`, and [indexOfRow] would
-     * hand the series an index one past its end - an exception on the first
-     * frame, before anything has been drawn at all. Before there is a viewport
-     * the honest answer is the whole series: its newest row and its oldest.
+     * [displayedRows] - requirement 8 asks for the topmost and bottom points
+     * *displayed*, and only that function answers exactly that - with one
+     * guarantee added: never empty while the series is not. On the very first
+     * composition the plot has not been measured yet (`onSizeChanged` has not
+     * run, so the viewport is still `0`) and [displayedRows] correctly answers
+     * "nothing is on screen"; a label built from that window's `lastRow` would
+     * ask for row `-1`, and [indexOfRow] would hand the series an index one past
+     * its end - an exception on the first frame, before anything has been drawn
+     * at all. Before there is a viewport the honest answer is the whole series:
+     * its newest row and its oldest.
      */
     fun labelRows(scrollPx: Float, viewportPx: Float, size: Int, pxPerSample: Float): RowWindow {
         if (size <= 0) return RowWindow(0, -1)
-        val window = visibleRows(scrollPx, viewportPx, size, pxPerSample)
+        val window = displayedRows(scrollPx, viewportPx, size, pxPerSample)
         return if (window.isEmpty) RowWindow(0, size - 1) else window
     }
 

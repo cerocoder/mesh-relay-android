@@ -90,6 +90,23 @@ private val SwitchLabelSpacing = 8.dp
 private const val PX_PER_SAMPLE = 1f
 
 /**
+ * Everything this screen draws at one instant, as one value.
+ *
+ * It exists so Freeze can capture the whole drawing atomically. The bars and the
+ * plot are one picture - with Auto scale on they share a range derived from these
+ * statistics - so capturing the series without them would freeze the trace while
+ * still letting it slide sideways under a widening scale. Holding the four
+ * together makes "what is frozen" one thing rather than four that a later edit
+ * could let drift apart.
+ */
+private data class GraphFrame(
+    val series: SignalSeries,
+    val rssiStats: SignalStats,
+    val snrStats: SignalStats,
+    val lastPacketAtMillis: Long,
+)
+
+/**
  * RSSI and SNR against time, for one relay or one neighbour.
  *
  * **The signature carries no `DetailSubject`, deliberately.** Spec requirement 2
@@ -135,9 +152,26 @@ fun SignalGraphScreen(
     var crosshairY by remember { mutableStateOf<Float?>(null) }
     var lastTotal by remember { mutableLongStateOf(0L) }
 
+    val live = GraphFrame(
+        series = series ?: SignalSeries.EMPTY,
+        rssiStats = rssiStats,
+        snrStats = snrStats,
+        lastPacketAtMillis = lastPacketAtMillis,
+    )
+
     // Freeze holds the drawing, not the collection: the engine keeps folding
     // packets throughout, and the graph is redrawn complete the moment it is
     // switched off.
+    //
+    // **The whole drawing is captured, not just the plot.** The bars and the
+    // trace are one picture, and with Auto scale on they share one range derived
+    // from these very statistics - so freezing the series alone would leave a
+    // frozen trace that still slides sideways: one stronger packet widens the
+    // session `maxVal`, `scaleRange` widens with it, and every point moves while
+    // the bars redraw underneath. `lastPacketAtMillis` comes with them so the
+    // bars' flash marker does not fire for packets this screen is not showing.
+    // The consequence is intended: **while Freeze is on the bars stop updating
+    // too.** That is requirement 4, not an oversight to be repaired later.
     //
     // Captured by `remember(freeze)` rather than by an effect, and that matters:
     // an effect runs *after* the composition that turned freeze on, leaving one
@@ -147,12 +181,12 @@ fun SignalGraphScreen(
     // press of the switch. `remember(freeze)` re-evaluates during the very
     // composition the switch flips in, so no such frame exists.
     //
-    // A rotation loses the captured snapshot (a `SignalSeries` is not
-    // `Saveable`) and re-captures the live series while leaving the switch on.
-    // That is the honest behaviour: the switch's meaning is "stop moving", and it
-    // keeps meaning that from the rotation onwards.
-    val frozen = remember(freeze) { if (freeze) series else null }
-    val shown = (if (freeze) frozen else series) ?: SignalSeries.EMPTY
+    // A rotation loses the captured frame (a `SignalSeries` is not `Saveable`)
+    // and re-captures the live one while leaving the switch on. That is the
+    // honest behaviour: the switch's meaning is "stop moving", and it keeps
+    // meaning that from the rotation onwards.
+    val frame = remember(freeze) { if (freeze) live else null } ?: live
+    val shown = frame.series
 
     // Re-anchor as measurements arrive, so the row under the reader's eye does not
     // move. A decrease means the statistics were reset under this chart and the
@@ -168,10 +202,14 @@ fun SignalGraphScreen(
     }
 
     // One clamped value, used by every consumer, so no caller can forget to clamp.
+    // Read for *rendering* only - the two scroll callbacks below re-read the state
+    // itself, for the reason each of them records.
     val effectiveScroll = ChartGeometry.clampScroll(scrollPx, shown.size, viewportPx, PX_PER_SAMPLE)
 
-    val rssiRange = ChartGeometry.scaleRange(rssiStats, autoScale, SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
-    val snrRange = ChartGeometry.scaleRange(snrStats, autoScale, SignalScales.SNR_MIN, SignalScales.SNR_MAX)
+    val rssiRange =
+        ChartGeometry.scaleRange(frame.rssiStats, autoScale, SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
+    val snrRange =
+        ChartGeometry.scaleRange(frame.snrStats, autoScale, SignalScales.SNR_MIN, SignalScales.SNR_MAX)
 
     val labelRows = ChartGeometry.labelRows(effectiveScroll, viewportPx, shown.size, PX_PER_SAMPLE)
     val locale = displayLocale()
@@ -179,8 +217,14 @@ fun SignalGraphScreen(
 
     // A wheel notch or a hardware scroll only: a touch drag on the plot belongs
     // to the crosshair, which consumes it before this ever sees it.
+    //
+    // `scrollPx` is read here from the state, not from the `effectiveScroll`
+    // computed above: two deltas can be dispatched between recompositions, and a
+    // composition-captured starting point would make the second overwrite the
+    // first instead of continuing from it - the plot would track the wheel at a
+    // fraction of its speed and report the wrong consumed amount.
     val wheelScroll = rememberScrollableState { delta ->
-        val before = effectiveScroll
+        val before = ChartGeometry.clampScroll(scrollPx, shown.size, viewportPx, PX_PER_SAMPLE)
         val after = ChartGeometry.clampScroll(before - delta, shown.size, viewportPx, PX_PER_SAMPLE)
         scrollPx = after
         // What was actually absorbed, so a wheel at either end of the series
@@ -232,7 +276,7 @@ fun SignalGraphScreen(
                 )
             }
 
-            if (!snrStats.hasData && !rssiStats.hasData) {
+            if (!frame.snrStats.hasData && !frame.rssiStats.hasData) {
                 // Spec section 8.8's empty state, exactly: the message once, the
                 // two switches above it disabled. `SignalBlock` renders this same
                 // string itself when neither metric has data, so drawing it here
@@ -246,10 +290,10 @@ fun SignalGraphScreen(
             }
 
             SignalBlock(
-                snr = snrStats,
-                rssi = rssiStats,
+                snr = frame.snrStats,
+                rssi = frame.rssiStats,
                 gaugeMode = gaugeMode,
-                lastPacketAtMillis = lastPacketAtMillis,
+                lastPacketAtMillis = frame.lastPacketAtMillis,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding),
@@ -318,7 +362,19 @@ fun SignalGraphScreen(
                     scrollPx = effectiveScroll,
                     contentPx = ChartGeometry.contentHeightPx(shown.size, PX_PER_SAMPLE),
                     viewportPx = viewportPx,
-                    onScrollBy = { delta -> scrollPx = effectiveScroll + delta },
+                    onScrollBy = { delta ->
+                        // Read from the state, not from the composition-captured
+                        // `effectiveScroll`: a drag dispatches several deltas
+                        // between recompositions, and each must continue from
+                        // where the last one left the chart rather than from a
+                        // starting point frozen at the last frame - otherwise the
+                        // plot tracks the finger at a fraction of its speed.
+                        // Clamped on the way in as well as out, so a drag past
+                        // the end of the track cannot bank an offset the chart
+                        // has to unwind before it moves again.
+                        val from = ChartGeometry.clampScroll(scrollPx, shown.size, viewportPx, PX_PER_SAMPLE)
+                        scrollPx = from + delta
+                    },
                     modifier = Modifier
                         .align(Alignment.CenterEnd)
                         .width(ScrollbarWidth)
@@ -404,10 +460,17 @@ private fun BoxScope.Crosshair(
             .onSizeChanged { labelBlockHeightPx = it.height }
             .padding(horizontal = CrosshairLabelPadding),
     ) {
+        // All three ellipsise rather than clip. The block is a timestamp and two
+        // values inside a plot already narrowed by padding and the scrollbar, and
+        // the default `TextOverflow.Clip` would cut a digit in half; a reader
+        // cannot tell a clipped number from a real one, but they can tell an
+        // ellipsis. `TimeRow` below makes the same choice for the same reason,
+        // and Spanish is the longer of this app's two languages.
         Text(
             text = StatsFormat.graphTimestamp(series.atMillis(index), locale),
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.onSizeChanged { timestampHeightPx = it.height },
         )
         Row(horizontalArrangement = Arrangement.spacedBy(LabelSpacing)) {
@@ -416,12 +479,14 @@ private fun BoxScope.Crosshair(
                 color = RssiTrack,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
             Text(
                 text = stringResource(R.string.format_snr_db, StatsFormat.sampleSnr(series.snr(index), locale)),
                 color = SnrTrack,
                 style = MaterialTheme.typography.labelSmall,
                 maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
             )
         }
     }

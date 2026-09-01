@@ -199,10 +199,53 @@ class ChartGeometryTest {
     }
 
     @Test
-    fun `the label rows are the visible ones once there is a viewport`() {
+    fun `the label rows name displayed measurements, not overscanned ones`() {
+        // Requirement 8 asks for the timestamps of the topmost and bottom points
+        // *displayed*. An overscan row is by definition not displayed - it exists
+        // only so the polyline segments that leave the top of the viewport and
+        // enter the bottom have somewhere to start and end - so a label taken
+        // from the drawn window would name a measurement the reader cannot see.
+        // Checked mid-scroll, where the two windows genuinely differ; at either
+        // extreme the clamps hide the difference.
         val labels = ChartGeometry.labelRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
-        val visible = ChartGeometry.visibleRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
-        assertEquals(visible, labels)
+        val drawn = ChartGeometry.visibleRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
+
+        // Row 100 sits at y == 0 and row 149 at y == 49, the last row inside a
+        // viewport 50 px tall. Row 150 would sit exactly on the bottom edge.
+        assertEquals(100, labels.firstRow)
+        assertEquals(149, labels.lastRow)
+
+        // Strictly inside the drawn window at both ends.
+        assertTrue("$labels not inside $drawn", labels.firstRow > drawn.firstRow)
+        assertTrue("$labels not inside $drawn", labels.lastRow < drawn.lastRow)
+    }
+
+    @Test
+    fun `the displayed window is exactly the rows whose y falls in the viewport`() {
+        // Both bounds are ceil, not floor. A fractional scroll offset must not
+        // name the row above the top edge, and a viewport a whole number of rows
+        // tall - which at pxPerSample 1 and an integer plot height is every
+        // viewport - must not name the row sitting exactly on the bottom edge.
+        val whole = ChartGeometry.displayedRows(scrollPx = 0f, viewportPx = 800f, size = 1000, pxPerSample = 1f)
+        assertEquals(0, whole.firstRow)
+        assertEquals(799, whole.lastRow)
+        assertEquals(0f, ChartGeometry.yOf(whole.firstRow, 0f, 1f), 0.0001f)
+        assertEquals(799f, ChartGeometry.yOf(whole.lastRow, 0f, 1f), 0.0001f)
+
+        val fractional = ChartGeometry.displayedRows(scrollPx = 100.5f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
+        assertEquals(101, fractional.firstRow)
+        assertEquals(150, fractional.lastRow)
+        // Every named row is on screen, and the ones just outside are not.
+        assertTrue(ChartGeometry.yOf(fractional.firstRow, 100.5f, 1f) >= 0f)
+        assertTrue(ChartGeometry.yOf(fractional.firstRow - 1, 100.5f, 1f) < 0f)
+        assertTrue(ChartGeometry.yOf(fractional.lastRow, 100.5f, 1f) < 50f)
+        assertTrue(ChartGeometry.yOf(fractional.lastRow + 1, 100.5f, 1f) >= 50f)
+    }
+
+    @Test
+    fun `nothing is displayed before the plot is measured or in an empty series`() {
+        assertTrue(ChartGeometry.displayedRows(0f, 0f, size = 1000, pxPerSample = 1f).isEmpty)
+        assertTrue(ChartGeometry.displayedRows(0f, 800f, size = 0, pxPerSample = 1f).isEmpty)
     }
 
     @Test
