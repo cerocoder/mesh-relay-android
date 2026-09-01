@@ -128,3 +128,57 @@ test, which this project does not currently have; adding the first one is part o
 
 Also fix the persistence race while here: a setting whose application can crash the process must
 not be written asynchronously, or a crash mid-write leaves an install that cannot start.
+
+---
+
+## F-3 — the Meshview link overflows its row, collapsing the relay list to a 128 px slit
+
+- **Found:** 2026-09-01, Samsung SM-S721B (1080×2340, density 450), build `50adb13` from CI run
+  `33477285981`, `app-debug`, **connected to a real node** (local `49bf`, position
+  40.331006, -3.750717). Reported by the owner: "pay attention to the space in the center area,
+  the router shown in the bottom of the app screen".
+- **Where:** `app/src/main/kotlin/com/cerocoder/meshrelay/ui/common/PositionLine.kt:66` (the link
+  `Row`), with the damage landing at
+  `app/src/main/kotlin/com/cerocoder/meshrelay/ui/relays/RelayListScreen.kt:201`
+  (`LazyColumn(modifier = Modifier.weight(1f) …)`).
+- **What:** on the Relays screen, most of the display is empty and a single relay card sits near
+  the bottom, apparently floating. Measured from the view hierarchy (`uiautomator dump`), not
+  from pixels:
+
+  ```
+  View  y= 748-1706  h= 958  w= 111   <- the Meshview TextButton
+  View  y=1717-1845  h= 128  w=1080   <- the relay LazyColumn, scrollable
+  ```
+
+- **Why it happens:** `PositionLine` puts its links in a plain
+  `Row(horizontalArrangement = Arrangement.spacedBy(8.dp))` with no wrapping and no horizontal
+  scroll. When the node has a position **and** a Meshview URL is configured, three `TextButton`s
+  compete for 1080 px: "Open in Google Maps" takes 450, "Open in OpenStreetMap" 451, and the
+  Meshview button is left ~111 px. Its label cannot fit, so it wraps to roughly one character per
+  line and the button grows to **958 px tall**. The relay list is the `weight(1f)` sibling, so it
+  receives what is left - 128 px, about two thirds of one card.
+- **The data is fine; only the space is gone.** Swiping inside the 128 px window does scroll, and
+  a second relay (`0xa5[1]`) appears. Every relay is present and correct - the screen simply has
+  no room to show them. This is a layout defect, not an engine one.
+- **Why no test and no demo run caught it:** the demo scenarios' local node carries **no
+  coordinates**, so only the Meshview button renders and it fits comfortably. Three links in that
+  row is a state that only a real node with a real position produces. Every screenshot taken
+  before connecting to hardware showed at most two.
+- **Not limited to this screen.** `PositionLine` has four callers, and all four pass a
+  `meshviewUrl`: `RelayListScreen.kt:296` (local node), `NeighbourListScreen.kt:370`,
+  `NodeCard.kt:132`, `RemoteNodesTab.kt:263`. Any of them showing a node that has a position will
+  overflow the same way; the relay list is merely where a `weight(1f)` sibling turns the overflow
+  into an unusable screen. Check all four when fixing.
+- **Severity:** broken - the app's primary screen shows about one relay at a time
+- **Status:** open - deliberately not fixed; collecting issues first
+
+**Notes for whoever fixes it.** The row needs to stop assuming three labelled buttons fit on one
+line. `FlowRow` (`androidx.compose.foundation.layout`, already available) is the smallest change
+and wraps to a second line on narrow screens. Shortening the labels only moves the threshold - a
+larger font scale or a narrower device brings it straight back, and Spanish labels are longer
+again ("Abrir en Google Maps"). Whatever is chosen, the fix should be checked at a large font
+scale, not just at default.
+
+Worth pairing with F-1: both are the same mistake in different places - a horizontal row given
+more content than it can hold, with no wrap and no measurement. A sweep for unbounded `Row`s
+carrying text would likely find the third instance before a user does.
