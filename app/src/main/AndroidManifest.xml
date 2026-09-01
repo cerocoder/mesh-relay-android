@@ -11,8 +11,16 @@
         android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"
         android:maxSdkVersion="30" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"
-        android:maxSdkVersion="30" />
+
+    <!-- Unrestricted, and superseding the maxSdkVersion="30" entry that used to
+         stand here for pre-Android-12 BLE scanning: the Graph command stamps every
+         measurement with where the observer was standing, on every API level. Both
+         are declared so that a user choosing "Approximate" in the Android 12+
+         permission dialog grants something rather than nothing. BLUETOOTH_SCAN
+         above keeps neverForLocation - that flag asserts scans are not used to
+         derive location, which is still true: this comes from the GNSS. -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
 
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />

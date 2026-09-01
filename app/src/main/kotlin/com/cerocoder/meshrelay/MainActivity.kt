@@ -28,6 +28,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import com.cerocoder.meshrelay.ble.BleReadiness
+import com.cerocoder.meshrelay.location.LocationAvailability
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.transport.DeviceListEntry
@@ -180,15 +181,20 @@ private fun MeshRelayContent(
         ActivityResultContracts.RequestMultiplePermissions(),
     ) { readiness = container.availability.check() }
 
-    // The notification permission is asked for alongside Bluetooth but is not part
-    // of readiness: without it the app works completely, only the foreground
-    // service's notification is not shown.
+    // Bluetooth, location and - from Android 13 - notifications, asked for in one
+    // dialog sequence at first connect. Location is not part of BleReadiness: a
+    // refusal is not an error, the setting stays on, no fix ever arrives, and every
+    // measurement falls back to the node's position. Distinct, because below
+    // Android 12 BluetoothAvailability already names ACCESS_FINE_LOCATION for
+    // scanning and RequestMultiplePermissions should not be handed it twice.
     val requested = remember {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            container.availability.requiredPermissions + Manifest.permission.POST_NOTIFICATIONS
+        val base = container.availability.requiredPermissions + LocationAvailability.REQUIRED_PERMISSIONS
+        val all = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            base + Manifest.permission.POST_NOTIFICATIONS
         } else {
-            container.availability.requiredPermissions
+            base
         }
+        all.distinct().toTypedArray()
     }
 
     // The adapter is switched on from the shade, and the shade does not stop the
