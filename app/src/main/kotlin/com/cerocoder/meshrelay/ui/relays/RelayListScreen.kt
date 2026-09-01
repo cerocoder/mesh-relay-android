@@ -24,7 +24,6 @@ import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
-import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.ReloadAction
 import com.cerocoder.meshrelay.ui.common.SortAction
@@ -52,7 +51,6 @@ fun RelayListScreen(
     snapshot: StatsSnapshot,
     connection: ConnectionState,
     gaugeMode: GaugeMode,
-    meshviewUrl: String?,
     nodeDbReloading: Boolean,
     onOpenRelay: (relayByte: Int) -> Unit,
     onSetSortMode: (SortMode) -> Unit,
@@ -97,7 +95,6 @@ fun RelayListScreen(
                 ),
                 sortMode = snapshot.sortMode,
             )
-            LocalNodeLine(directory = snapshot.directory, meshviewUrl = meshviewUrl)
 
             if (snapshot.relays.isEmpty()) {
                 EmptyRelaysState(modifier = Modifier.weight(1f))
@@ -185,7 +182,6 @@ private fun RelayListScreenPopulatedPreview() {
                 snapshot = SampleData.snapshot,
                 connection = ConnectionState.Connected,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 nodeDbReloading = false,
                 onOpenRelay = {},
                 onSetSortMode = {},
@@ -208,7 +204,6 @@ private fun RelayListScreenEmptyPreview() {
                 snapshot = SampleData.emptySnapshot,
                 connection = ConnectionState.Connected,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = null,
                 nodeDbReloading = false,
                 onOpenRelay = {},
                 onSetSortMode = {},
@@ -231,7 +226,6 @@ private fun RelayListScreenPausedPreview() {
                 snapshot = SampleData.pausedSnapshot,
                 connection = ConnectionState.Connected,
                 gaugeMode = GaugeMode.SIMPLE,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 nodeDbReloading = false,
                 onOpenRelay = {},
                 onSetSortMode = {},
@@ -254,7 +248,6 @@ private fun RelayListScreenDarkPreview() {
                 snapshot = SampleData.snapshot,
                 connection = ConnectionState.Connected,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 nodeDbReloading = false,
                 onOpenRelay = {},
                 onSetSortMode = {},
@@ -278,7 +271,6 @@ private fun RelayListScreenReloadingPreview() {
                 snapshot = SampleData.snapshot,
                 connection = ConnectionState.Connected,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 nodeDbReloading = true,
                 onOpenRelay = {},
                 onSetSortMode = {},
@@ -306,7 +298,6 @@ private fun RelayListScreenReloadFlagStaleWhileDisconnectedPreview() {
                 snapshot = SampleData.snapshot,
                 connection = ConnectionState.Disconnected(retrying = true),
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 nodeDbReloading = true,
                 onOpenRelay = {},
                 onSetSortMode = {},

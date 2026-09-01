@@ -131,7 +131,6 @@
     <string name="relays_status_total">Total</string>
     <string name="relays_status_relayed">Repetidos</string>
     <string name="relays_status_paused">Pausado</string>
-    <string name="relays_local_node">Nodo local</string>
     <string name="relays_local_node_unknown">Nodo local desconocido</string>
 
     <!-- Neighbours -->

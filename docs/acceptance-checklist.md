@@ -264,6 +264,55 @@ as a direct neighbour.
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
+### C3. The two new sort modes — *added with the sort-modes work*
+**Do:** On Relays, choose **Known nodes**, then **Latest packet**. For each, read the order off a
+`uiautomator dump` and check it against the per-card figures (the count of remote nodes a relay
+carries; the packet age). Repeat **Latest packet** on Neighbours.
+**Pass looks like:** the order matches the numbers on the cards, descending, on both screens; the
+status strip names the mode that was chosen.
+**Silent-failure watch:** a mis-keyed sort still produces *an* order and looks fine at a glance —
+only the card figures prove it.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### C4. Known nodes on Neighbours falls back, and says so — *added with the sort-modes work*
+**Do:** Choose **Known nodes** on Relays (or set it as the default sort in Settings), then switch
+to the Neighbours tab.
+**Pass looks like:** the sort menu on Neighbours does not offer Known nodes at all; the status
+strip reads **Packet count** / **Número de paquetes**, and the list order matches that, not the
+mode that was chosen.
+**Silent-failure watch:** this is the one case where the strip and the list can disagree. A strip
+saying "Known nodes" over a packet-count order is the defect, and it looks like a working screen.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### C5. The My node tab, all three states — *added with the My node work*
+**Do:** Open **My node** / **Mi nodo** on a live connection. Then reach the other two states: kill
+and restart the app to catch the moment after the handshake but before the node's own NodeInfo
+arrives, and read the pre-handshake state from the demo transport.
+**Pass looks like:** connected and populated, the card shows this node's long name, short name,
+position, altitude, Src and the Meshview link — with **no distance figure**, since there is no
+other node to measure from. Before its NodeInfo arrives: the "has not sent its own details yet"
+message. Before the handshake: "Local node unknown" / "Nodo local desconocido".
+**Also confirm:** neither list screen shows the local-node block any more.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### C6. The three-count status strip at a large font scale, in Spanish — *added with the My node work*
+**Do:** Set the system font scale to its largest, the language to Español, and open **Mi nodo**
+while paused, so the row holds Total, Repetidos, Directos *and* the paused badge. Read the strip's
+bounds off a `uiautomator dump`.
+**Pass looks like:** every label and number is present and inside the screen's width; the row wraps
+onto a second line rather than clipping or pushing anything off the edge.
+**Silent-failure watch:** this is the F-3 shape. A screenshot at the default font scale in English
+will not show it.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
 ---
 
 ## Group D — Controls: pause, reset, reload
@@ -407,7 +456,7 @@ same phone).
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 28
+- **Total items run:** _____ / 32
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

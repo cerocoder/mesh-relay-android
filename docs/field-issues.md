@@ -334,6 +334,15 @@ builds the sort menu for both screens and a common component should not import f
 **Verified on the phone, 2026-09-01:** `Local node [45,516][221,561]` and `49bf [244,510][327,567]`
 - one line, label then name, on both screens.
 
+**Superseded, 2026-09-01 (same day).** The owner then asked for everything about this device to
+move off the two lists and onto a screen of its own, so `ui/common/LocalNodeLine.kt` is deleted and
+the block it fixed now lives on the **My node** tab, drawn by the shared `NodeCard`. The finding
+above stands and so does what was done for it - a stacked label and value was the defect, and the
+answer that superseded it is the same answer taken further: the caption is now the screen's title,
+and the list screens spend no vertical room on this at all. `relays_local_node` ("Local node") has
+no caller left and is deleted with the composable; `relays_local_node_unknown` survives as the My
+node screen's first state.
+
 ---
 
 ## F-5 - the app runs in the chosen language but every menu and dialog stays in the system's

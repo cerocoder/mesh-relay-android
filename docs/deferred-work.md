@@ -93,14 +93,20 @@ are kept rather than removed so this list is not silently rewritten.
 - **Task 21** — report says "nine discarding collectors" where there are now ten; a
   comment says Internal.countNonNull where Kotlin Wire emits a top-level countNonNull; the optional
   one-line assertThrows hardening against schema renumbering.
-- **Task 23** — a KDoc claims ui/relays/StatusStrip is "private to its own package" — it
-  is not, it is public; the real reason duplication was right is that StatusStrip hardcodes the
-  Total/Relayed pair. The duplication is correct, the stated justification is false.
-- **Task 23** — rename relays_status_paused / relays_local_node* to neutral keys.
+- **Task 23** — **[CLOSED by the shared StatusStrip]** a KDoc claims ui/relays/StatusStrip is
+  "private to its own package" — it is not, it is public; the real reason duplication was right is
+  that StatusStrip hardcodes the Total/Relayed pair. The duplication is correct, the stated
+  justification is false. *Closed because the duplication itself is gone: StatusStrip moved to
+  ui/common and takes its counters as a parameter, so the false justification and the thing it
+  justified are both deleted.*
+- **Task 23** — rename relays_status_paused / relays_local_node_unknown to neutral keys.
+  (`relays_local_node` itself is gone: the My node screen's title replaced it.)
 - **Task 23** — add never-heard and no-signal neighbour fixtures to SampleData.
-- **Task 24** — two doc comments misattribute the LabelledCount precedent to
-  RelayListScreen (it is in StatusStrip.kt:85); SignalBlock's fourth parameter (lastPacketAtMillis,
-  required by SignalGauge's flash animation) is unremarked in the diff.
+- **Task 24** — **[half CLOSED by the shared StatusStrip]** two doc comments misattribute the
+  LabelledCount precedent to RelayListScreen (it is in StatusStrip.kt:85) — *closed: one of the two
+  went with the merged strip and the survivor now sits in the same file as LabelledCount*;
+  SignalBlock's fourth parameter (lastPacketAtMillis, required by SignalGauge's flash animation)
+  is unremarked in the diff — **still open**.
 - **Task 25** — it correctly REFUSED to fix an out-of-scope KDoc in MatchingNodesTab.kt
   (that file was not in the fix round's allowed list), leaving a slightly misattributed comment
   about why PreviewClock is needed. Right discipline, small residue — carrying to the final review

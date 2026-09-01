@@ -255,7 +255,6 @@ private fun MainScaffold(
                 snapshot = snapshot,
                 connection = connectionState,
                 gaugeMode = settings.gaugeMode,
-                meshviewUrl = meshviewUrl,
                 nodeDbReloading = nodeDbReloading,
                 onOpenRelay = { relayByte -> backStack.push(Screen.Detail(DetailSubject.Relay(relayByte))) },
                 onSetSortMode = { mode -> container.engine.setSortMode(mode) },
@@ -272,7 +271,6 @@ private fun MainScaffold(
             MainTab.NEIGHBOURS -> NeighbourListScreen(
                 snapshot = snapshot,
                 gaugeMode = settings.gaugeMode,
-                meshviewUrl = meshviewUrl,
                 onOpenNeighbour = { nodeNum -> backStack.push(Screen.Detail(DetailSubject.Neighbour(nodeNum))) },
                 onSetSortMode = { mode -> container.engine.setSortMode(mode) },
                 onSetGaugeMode = { mode -> container.settings.update { it.copy(gaugeMode = mode) } },

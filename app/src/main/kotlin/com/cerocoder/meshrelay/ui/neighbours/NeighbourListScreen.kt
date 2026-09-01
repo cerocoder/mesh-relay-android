@@ -23,7 +23,6 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
-import com.cerocoder.meshrelay.ui.common.LocalNodeLine
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.SortAction
 import com.cerocoder.meshrelay.ui.common.StatsTopBar
@@ -63,7 +62,6 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 fun NeighbourListScreen(
     snapshot: StatsSnapshot,
     gaugeMode: GaugeMode,
-    meshviewUrl: String?,
     onOpenNeighbour: (nodeNum: Int) -> Unit,
     onSetSortMode: (SortMode) -> Unit,
     onSetGaugeMode: (GaugeMode) -> Unit,
@@ -107,7 +105,6 @@ fun NeighbourListScreen(
                 // for: KNOWN_NODES can reach this screen and degrades to PACKETS.
                 sortMode = snapshot.sortMode.forNeighbours(),
             )
-            LocalNodeLine(directory = snapshot.directory, meshviewUrl = meshviewUrl)
 
             if (snapshot.neighbours.isEmpty()) {
                 EmptyNeighboursState(modifier = Modifier.weight(1f))
@@ -184,7 +181,6 @@ private fun NeighbourListScreenPopulatedPreview() {
             NeighbourListScreen(
                 snapshot = SampleData.snapshot,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenNeighbour = {},
                 onSetSortMode = {},
                 onSetGaugeMode = {},
@@ -204,7 +200,6 @@ private fun NeighbourListScreenEmptyPreview() {
             NeighbourListScreen(
                 snapshot = SampleData.emptySnapshot,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = null,
                 onOpenNeighbour = {},
                 onSetSortMode = {},
                 onSetGaugeMode = {},
@@ -224,7 +219,6 @@ private fun NeighbourListScreenPausedPreview() {
             NeighbourListScreen(
                 snapshot = SampleData.pausedSnapshot,
                 gaugeMode = GaugeMode.SIMPLE,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenNeighbour = {},
                 onSetSortMode = {},
                 onSetGaugeMode = {},
@@ -244,7 +238,6 @@ private fun NeighbourListScreenDarkPreview() {
             NeighbourListScreen(
                 snapshot = SampleData.snapshot,
                 gaugeMode = GaugeMode.COMPLEX,
-                meshviewUrl = "https://meshview.meshtastic.es",
                 onOpenNeighbour = {},
                 onSetSortMode = {},
                 onSetGaugeMode = {},

@@ -31,6 +31,28 @@ Per-step results, which is how you tell a compile failure from a test failure:
 curl -s ".../actions/runs/$RID/jobs" | python3 -c "…print(j['name'], s['number'], s['name'], s['conclusion'])"
 ```
 
+**Sixty API requests per hour, and a poll loop eats them.** The unauthenticated limit is 60/hour
+for the whole machine, and every call above spends one - a 30-second `until` loop spends 120 in an
+hour on its own. Past the limit the API returns a JSON body with no `status` key, so the snippets
+above die with `KeyError: 'status'` rather than saying "rate limited". Check what is left with
+`curl -s https://api.github.com/rate_limit` (that call is free).
+
+Two habits keep it from happening: poll on a **60-second** interval or slower, and **let each run
+finish before pushing the next commit** - overlapping runs mean polling two at once, and the older
+one is cancelled anyway.
+
+When the budget is gone, the **badge is not part of it**:
+
+```bash
+curl -s "https://github.com/cerocoder/mesh-relay-android/actions/workflows/build.yml/badge.svg?branch=feat/stage-1-port" \
+  | grep -o "passing\|failing\|no status"
+```
+
+It is served from github.com rather than api.github.com and is unmetered, but it reports only the
+latest *completed* run on the branch - not the run for a particular commit, and not per-step
+results. It answers "did the branch go red", not "did my commit pass". Everything else here -
+per-step results, the failure comment, the artifact id - needs the API budget back.
+
 **A `cancelled` conclusion is not a failure.** The workflow has
 `concurrency: cancel-in-progress: true`, so pushing again kills the previous run. Always poll the
 run for the actual `HEAD`, never the newest run on the branch.
