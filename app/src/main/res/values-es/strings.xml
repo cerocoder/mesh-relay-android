@@ -39,9 +39,9 @@
     <string name="age_1m">1min</string>
     <string name="age_5m">5min</string>
     <string name="age_30m">30min</string>
-    <string name="age_1h">1hrs</string>
+    <string name="age_1h">1hr</string>
     <string name="age_12h">12hrs</string>
-    <string name="age_1d">1días</string>
+    <string name="age_1d">1día</string>
     <string name="age_1w">1w</string>
     <string name="age_1y">1y</string>
     <string name="age_unknown">\?\?</string>
