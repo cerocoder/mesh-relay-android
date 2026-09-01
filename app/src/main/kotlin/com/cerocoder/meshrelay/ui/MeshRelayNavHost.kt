@@ -403,9 +403,15 @@ private fun DetailDestination(
  * put a navigation concept inside the engine.
  *
  * The watch is a [DisposableEffect] keyed on the subject, so it starts when this
- * destination appears, switches when the subject does, and - this is the part
- * that matters - stops when the chart is closed. A watch left running would keep
- * copying 125 KB per batch for a screen nobody is looking at.
+ * destination appears, switches when the subject does, and stops when the
+ * destination *leaves the composition* - navigating back, or switching subject.
+ * It deliberately does not stop when the app is merely backgrounded: pressing
+ * Home does not detach the window, so the composition outlives `onStop` and this
+ * `DisposableEffect` never fires. The watch stays armed while the app sits in the
+ * background, which is exactly the "nobody looking" case. That is tolerable
+ * rather than a leak, because snapshot building continues while backgrounded
+ * anyway - `collectAsState` keeps the snapshot subscribed regardless of this
+ * watch - so the cost is extra array copying, not a new wake-up path.
  */
 @Composable
 private fun GraphDestination(
