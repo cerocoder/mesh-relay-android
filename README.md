@@ -25,6 +25,10 @@ version through `gradle/actions/setup-gradle@v4`) and build with:
 gradle :app:assembleDebug
 ```
 
+Without an Android SDK on the machine, that command cannot run at all and CI is
+the only build. `docs/verifying.md` is how to read a CI run, fetch its APK and
+check a change on the phone — none of which works the obvious way here.
+
 ## Connecting to a node
 
 The app connects to a Meshtastic node over **Bluetooth Low Energy (BLE)**. A

@@ -35,6 +35,9 @@ plan's constraints that this work can violate; the rest still apply.
 - The verification loop is CI plus the phone. There is no local Android SDK, so *nothing here is
   verified by looking at it* — every task ends at a green CI run, and Tasks 3-5 are not done until
   they have been read off `uiautomator dump` on the device, in Spanish as well as English.
+  **`docs/verifying.md` is how to reach both**: `gh` is not installed on this machine, GitHub's
+  artifact endpoint returns 401 without a token, and neither is discoverable by trying. Read it
+  before the first push, not after the first failure.
 
 ## Decisions taken before writing this plan
 
@@ -63,6 +66,37 @@ Recorded because each one closes a question a reader will otherwise re-open.
    `ui/common/LocalNodeLine.kt`, added a day earlier for F-4. Recorded so the deletion does not look
    like a mistake: F-4 asked for the label and the name on one line, and the answer is now that the
    whole block lives on its own screen.
+
+## Model selection
+
+If this plan is executed with `superpowers:subagent-driven-development`, dispatch each task on the
+model named here. If it is executed inline, ignore this section - everything runs on the session's
+own model.
+
+| # | Task | Implementer | Reviewer |
+|---|---|---|---|
+| 1 | Two sort keys in the engine | Sonnet | Sonnet |
+| 2 | The modes on screen (`SortAction`) | Sonnet | Sonnet |
+| 3 | Extract the status strip | Sonnet | Sonnet |
+| 4 | My node screen + third tab | Sonnet | **Opus** |
+| 5 | Strip the local node from the lists + docs | Sonnet | Sonnet |
+| — | Final whole-branch review | — | **Opus** |
+
+**No Haiku anywhere, deliberately.** Tasks 2 and 5 look like transcription and are not. Task 5 is a
+deletion across two screens, and the same deletion done by hand on 2026-09-01 took
+`NeighbourStatusStrip`, `LabelledCount` and `dbLoadTimeText` out with it, by matching a line range
+instead of a function boundary - CI caught it as an unresolved reference. It also carries a real
+judgment call: whether `meshviewUrl` is still used by each screen afterwards. Task 2 changes a
+shared component's API and rewires three call sites; a cheap model takes two or three times the
+turns on multi-file edits, which costs more wall-clock than the tier saves.
+
+**Task 4 gets an Opus reviewer** because it is the only task touching navigation and the
+`rememberSaveable` back stack, where a defect survives a rotation or a language change and surfaces
+somewhere else entirely.
+
+**Why none of the reviewers drop a tier.** Task 1 is the only task with executable tests. Tasks 2-5
+are Compose, and this project has no Compose test harness, so their only gates are "it compiles" and
+"it was read off a `uiautomator dump`". Their reviewers are doing more work than usual, not less.
 
 ## File Structure
 
