@@ -33,7 +33,6 @@ import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.RelayStats
-import com.cerocoder.meshrelay.stats.model.SignalHistory
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
@@ -248,8 +247,8 @@ private fun resolveHeader(subject: DetailSubject, snapshot: StatsSnapshot): Deta
             packetsPerHour = null,
             skippedCount = 0,
             hopsAway = snapshot.directory.node(subject.nodeNum)?.hopsAway,
-            snr = neighbour.snr.stats,
-            rssi = neighbour.rssi.stats,
+            snr = neighbour.snr,
+            rssi = neighbour.rssi,
             lastPacketAtMillis = neighbour.lastPacketAtMillis,
             tab1TitleRes = R.string.detail_tab_node,
             // The one test this screen runs to decide whether a second tab
@@ -318,8 +317,8 @@ private fun PreviewClock(content: @Composable () -> Unit) {
  */
 private val previewNeighbourNoRelayByte = NeighbourStats(
     nodeNum = SampleData.NUM_YUNCOS_REINICIO,
-    snr = SignalHistory().plus(System.currentTimeMillis() - 90_000L, 2.0f),
-    rssi = SignalHistory().plus(System.currentTimeMillis() - 90_000L, -91f),
+    snr = SignalStats.EMPTY.plus(2.0f),
+    rssi = SignalStats.EMPTY.plus(-91f),
     packetCount = 3,
     lastPacketAtMillis = System.currentTimeMillis() - 40_000L,
 )

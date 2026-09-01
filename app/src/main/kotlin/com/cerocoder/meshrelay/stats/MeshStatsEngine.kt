@@ -297,8 +297,8 @@ class MeshStatsEngine(
         val existing = neighbours[direct.fromNode] ?: NeighbourStats(nodeNum = direct.fromNode)
         val signal = direct.signal
         neighbours[direct.fromNode] = existing.copy(
-            snr = if (signal == null) existing.snr else existing.snr.plus(atMillis, signal.snr),
-            rssi = if (signal == null) existing.rssi else existing.rssi.plus(atMillis, signal.rssi),
+            snr = if (signal == null) existing.snr else existing.snr.plus(signal.snr),
+            rssi = if (signal == null) existing.rssi else existing.rssi.plus(signal.rssi),
             packetCount = existing.packetCount + 1,
             lastPacketAtMillis = atMillis,
         )
@@ -370,8 +370,8 @@ class MeshStatsEngine(
         return when (sortMode.forNeighbours()) {
             SortMode.PACKETS -> values.sortedByDescending { it.packetCount }
             SortMode.PERCENT -> values.sortedByDescending { share(it.packetCount, total) }
-            SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr.stats) }
-            SortMode.AVG_RSSI -> values.sortedByDescending { rank(it.rssi.stats) }
+            SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr) }
+            SortMode.AVG_RSSI -> values.sortedByDescending { rank(it.rssi) }
             // A neighbour is a whole node number, so unlike a relay byte it always has
             // an identity to fall back on when the database has not named it.
             SortMode.NAME -> values.sortedBy {

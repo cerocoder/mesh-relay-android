@@ -101,7 +101,7 @@ fun NeighbourCard(
             SignalRow(
                 label = stringResource(R.string.gauge_snr),
                 unitFormatRes = R.string.format_snr_db,
-                stats = neighbour.snr.stats,
+                stats = neighbour.snr,
                 scaleMin = SignalScales.SNR_MIN,
                 scaleMax = SignalScales.SNR_MAX,
                 mode = gaugeMode,
@@ -113,7 +113,7 @@ fun NeighbourCard(
             SignalRow(
                 label = stringResource(R.string.gauge_rssi),
                 unitFormatRes = R.string.format_rssi_dbm,
-                stats = neighbour.rssi.stats,
+                stats = neighbour.rssi,
                 scaleMin = SignalScales.RSSI_MIN,
                 scaleMax = SignalScales.RSSI_MAX,
                 mode = gaugeMode,

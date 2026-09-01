@@ -9,7 +9,6 @@ import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionReport
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.RemoteNodeStats
-import com.cerocoder.meshrelay.stats.model.SignalHistory
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
@@ -455,15 +454,15 @@ object SampleData {
     private val neighbours: List<NeighbourStats> = listOf(
         NeighbourStats(
             nodeNum = NUM_GETAFE_ROUTER,
-            snr = SignalHistory().plus(NOW - 500_000L, 9.0f).plus(NOW - 100_000L, 8.7f),
-            rssi = SignalHistory().plus(NOW - 500_000L, -60f).plus(NOW - 100_000L, -58f),
+            snr = SignalStats.EMPTY.plus(9.0f).plus(8.7f),
+            rssi = SignalStats.EMPTY.plus(-60f).plus(-58f),
             packetCount = 2,
             lastPacketAtMillis = NOW - 100_000L,
         ),
         NeighbourStats(
             nodeNum = NUM_ILLESCAS_MUDO,
-            snr = SignalHistory().plus(NOW - 400_000L, 10.2f),
-            rssi = SignalHistory().plus(NOW - 400_000L, -55f),
+            snr = SignalStats.EMPTY.plus(10.2f),
+            rssi = SignalStats.EMPTY.plus(-55f),
             packetCount = 1,
             lastPacketAtMillis = NOW - 400_000L,
         ),
