@@ -58,9 +58,10 @@ half of the toggle is a hand-authored drawable (`res/drawable/ic_action_pause.xm
 word it used to be — the word was half the width problem. The reset confirmation moved into the
 shared bar too, so the screens hold no local state at all now.
 
-Spanish is still unverified on hardware, but the arithmetic is no longer close: three icon buttons
-take about 144 dp of the 384 dp width, against 352 dp before, so `Repetidores` has more than twice
-the room `Relays` failed to fit in.
+**Verified on the phone, 2026-09-01**, in Spanish - the worse of the two cases, and the one the
+original finding could not check. `Repetidores` renders on one line at `[45,234][369,313]`, 324 px
+wide, and the first action starts at x=664: three icon buttons (`Ordenar`, `Pausar`, `Más`) against
+the six controls that left the title a few characters of room.
 
 **Note for whoever fixed it:** resist shrinking the font. The bar is overloaded, which is the
 actual defect: six actions is past what a `TopAppBar` title can survive. Moving the two text
@@ -263,6 +264,12 @@ in the row.
 
 All four callers get it, since all four go through `PositionLine`.
 
+**Verified on the phone, 2026-09-01**, connected to the real node, in both languages. The three
+links sit on one line with every label rendered - in Spanish
+`Google Maps [79,831][314,888]`, `OpenStreetMap [405,831][684,888]`, `Meshview [775,831][954,888]`,
+875 px of the 1080 - and the relay list runs from y≈900 to the bottom of the screen showing three
+full relay cards, against the 128 px that held two thirds of one.
+
 **Notes for whoever fixed it.** The row needs to stop assuming three labelled buttons fit on one
 line. `FlowRow` (`androidx.compose.foundation.layout`, already available) is the smallest change
 and wraps to a second line on narrow screens. Shortening the labels only moves the threshold - a
@@ -324,6 +331,9 @@ case degrade correctly - the label stands alone, with no separator left dangling
 `SortModeLabels` moved from `ui/relays` to `ui/common` in the same pass, since the shared app bar
 builds the sort menu for both screens and a common component should not import from `ui/relays`.
 
+**Verified on the phone, 2026-09-01:** `Local node [45,516][221,561]` and `49bf [244,510][327,567]`
+- one line, label then name, on both screens.
+
 ---
 
 ## F-5 - the app runs in the chosen language but every menu and dialog stays in the system's
@@ -369,3 +379,10 @@ locale means - the navigation stack is `rememberSaveable` and everything longer-
 `AppContainer`, which is what rotation already relies on. `MeshForegroundService` got the same
 override, so the notification's title and channel name follow the setting too (its body text
 already did, through `AppContainer.notificationContext`).
+
+**Verified on the phone, 2026-09-01.** The same two menus that showed the defect:
+`Indicadores`/`Complejo`, `Recargar base de nodos`, `Reiniciar`, `Ajustes` in the overflow, and
+`Número de paquetes`, `Porcentaje`, `SNR medio`, `RSSI medio`, `Nombre del nodo` in the sort menu.
+Then the path that used to be fatal, driven through the UI rather than the preference file:
+Settings -> English -> the whole app switches with no crash and the same process id, Settings ->
+System default -> switches back. The install was left on `SYSTEM`, as it was found.
