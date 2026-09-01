@@ -348,4 +348,62 @@ class StatsFormatTest {
         assertTrue("expected a non-blank Europe/Madrid result, got <$madrid>", madrid.isNotBlank())
         assertNotEquals(utc, madrid)
     }
+
+    @Test
+    fun `a single measurement prints RSSI whole and SNR to a tenth`() {
+        // The pair the Graph screen's crosshair shows, at the precisions the
+        // design's own sketch prints them at: `-92 dBm  4.5 dB`. RSSI arrives
+        // from the radio as an Int and has no fractional part to print; SNR
+        // arrives as a Float and its tenths are the variation the chart exists
+        // to show.
+        assertEquals("-92", StatsFormat.sampleRssi(-92.4f, Locale.UK))
+        assertEquals("4.5", StatsFormat.sampleSnr(4.5f, Locale.UK))
+    }
+
+    @Test
+    fun `a single measurement follows the reader's decimal separator`() {
+        // A Spanish reader gets a decimal comma. This is the same reason
+        // MapLinks refuses to reuse display text for a URL - and the reason
+        // these formatters take a locale at all.
+        assertEquals("4,5", StatsFormat.sampleSnr(4.5f, Locale("es", "ES")))
+    }
+
+    @Test
+    fun `a measurement's timestamp carries seconds and a numeric date`() {
+        // Seconds because measurements on a busy relay arrive seconds apart; a
+        // numeric date because the field is one line under a chart.
+        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
+        val text = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("Europe/Madrid"))
+
+        assertTrue(text, text.contains("13:01:13"))
+        assertTrue(text, text.contains("2026") || text.contains("26"))
+    }
+
+    @Test
+    fun `the timestamp follows the locale, not a hardcoded pattern`() {
+        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
+        val english = StatsFormat.graphTimestamp(at, Locale.US, ZoneId.of("Europe/Madrid"))
+        val spanish = StatsFormat.graphTimestamp(at, Locale("es", "ES"), ZoneId.of("Europe/Madrid"))
+
+        // A US reader gets a 12-hour clock and month-first; a Spanish one does not.
+        // Asserting they differ rather than asserting either exact rendering, for
+        // the same reason `nodeDatabaseLastHeard`'s own tests do: the exact
+        // rendering is the platform's CLDR data, not ours.
+        assertNotEquals(english, spanish)
+    }
+
+    @Test
+    fun `the timestamp follows the zone it is given`() {
+        // The same instant, an hour apart. Madrid is UTC+2 in August (summer
+        // time), so the Madrid rendering must carry a different hour from UTC's.
+        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
+        val madrid = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("Europe/Madrid"))
+        val utc = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("UTC"))
+
+        assertTrue(madrid, madrid.contains("13:01:13"))
+        assertTrue(utc, utc.contains("11:01:13"))
+    }
 }

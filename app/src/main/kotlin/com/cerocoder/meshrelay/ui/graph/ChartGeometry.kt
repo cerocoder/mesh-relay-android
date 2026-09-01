@@ -66,6 +66,25 @@ object ChartGeometry {
         )
     }
 
+    /**
+     * The two rows the screen's `Time` fields print: the newest measurement on
+     * screen and the oldest.
+     *
+     * [visibleRows] with one guarantee added - never empty while the series is
+     * not. On the very first composition the plot has not been measured yet
+     * (`onSizeChanged` has not run, so the viewport is still `0`) and
+     * [visibleRows] correctly answers "there is nothing to draw"; a label built
+     * from that window's `lastRow` would ask for row `-1`, and [indexOfRow] would
+     * hand the series an index one past its end - an exception on the first
+     * frame, before anything has been drawn at all. Before there is a viewport
+     * the honest answer is the whole series: its newest row and its oldest.
+     */
+    fun labelRows(scrollPx: Float, viewportPx: Float, size: Int, pxPerSample: Float): RowWindow {
+        if (size <= 0) return RowWindow(0, -1)
+        val window = visibleRows(scrollPx, viewportPx, size, pxPerSample)
+        return if (window.isEmpty) RowWindow(0, size - 1) else window
+    }
+
     /** Where this row sits in the viewport, in pixels from its top edge. */
     fun yOf(row: Int, scrollPx: Float, pxPerSample: Float): Float = row * pxPerSample - scrollPx
 
@@ -150,4 +169,59 @@ object ChartGeometry {
      */
     fun clampScroll(scrollPx: Float, size: Int, viewportPx: Float, pxPerSample: Float): Float =
         scrollPx.coerceIn(0f, maxScrollPx(size, viewportPx, pxPerSample))
+
+    /**
+     * The scrollbar thumb's height as a fraction of its track: how much of the
+     * whole series is on screen at once.
+     *
+     * `1` when there is nothing to scroll. The one caller draws no scrollbar at
+     * all in that case, so that value is a defensive answer rather than one
+     * anything renders - but it is the right one, a thumb filling its track being
+     * exactly what "all of it is already visible" looks like.
+     */
+    fun thumbHeightFraction(viewportPx: Float, contentPx: Float): Float =
+        if (contentPx <= 0f) 1f else (viewportPx / contentPx).coerceIn(0f, 1f)
+
+    /**
+     * The thumb's top edge as a fraction of its track.
+     *
+     * Clamped so the thumb's *bottom* cannot leave the track: at [maxScrollPx]
+     * the top lands on `1 - thumbHeightFraction` exactly - the thumb flush
+     * against the bottom of the track, which is the reading a chart scrolled to
+     * its oldest measurement should give.
+     */
+    fun thumbTopFraction(scrollPx: Float, viewportPx: Float, contentPx: Float): Float {
+        if (contentPx <= 0f) return 0f
+        val maxTop = (1f - thumbHeightFraction(viewportPx, contentPx)).coerceAtLeast(0f)
+        return (scrollPx / contentPx).coerceIn(0f, maxTop)
+    }
+
+    /**
+     * A drag of [trackDeltaPx] down a track [trackPx] tall, as a scroll in
+     * content pixels.
+     *
+     * The exact inverse of [thumbTopFraction]'s mapping, and exactly so on
+     * purpose: dragging the thumb from the top of the track until its bottom
+     * meets the bottom of the track travels `trackPx * (1 - viewportPx /
+     * contentPx)` track pixels, which this converts to `contentPx - viewportPx` -
+     * [maxScrollPx] precisely. The gesture therefore reaches the oldest
+     * measurement exactly as the thumb reaches the end of its track, and no
+     * sooner or later.
+     */
+    fun contentDeltaFor(trackDeltaPx: Float, trackPx: Float, contentPx: Float): Float =
+        if (trackPx <= 0f) 0f else trackDeltaPx * contentPx / trackPx
+
+    /**
+     * Where an overlay anchored to the crosshair starts, kept inside the plot.
+     *
+     * The crosshair's label block hangs [aboveAnchorPx] above the rule, and its
+     * globe half the globe's own height above it. Near either edge of the plot an
+     * unclamped offset would put the block over the `Time` field above the plot,
+     * or past the bottom of it - Compose clips neither. Clamping degrades to "as
+     * close to the rule as the plot allows", which is the readable failure: the
+     * labels stay legible and stay inside the chart, and only their alignment
+     * with the rule is lost, in the two places the rule is at an edge anyway.
+     */
+    fun overlayTopPx(anchorY: Float, aboveAnchorPx: Float, overlayHeightPx: Float, viewportPx: Float): Float =
+        (anchorY - aboveAnchorPx).coerceIn(0f, (viewportPx - overlayHeightPx).coerceAtLeast(0f))
 }

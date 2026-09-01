@@ -1,15 +1,19 @@
 package com.cerocoder.meshrelay.ui.preview
 
+import com.cerocoder.meshrelay.stats.SignalSeriesBuffer
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
+import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.PositionReport
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.RemoteNodeStats
+import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.stats.model.StampedPosition
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
 
@@ -532,4 +536,74 @@ object SampleData {
     /** Looks up one of the fixtures above by its relay byte, for a preview that
      *  wants to parameterise over a specific case rather than the whole list. */
     fun relay(byte: Int): RelayStats = allRelays.first { it.relayByte == byte }
+
+    // ------------------------------------------------------------------
+    // Signal series, for the Graph screen.
+    // ------------------------------------------------------------------
+
+    /**
+     * About twenty minutes of a relay drifting as the sun sets, at roughly one
+     * packet every two seconds - the shape the Graph screen was designed to make
+     * visible. Built through the real [SignalSeriesBuffer] rather than by
+     * constructing a [SignalSeries] by hand, so a preview cannot show a series the
+     * engine could never produce.
+     */
+    val graphSeries: SignalSeries = SignalSeriesBuffer().apply {
+        val start = NOW - 20 * 60 * 1000L
+        repeat(600) { i ->
+            val drift = i * 0.03f
+            append(
+                atMillis = start + i * 2_000L,
+                rssi = -78f - drift + (i % 7) * 0.8f,
+                snr = 6.5f - drift * 0.12f + (i % 5) * 0.3f,
+                position = StampedPosition.fromDegrees(
+                    // A slow walk north-west, so consecutive crosshairs open
+                    // different pins rather than the same one.
+                    40.3057734 + i * 0.000012,
+                    -3.7325611 - i * 0.000009,
+                    if (i % 20 == 0) PositionOrigin.NODE else PositionOrigin.PHONE,
+                ),
+            )
+        }
+    }.snapshot()
+
+    /** The thin state: one measurement, a point and no line. It also carries no
+     *  position at all, which is the case that must leave the crosshair's globe
+     *  disabled rather than opening a map on the Gulf of Guinea. */
+    val graphSeriesSingle: SignalSeries = SignalSeriesBuffer().apply {
+        append(NOW - 30_000L, -92f, 4.5f, null)
+    }.snapshot()
+
+    /**
+     * The statistics that go beside a series, folded from that series' own
+     * measurements rather than written by hand.
+     *
+     * The Graph screen shows the bars and the plot together and, with Auto scale
+     * on, derives the plot's range from these very statistics. A fixture whose
+     * bars described different numbers from its plot would make the one preview
+     * that exists to check they agree incapable of showing a disagreement.
+     */
+    private fun foldSeries(series: SignalSeries, valueOf: (index: Int) -> Float): SignalStats {
+        var stats = SignalStats.EMPTY
+        for (index in 0 until series.size) stats = stats.plus(valueOf(index))
+        return stats
+    }
+
+    /** [graphSeries]' own RSSI statistics. See [foldSeries]. */
+    val graphRssiStats: SignalStats = foldSeries(graphSeries) { graphSeries.rssi(it) }
+
+    /** [graphSeries]' own SNR statistics. See [foldSeries]. */
+    val graphSnrStats: SignalStats = foldSeries(graphSeries) { graphSeries.snr(it) }
+
+    /** [graphSeriesSingle]'s own RSSI statistics: one sample, so `min == max` and
+     *  Auto scale has a degenerate range to fall back from. */
+    val graphSingleRssiStats: SignalStats = foldSeries(graphSeriesSingle) { graphSeriesSingle.rssi(it) }
+
+    /** [graphSeriesSingle]'s own SNR statistics. See [graphSingleRssiStats]. */
+    val graphSingleSnrStats: SignalStats = foldSeries(graphSeriesSingle) { graphSeriesSingle.snr(it) }
+
+    /** When the newest measurement in [graphSeries] arrived - what the Graph
+     *  screen hands [com.cerocoder.meshrelay.ui.detail.SignalBlock] as its
+     *  last-packet time, so the gauges' flash logic has a real instant. */
+    val graphLastPacketAtMillis: Long = graphSeries.atMillis(graphSeries.size - 1)
 }

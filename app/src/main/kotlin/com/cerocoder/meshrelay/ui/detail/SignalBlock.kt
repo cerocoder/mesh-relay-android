@@ -46,6 +46,12 @@ import java.util.Locale
  * reverse) still shows what it has, with `common_not_available` in the five
  * cells that have nothing - more informative than hiding a real reading
  * because its sibling metric is missing.
+ *
+ * The four scale parameters exist for the Graph screen's Auto scale switch,
+ * which moves the bars' borders as well as the plot's (spec requirement 5) so
+ * that the two cannot misrepresent each other. They default to the fixed ranges
+ * every other screen uses, so only that one screen ever passes anything else and
+ * the three existing call sites are unchanged.
  */
 @Composable
 fun SignalBlock(
@@ -54,6 +60,10 @@ fun SignalBlock(
     gaugeMode: GaugeMode,
     lastPacketAtMillis: Long,
     modifier: Modifier = Modifier,
+    snrScaleMin: Float = SignalScales.SNR_MIN,
+    snrScaleMax: Float = SignalScales.SNR_MAX,
+    rssiScaleMin: Float = SignalScales.RSSI_MIN,
+    rssiScaleMax: Float = SignalScales.RSSI_MAX,
 ) {
     if (!snr.hasData && !rssi.hasData) {
         Text(
@@ -73,8 +83,8 @@ fun SignalBlock(
             label = stringResource(R.string.detail_signal_snr),
             unitFormatRes = R.string.format_snr_db,
             stats = snr,
-            scaleMin = SignalScales.SNR_MIN,
-            scaleMax = SignalScales.SNR_MAX,
+            scaleMin = snrScaleMin,
+            scaleMax = snrScaleMax,
             mode = gaugeMode,
             lastPacketAtMillis = lastPacketAtMillis,
             trackColor = SnrTrack,
@@ -85,8 +95,8 @@ fun SignalBlock(
             label = stringResource(R.string.detail_signal_rssi),
             unitFormatRes = R.string.format_rssi_dbm,
             stats = rssi,
-            scaleMin = SignalScales.RSSI_MIN,
-            scaleMax = SignalScales.RSSI_MAX,
+            scaleMin = rssiScaleMin,
+            scaleMax = rssiScaleMax,
             mode = gaugeMode,
             lastPacketAtMillis = lastPacketAtMillis,
             trackColor = RssiTrack,

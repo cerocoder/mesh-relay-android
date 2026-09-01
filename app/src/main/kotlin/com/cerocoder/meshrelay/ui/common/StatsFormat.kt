@@ -60,6 +60,24 @@ object StatsFormat {
     private const val HOP_AVERAGE_PATTERN = "%.1f"
 
     /**
+     * One measurement's own SNR, as the Graph screen's crosshair prints it.
+     *
+     * Numerically [AVG_PATTERN], and deliberately not [SPOT_PATTERN] even though
+     * a crosshair reading is a spot reading in every other sense. The two metrics
+     * arrive at different precisions and are printed at the precision each
+     * carries: `PacketClassifier` reads `rx_rssi` as an `Int` and widens it
+     * (`PacketClassifier.kt:69`), so an RSSI has no fractional part to print,
+     * while `rx_snr` is a `Float` on the wire and its fractional part is real.
+     * SNR's whole useful span is the 35 dB of
+     * [com.cerocoder.meshrelay.stats.SignalScales.SNR_MIN]`..SNR_MAX` against
+     * RSSI's 100 dBm, and the packet-to-packet differences this chart exists to
+     * make visible are fractions of a dB; rounding them to whole units would
+     * flatten exactly the variation the reader came for. The design's own layout
+     * sketch shows the pair as `-92 dBm  4.5 dB`, which is these two patterns.
+     */
+    private const val SAMPLE_SNR_PATTERN = "%.1f"
+
+    /**
      * Structural glue, not translatable prose - the same treatment
      * [PositionLineText]'s direction separator gets.
      */
@@ -110,6 +128,48 @@ object StatsFormat {
      */
     fun signalLast(stats: SignalStats, locale: Locale): String? =
         if (stats.hasData) String.format(locale, SPOT_PATTERN, stats.lastVal) else null
+
+    /**
+     * One single measurement's RSSI - the Graph screen's crosshair, which reads
+     * a value straight out of a
+     * [com.cerocoder.meshrelay.stats.model.SignalSeries] rather than out of a
+     * running [SignalStats].
+     *
+     * At [SPOT_PATTERN], the same precision [signalMin]/[signalMax]/[signalLast]
+     * print an RSSI at - a crosshair reading is a spot reading in exactly the
+     * sense that constant already documents, and the graph and the bars above it
+     * must not print the same dBm to different precisions. No `hasData` guard and
+     * no nullable return: unlike a [SignalStats], a series index either exists or
+     * is a defect in the geometry, and the caller has already resolved one.
+     */
+    fun sampleRssi(value: Float, locale: Locale): String = String.format(locale, SPOT_PATTERN, value)
+
+    /** One single measurement's SNR. See [sampleRssi]; [SAMPLE_SNR_PATTERN] records
+     *  why this one keeps its tenth of a dB where the RSSI beside it does not. */
+    fun sampleSnr(value: Float, locale: Locale): String = String.format(locale, SAMPLE_SNR_PATTERN, value)
+
+    /**
+     * A measurement's own timestamp: local time, then local date, as the design's
+     * layout sketch shows it - `13:01:13 21.08.2026`.
+     *
+     * Both halves are locale-resolved rather than pattern-formatted, the same
+     * argument [nodeDatabaseLastHeard] makes: a Spanish reader expects
+     * day-before-month, and the platform is what knows that.
+     * [FormatStyle.MEDIUM] is the shortest built-in time style that still
+     * includes seconds - measurements on a busy relay arrive seconds apart, and a
+     * chart whose two Time fields read the same to the minute would say nothing.
+     * [FormatStyle.SHORT] is the only date style that stays numeric, which is what
+     * the drawing shows and what fits under a chart on a phone.
+     *
+     * [zone] defaults to the device's own configured zone and is a parameter only
+     * so a test can pin one.
+     */
+    fun graphTimestamp(atMillis: Long, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {
+        val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(atMillis), zone)
+        val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM).withLocale(locale)
+        val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
+        return "${time.format(localDateTime)} ${date.format(localDateTime)}"
+    }
 
     /**
      * A rate of packets per hour, ports the `:.1f` precision mesh_stats.py:1824

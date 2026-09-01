@@ -184,4 +184,91 @@ class ChartGeometryTest {
         // A series shorter than the viewport cannot scroll at all.
         assertEquals(0f, ChartGeometry.clampScroll(120f, size = 3, viewportPx = 1200f, pxPerSample = 1f), 0.0001f)
     }
+
+    @Test
+    fun `the label rows are the visible ones once there is a viewport`() {
+        val labels = ChartGeometry.labelRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
+        val visible = ChartGeometry.visibleRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
+        assertEquals(visible, labels)
+    }
+
+    @Test
+    fun `the label rows never index past the series before the plot is measured`() {
+        // The first composition, before onSizeChanged has reported a height:
+        // visibleRows is empty and its lastRow is -1, which indexOfRow turns into
+        // `size` - one past the end of the series, and SignalSeries does not
+        // bounds-check. Without this the screen throws on its very first frame.
+        val labels = ChartGeometry.labelRows(scrollPx = 0f, viewportPx = 0f, size = 600, pxPerSample = 1f)
+        assertEquals(0, labels.firstRow)
+        assertEquals(599, labels.lastRow)
+        assertEquals(0, ChartGeometry.indexOfRow(labels.lastRow, 600))
+        assertEquals(599, ChartGeometry.indexOfRow(labels.firstRow, 600))
+    }
+
+    @Test
+    fun `an empty series still has no label rows`() {
+        // The screen renders its empty state instead; there is no timestamp to print.
+        assertTrue(ChartGeometry.labelRows(0f, 0f, size = 0, pxPerSample = 1f).isEmpty)
+        assertTrue(ChartGeometry.labelRows(0f, 800f, size = 0, pxPerSample = 1f).isEmpty)
+    }
+
+    @Test
+    fun `the thumb is the visible share of the series`() {
+        // 1200 px of a 5000-row series on screen at once: just under a quarter.
+        assertEquals(0.24f, ChartGeometry.thumbHeightFraction(viewportPx = 1200f, contentPx = 5000f), 0.0001f)
+        // Nothing to scroll: the thumb fills its track.
+        assertEquals(1f, ChartGeometry.thumbHeightFraction(viewportPx = 1200f, contentPx = 300f), 0.0001f)
+        assertEquals(1f, ChartGeometry.thumbHeightFraction(viewportPx = 1200f, contentPx = 0f), 0.0001f)
+    }
+
+    @Test
+    fun `the thumb reaches the bottom of its track exactly at the end of the series`() {
+        // The reading a chart scrolled to its oldest measurement must give: the
+        // thumb flush against the bottom, not short of it and not past it.
+        val max = ChartGeometry.maxScrollPx(size = 5000, viewportPx = 1200f, pxPerSample = 1f)
+        val top = ChartGeometry.thumbTopFraction(scrollPx = max, viewportPx = 1200f, contentPx = 5000f)
+        val height = ChartGeometry.thumbHeightFraction(viewportPx = 1200f, contentPx = 5000f)
+        assertEquals(1f, top + height, 0.0001f)
+
+        assertEquals(0f, ChartGeometry.thumbTopFraction(0f, viewportPx = 1200f, contentPx = 5000f), 0.0001f)
+        // Past the end - the caller clamps, but the bar must not overshoot even so.
+        assertEquals(top, ChartGeometry.thumbTopFraction(9_999f, viewportPx = 1200f, contentPx = 5000f), 0.0001f)
+    }
+
+    @Test
+    fun `a full drag of the thumb scrolls exactly the whole series`() {
+        // The scrollbar's gesture and its thumb must agree, or the thumb arrives
+        // at the end of its track while the chart is still short of the oldest
+        // measurement (or the reverse, and the last rows become unreachable).
+        val trackPx = 900f
+        val contentPx = 5000f
+        val viewportPx = 1200f
+        val travel = trackPx * (1f - ChartGeometry.thumbHeightFraction(viewportPx, contentPx))
+        val scrolled = ChartGeometry.contentDeltaFor(travel, trackPx, contentPx)
+        assertEquals(ChartGeometry.maxScrollPx(5000, viewportPx, 1f), scrolled, 0.01f)
+    }
+
+    @Test
+    fun `a drag on an unmeasured track scrolls nothing`() {
+        assertEquals(0f, ChartGeometry.contentDeltaFor(40f, trackPx = 0f, contentPx = 5000f), 0.0001f)
+    }
+
+    @Test
+    fun `a crosshair overlay stays inside the plot at both edges`() {
+        val viewportPx = 800f
+        // Comfortably in the middle: the overlay hangs where it was asked to.
+        assertEquals(380f, ChartGeometry.overlayTopPx(400f, 20f, 60f, viewportPx), 0.0001f)
+        // Against the top: it would have started above the plot.
+        assertEquals(0f, ChartGeometry.overlayTopPx(5f, 20f, 60f, viewportPx), 0.0001f)
+        // Against the bottom: its foot would have hung below the plot.
+        assertEquals(740f, ChartGeometry.overlayTopPx(799f, 20f, 60f, viewportPx), 0.0001f)
+    }
+
+    @Test
+    fun `an overlay taller than the plot is pinned to the top rather than throwing`() {
+        // coerceIn throws when its minimum exceeds its maximum, and an unmeasured
+        // plot (viewportPx still 0) is exactly that case.
+        assertEquals(0f, ChartGeometry.overlayTopPx(0f, 20f, 60f, viewportPx = 0f), 0.0001f)
+        assertEquals(0f, ChartGeometry.overlayTopPx(30f, 20f, 900f, viewportPx = 800f), 0.0001f)
+    }
 }
