@@ -28,9 +28,15 @@ import kotlin.time.Duration.Companion.minutes
 
 private const val SENDER = 0x9e75f1a4.toInt()
 
-private fun relayed(relay: Int = 0x69, from: Int = SENDER, snr: Float = -7.5f, rssi: Int = -94) =
+private fun relayed(
+    relay: Int = 0x69,
+    from: Int = SENDER,
+    snr: Float = -7.5f,
+    rssi: Int = -94,
+    at: Long = 1_000L,
+) =
     TimestampedFrame(
-        rxMillis = 1_000L,
+        rxMillis = at,
         frame = FromRadio(
             packet = MeshPacket(
                 from = from, relay_node = relay, hop_start = 3, hop_limit = 1,
@@ -39,8 +45,8 @@ private fun relayed(relay: Int = 0x69, from: Int = SENDER, snr: Float = -7.5f, r
         ),
     )
 
-private fun direct(from: Int = SENDER) = TimestampedFrame(
-    rxMillis = 1_000L,
+private fun direct(from: Int = SENDER, at: Long = 1_000L) = TimestampedFrame(
+    rxMillis = at,
     frame = FromRadio(packet = MeshPacket(from = from, relay_node = 0, rx_snr = -3f, rx_rssi = -80)),
 )
 
@@ -458,5 +464,104 @@ class MeshStatsEngineTest {
         assertEquals(1, after.counters.totalRelayedPackets)
         assertEquals(1, after.counters.relayCount)
         assertEquals(3, after.counters.totalPackets)
+    }
+
+    @Test
+    fun `known nodes sorts relays by how many remote nodes they carry`() = runTest(StandardTestDispatcher()) {
+        // Not the packet count: 0x69 carries the most traffic and the fewest nodes.
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, from = 0x11111111),
+                relayed(relay = 0x69, from = 0x11111111),
+                relayed(relay = 0x69, from = 0x11111111),
+                relayed(relay = 0xa4, from = 0x11111111),
+                relayed(relay = 0xa4, from = 0x22222222),
+                relayed(relay = 0xa4, from = 0x33333333),
+                relayed(relay = 0xb7, from = 0x11111111),
+                relayed(relay = 0xb7, from = 0x22222222),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.KNOWN_NODES)
+        runCurrent()
+
+        val after = subject.snapshot.value
+        assertEquals(listOf(0xa4, 0xb7, 0x69), after.relays.map { it.relayByte })
+        assertEquals(listOf(3, 2, 1), after.relays.map { it.knownNodesCount })
+    }
+
+    @Test
+    fun `latest packet puts the most recently heard relay first`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, at = 3_000L),
+                relayed(relay = 0xa4, at = 1_000L),
+                relayed(relay = 0xb7, at = 2_000L),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.LATEST_PACKET)
+        runCurrent()
+
+        assertEquals(listOf(0x69, 0xb7, 0xa4), subject.snapshot.value.relays.map { it.relayByte })
+    }
+
+    @Test
+    fun `latest packet orders neighbours the same way`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                direct(from = 0x11111111, at = 1_000L),
+                direct(from = 0x22222222, at = 3_000L),
+                direct(from = 0x33333333, at = 2_000L),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.LATEST_PACKET)
+        runCurrent()
+
+        assertEquals(
+            listOf(0x22222222, 0x33333333, 0x11111111),
+            subject.snapshot.value.neighbours.map { it.nodeNum },
+        )
+    }
+
+    @Test
+    fun `known nodes falls back to packet count for neighbours`() = runTest(StandardTestDispatcher()) {
+        // A neighbour has no set of carried nodes. The mode can still reach this list by
+        // being chosen on the relay screen or saved as the default, and when it does the
+        // list must be ordered by something real - not left in map order.
+        assertEquals(SortMode.PACKETS, SortMode.KNOWN_NODES.forNeighbours())
+
+        // And the engine must agree with that function rather than reimplement it: the
+        // order below is the one PACKETS produces, arrived at through KNOWN_NODES.
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                direct(from = 0x11111111, at = 3_000L),
+                direct(from = 0x22222222, at = 1_000L),
+                direct(from = 0x22222222, at = 1_000L),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.KNOWN_NODES)
+        runCurrent()
+
+        assertEquals(
+            listOf(0x22222222, 0x11111111),
+            subject.snapshot.value.neighbours.map { it.nodeNum },
+        )
+    }
+
+    @Test
+    fun `every other mode is unchanged for neighbours`() {
+        SortMode.entries.filter { it != SortMode.KNOWN_NODES }
+            .forEach { assertEquals(it, it.forNeighbours()) }
     }
 }
