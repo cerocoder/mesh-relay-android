@@ -18,6 +18,7 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -35,16 +36,23 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.settings.AppSettings
+import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
+import com.cerocoder.meshrelay.stats.NodeId
+import com.cerocoder.meshrelay.stats.SeriesKey
+import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.RelayStats
+import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
+import com.cerocoder.meshrelay.ui.detail.DetailMenuItem
 import com.cerocoder.meshrelay.ui.detail.DetailScreen
 import com.cerocoder.meshrelay.ui.detail.MatchingNodesTab
 import com.cerocoder.meshrelay.ui.detail.NodeCard
 import com.cerocoder.meshrelay.ui.detail.RemoteNodeScreen
 import com.cerocoder.meshrelay.ui.detail.RemoteNodesTab
 import com.cerocoder.meshrelay.ui.devices.DeviceListScreen
+import com.cerocoder.meshrelay.ui.graph.SignalGraphScreen
 import com.cerocoder.meshrelay.ui.mynode.MyNodeScreen
 import com.cerocoder.meshrelay.ui.nav.BackStack
 import com.cerocoder.meshrelay.ui.nav.DetailSubject
@@ -85,6 +93,7 @@ fun MeshRelayNavHost(
     val backStack = rememberSaveable(saver = backStackSaver) { BackStack(Screen.Devices) }
 
     val snapshot by container.engine.snapshot.collectAsState()
+    val series by container.engine.series.collectAsState()
     val connectionState by container.connectionManager.connectionState.collectAsState()
     val settings by container.settings.settings.collectAsState()
     val skippedRelayNodes by container.settings.skippedRelayNodes.collectAsState()
@@ -194,12 +203,15 @@ fun MeshRelayNavHost(
             modifier = modifier,
         )
 
-        // Task 12 replaces this with the real destination. Until then nothing
-        // pushes Screen.Graph, so the branch is unreachable - it exists because a
-        // non-exhaustive `when` statement over a sealed interface has been a
-        // compile error since Kotlin 1.7, and an `else` here would silently
-        // swallow the next destination someone adds instead.
-        is Screen.Graph -> Unit
+        is Screen.Graph -> GraphDestination(
+            subject = screen.subject,
+            snapshot = snapshot,
+            series = series,
+            gaugeMode = settings.gaugeMode,
+            container = container,
+            onBack = { backStack.pop() },
+            modifier = modifier,
+        )
     }
 }
 
@@ -349,6 +361,9 @@ private fun DetailDestination(
         onSkipNode = { nodeNum -> container.skipRelayNode(nodeNum) },
         onClearSkipped = { container.clearSkippedForRelay(relayByte) },
         modifier = modifier,
+        // Today exactly one item. A second command is one more entry in this
+        // list, not a change to DetailScreen's signature.
+        menuItems = listOf(DetailMenuItem(R.string.action_graph) { backStack.push(Screen.Graph(subject)) }),
         matchingNodesTab = {
             when (subject) {
                 // relayByte above is already this subject's own byte in this branch.
@@ -376,6 +391,80 @@ private fun DetailDestination(
             )
         },
     )
+}
+
+/**
+ * [SignalGraphScreen] plus the one thing it deliberately cannot do for itself:
+ * resolve a [DetailSubject].
+ *
+ * This is the only place that knows both vocabularies. `stats/` may not import
+ * `ui/`, so `SeriesKey` mirrors `DetailSubject` without being it, and the mapping
+ * lives here - one function, four lines, rather than a shared type that would
+ * put a navigation concept inside the engine.
+ *
+ * The watch is a [DisposableEffect] keyed on the subject, so it starts when this
+ * destination appears, switches when the subject does, and - this is the part
+ * that matters - stops when the chart is closed. A watch left running would keep
+ * copying 125 KB per batch for a screen nobody is looking at.
+ */
+@Composable
+private fun GraphDestination(
+    subject: DetailSubject,
+    snapshot: StatsSnapshot,
+    series: SignalSeries?,
+    gaugeMode: GaugeMode,
+    container: AppContainer,
+    onBack: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val key = when (subject) {
+        is DetailSubject.Relay -> SeriesKey.Relay(subject.relayByte)
+        is DetailSubject.Neighbour -> SeriesKey.Neighbour(subject.nodeNum)
+    }
+
+    DisposableEffect(key) {
+        container.engine.watchSeries(key)
+        onDispose { container.engine.watchSeries(null) }
+    }
+
+    // A subject cleared by a reset while the chart is open falls back to an
+    // all-zero record rather than crashing, exactly as DetailScreen's own header
+    // resolution already allows for.
+    when (subject) {
+        is DetailSubject.Relay -> {
+            val relay = snapshot.relays.find { it.relayByte == subject.relayByte }
+                ?: RelayStats(relayByte = subject.relayByte)
+            SignalGraphScreen(
+                title = stringResource(R.string.graph_title_relay, relay.hexId),
+                // A name beside an ambiguous byte would present a guess as a fact -
+                // the same honesty rule DetailScreen's own title line enforces.
+                subtitle = snapshot.directory.uniqueRelayName(relay.relayByte),
+                series = series,
+                rssiStats = relay.rssi,
+                snrStats = relay.snr,
+                gaugeMode = gaugeMode,
+                lastPacketAtMillis = relay.lastPacketAtMillis,
+                onBack = onBack,
+                modifier = modifier,
+            )
+        }
+
+        is DetailSubject.Neighbour -> {
+            val neighbour = snapshot.neighbours.find { it.nodeNum == subject.nodeNum }
+                ?: NeighbourStats(nodeNum = subject.nodeNum)
+            SignalGraphScreen(
+                title = stringResource(R.string.graph_title_neighbour, NodeId.format(subject.nodeNum)),
+                subtitle = snapshot.directory.shortName(subject.nodeNum),
+                series = series,
+                rssiStats = neighbour.rssi,
+                snrStats = neighbour.snr,
+                gaugeMode = gaugeMode,
+                lastPacketAtMillis = neighbour.lastPacketAtMillis,
+                onBack = onBack,
+                modifier = modifier,
+            )
+        }
+    }
 }
 
 /**
