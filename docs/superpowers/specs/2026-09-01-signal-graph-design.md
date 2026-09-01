@@ -35,7 +35,7 @@ As given by the owner:
 4. **Freeze** holds the drawing. Data keeps being collected while frozen, and the
    graph is redrawn complete as soon as it is switched off.
 5. **Auto scale** makes the left and right borders of the RSSI and SNR bars the
-   observed min and max of each parameter.
+   observed min and max of each parameter. Switch off by default.
 6. Bar and line colours are the same as everywhere else in the application.
 7. The graph area fills most of the view. The oldest measurement is at the bottom,
    the newest at the top. It scrolls.
@@ -52,6 +52,7 @@ Settled during brainstorming:
 13. **One measurement is one pixel row.** Only the rows inside the scrolled window
     are drawn. A scale coefficient (2 px, 4 px per measurement) is deliberately
     *not* exposed yet — it exists as a parameter so it can become a control later.
+    The scale coefficient may be a fraction number (e.g 0.1) making scaling available.
 14. Series are kept for **every** relay and neighbour, from the first packet,
     whether or not a Graph is open.
 15. Sample retention: **5000 measurements** per relay and per neighbour.
