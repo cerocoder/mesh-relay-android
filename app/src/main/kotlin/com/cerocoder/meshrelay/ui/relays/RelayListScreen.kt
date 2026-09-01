@@ -29,6 +29,8 @@ import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.common.ReloadAction
 import com.cerocoder.meshrelay.ui.common.SortAction
 import com.cerocoder.meshrelay.ui.common.StatsTopBar
+import com.cerocoder.meshrelay.ui.common.StatusCount
+import com.cerocoder.meshrelay.ui.common.StatusStrip
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
@@ -87,7 +89,14 @@ fun RelayListScreen(
                 .padding(innerPadding)
                 .fillMaxSize(),
         ) {
-            StatusStrip(snapshot = snapshot)
+            StatusStrip(
+                snapshot = snapshot,
+                counts = listOf(
+                    StatusCount(R.string.relays_status_total, snapshot.counters.totalPackets),
+                    StatusCount(R.string.relays_status_relayed, snapshot.counters.totalRelayedPackets),
+                ),
+                sortMode = snapshot.sortMode,
+            )
             LocalNodeLine(directory = snapshot.directory, meshviewUrl = meshviewUrl)
 
             if (snapshot.relays.isEmpty()) {
