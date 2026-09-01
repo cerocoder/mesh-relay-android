@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.detail
 
+import androidx.annotation.StringRes
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -7,6 +8,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -20,9 +23,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -41,6 +46,15 @@ import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 
 /**
+ * One entry in the detail screen's overflow menu.
+ *
+ * A list rather than a fixed set of parameters, so a second command is one more
+ * entry rather than a change to this screen's signature. An empty list draws no
+ * button at all - a menu with nothing in it is worse than no menu.
+ */
+data class DetailMenuItem(@StringRes val labelRes: Int, val onClick: () -> Unit)
+
+/**
  * One shell, two subjects. Ports the terminal tool's single relay-only detail
  * view (`build_detail_lines`, mesh_stats.py:1802-1943) but this is deliberately
  * the point the port stops being literal (spec §10.4): a [DetailSubject.Relay]
@@ -52,25 +66,15 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * every other part of this screen only needs to render.
  *
  * **Tab content is a slot, not a call.** [matchingNodesTab] and [remoteNodesTab]
- * are supplied by the caller rather than built in here from [MatchingNodesTab]/
- * [RemoteNodesTab] directly, for a structural reason, not a stylistic one: this
- * task's brief restricts every future task in this port to its own new files -
- * Task 25 creates `MatchingNodesTab.kt`/`NodeCard.kt`, Task 26 creates
- * `RemoteNodesTab.kt`, and neither is permitted to touch this file. If this
- * screen called them directly it could only ever do so once they already
- * existed, and no later task is ever authorised to come back and wire them in.
- * A slot is the only shape that lets this file be finished now and filled in
- * later - by `MeshRelayNavHost` (Task 30), which already holds every value
- * ([onSkipNode], [onClearSkipped], [onOpenRemoteNode], [meshviewUrl]) those two
- * tabs need and can close over them directly when it builds the lambda it
- * passes in here. Both parameters default to an empty composable so this
- * screen (and its own previews) render correctly with the shell alone.
- *
- * A consequence worth stating: [onOpenRemoteNode], [onSkipNode], [onClearSkipped]
- * and [meshviewUrl] are part of this function's contract - Task 25/26's tab
- * content needs every one of them - but none is read inside this file's own
- * body. They exist to be threaded into the slot lambdas a caller builds, not to
- * be called from here.
+ * are supplied by the caller rather than built here from [MatchingNodesTab] and
+ * [RemoteNodesTab] directly, because `MeshRelayNavHost` is the one place that
+ * holds everything those two tabs need at once - the snapshot, the Meshview URL
+ * and the container's skip commands - and closing over them there is cheaper than
+ * threading four more parameters through this shell. Both default to an empty
+ * composable, so this screen and its own previews render with the shell alone.
+ * [onOpenRemoteNode], [onSkipNode], [onClearSkipped] and [meshviewUrl] are part of
+ * this function's contract for the same reason and are deliberately not read in
+ * this file's own body.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,11 +90,13 @@ fun DetailScreen(
     modifier: Modifier = Modifier,
     matchingNodesTab: @Composable () -> Unit = {},
     remoteNodesTab: @Composable () -> Unit = {},
+    menuItems: List<DetailMenuItem> = emptyList(),
 ) {
     // Resets to the first tab whenever the subject itself changes (a fresh
     // navigation to a different relay or neighbour), so the previous screen's
     // tab choice never leaks into this one.
     var selectedTab by remember(subject) { mutableIntStateOf(0) }
+    var menuExpanded by remember { mutableStateOf(false) }
 
     val header = resolveHeader(subject, snapshot)
 
@@ -107,6 +113,35 @@ fun DetailScreen(
                     }
                 },
                 title = { DetailTitle(primary = header.titlePrimary, secondary = header.titleSecondary) },
+                actions = {
+                    if (menuItems.isNotEmpty()) {
+                        Box {
+                            IconButton(onClick = { menuExpanded = true }) {
+                                Icon(
+                                    painter = painterResource(R.drawable.ic_action_more),
+                                    contentDescription = stringResource(R.string.action_more),
+                                )
+                            }
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                            ) {
+                                menuItems.forEach { item ->
+                                    DropdownMenuItem(
+                                        text = { Text(stringResource(item.labelRes)) },
+                                        onClick = {
+                                            // Dismissed first: the click navigates
+                                            // away, and a menu left expanded is
+                                            // still expanded on the way back.
+                                            menuExpanded = false
+                                            item.onClick()
+                                        },
+                                    )
+                                }
+                            }
+                        }
+                    }
+                },
             )
         },
     ) { innerPadding ->
@@ -360,6 +395,26 @@ private fun DetailScreenRelayOneMatchPreview() {
                 onOpenRemoteNode = {},
                 onSkipNode = {},
                 onClearSkipped = {},
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Relay - with the overflow menu")
+@Composable
+private fun DetailScreenWithMenuPreview() {
+    MeshRelayTheme {
+        PreviewClock {
+            DetailScreen(
+                subject = DetailSubject.Relay(SampleData.RELAY_ONE_MATCH_BYTE),
+                snapshot = SampleData.snapshot,
+                gaugeMode = GaugeMode.COMPLEX,
+                meshviewUrl = "https://meshview.meshtastic.es",
+                onBack = {},
+                onOpenRemoteNode = {},
+                onSkipNode = {},
+                onClearSkipped = {},
+                menuItems = listOf(DetailMenuItem(R.string.action_graph) {}),
             )
         }
     }

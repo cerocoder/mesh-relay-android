@@ -92,6 +92,7 @@
     <string name="action_reload_db">Recargar base de nodos</string>
     <string name="action_sort">Ordenar</string>
     <string name="action_more">Más</string>
+    <string name="action_graph">Gráfica</string>
     <string name="action_gauges">Indicadores</string>
     <string name="action_gauge_mode">Modo de indicador</string>
     <string name="action_settings">Ajustes</string>

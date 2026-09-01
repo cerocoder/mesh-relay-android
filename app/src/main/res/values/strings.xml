@@ -92,6 +92,7 @@
     <string name="action_reload_db">Reload node database</string>
     <string name="action_sort">Sort</string>
     <string name="action_more">More</string>
+    <string name="action_graph">Graph</string>
     <string name="action_gauges">Gauges</string>
     <string name="action_gauge_mode">Gauge mode</string>
     <string name="action_settings">Settings</string>
