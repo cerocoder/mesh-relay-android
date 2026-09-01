@@ -184,6 +184,25 @@ not be written asynchronously, or a crash mid-write leaves an install that canno
   label is already clipped before Meshview is laid out at all**, so the row is over-full even
   with two links. That matters for the fix - shortening the Meshview label alone would leave
   OpenStreetMap still truncated.
+- **The consequence is a LOST ACTION, not just bad layout** (owner's observation, 2026-09-01):
+  "there are some nodes with 'Open in Meshview', but the last wide node doesn't have this action,
+  but they should". Measured on one screen, two cards:
+
+  ```
+  node WITHOUT a position (!a1991854)  - only the Meshview link is in the row:
+    TextView x=  91- 417 w=326  "Open in Meshview"
+    Button   x=  57- 451 w=394                       <- normal, label rendered
+
+  node WITH a position                 - three links in the row:
+    View     x= 957-1057 w=100 y=1211-1644 clickable=true   <- NO TextView child at all
+  ```
+
+  The Meshview control is still present and still clickable, but it renders **no label glyph
+  whatsoever** - a 100 px invisible strip at the card's right edge. So the action vanishes exactly
+  on the nodes where it is most wanted (the ones with a position, i.e. the ones worth looking up),
+  and an invisible-but-tappable strip is worse than an absent one: a stray thumb opens a browser
+  with no warning. Any fix must be judged on whether the label is *readable* on a positioned node,
+  not merely on whether the row stops overflowing.
 - **Severity:** broken - the app's primary screen shows about one relay at a time
 - **Status:** open - deliberately not fixed; collecting issues first
 
