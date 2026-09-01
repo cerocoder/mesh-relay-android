@@ -1,0 +1,130 @@
+# Deferred work
+
+Follow-up items found during the Stage 1 port and deliberately **not** fixed, so that review
+findings would not keep widening the branch. Each was seen by a reviewer, judged non-blocking,
+and recorded at the moment it was found. None is a known crash or a known wrong result.
+
+Provenance: extracted from the SDD ledger for
+`docs/superpowers/plans/2026-08-26-mesh-relay-android.md` before that scratch workspace was
+deleted. Wording is the reviewer's or mine at the time of the finding, kept verbatim rather than
+re-summarised — the reasoning for deferring is part of the record, and a later reader deserves to
+judge it rather than take it.
+
+Items marked **[CLOSED]** were fixed later, by a subsequent task or by the final fix wave. They
+are kept rather than removed so this list is not silently rewritten.
+
+---
+
+- **Task 2** — Type.kt:11-13 allocates a throwaway Typography() to read its default
+  bodySmall; Typography().copy(bodySmall = ...) would do it in one. No functional difference.
+- **Task 3** — GeoTest.kt:221 uses Kotlin `assert()`, a no-op without -ea. Gradle
+  enables assertions by default so it runs, and the assertEquals on the next line is the
+  load-bearing check regardless. Plan-mandated (my brief text), not an implementer choice.
+- **Task 6** — AndroidSettingsStore does not runCatching around SharedPreferences
+  getString/getStringSet, which throw ClassCastException on a type-mismatched hand-edited key.
+  Beyond the brief's stated degrade-not-crash scope (unparseable ids, renamed enums), both handled.
+- **Task 6** — persist() rewrites all setting keys on every mutation, incl. skip-list
+  changes. Harmless, just more I/O per call than needed.
+- **Task 6** — per-mutation ioScope.launch gives no ordering guarantee on a
+  multi-threaded dispatcher. Speculative — no consumer wiring exists yet to judge against.
+- **Task 7** — values-es action_skip_confirm_body uses the infinitive where its sibling
+  action_reset_confirm_body uses the tu imperative; the rest of the file is imperative throughout.
+- **Task 7** — "count" renders as "Numero de paquetes" in sort_packets but "Recuento"
+  in detail_stat_count. Different contexts, slight canon gap.
+- **Task 11** — the report's prose mischaracterises a createChannel comment that does
+  not exist in either the original or the port. Report narrative only, shipped code unaffected.
+- **Task 13** — an in-code comment cites mesh_stats.py:1043 where the block actually
+  begins around 1039-1041. Approximate line reference in a comment, not a defect.
+- **Task 13** — reviewer's #4, from == 0 handling — carried to Task 21, see note above.
+- **Task 12** — hexId does not clamp relayByte to 0..255, so an unmasked value would
+  print more than two hex digits. No current caller can produce one — carry to Task 21.
+- **Task 17** — the report's narrative misstates a few figures (omits Yuncos as a direct
+  sender; RELAY_WEAK min is -115 not -118; RELAY_STEADY SNR max is 8.3 not 9). Code unaffected —
+  noted so nobody treats the report as authoritative.
+- **Task 17** — every packet in the fixture has non-zero rx_rssi, so the no-signal
+  (rx_rssi == 0) path is never exercised in the demo data. A later screen author debugging
+  null-signal rendering will find no case here.
+- **Task 17** — Illescas Router carries the ROUTER role AND the intermittent profile;
+  worth a comment distinguishing role from link reliability.
+- **Task 8** — **[CLOSED by 7aa39bd]** two user-facing literals remain in BleRadioTransport.kt:87,119 —
+  deliberate, to keep that class Context-free and plain-JVM-testable; both are carry-overs, not new.
+- **Task 8** — BleScannerImpl.kt:101 "unknown node" literal — the brief's own
+  BleScanner interface takes no Context, so extracting it needs a constructor change.
+- **Task 8** — BleFailureText.kt:48 catch-all surfaces e::class.simpleName, which names
+  neither a cause nor a next step. Unchanged from source; worth a follow-up generic message.
+- **Task 8** — the task-8 report overstates translation #6 (see above).
+- **Task 10** — the reload flag survives a silence-detector teardown, so
+  nodeDbReloading can read true over a disconnected session. Exactly as the brief prescribed.
+  CARRY TO TASK 22: derive the spinner from `nodeDbReloading && state == Connected`.
+- **Task 10: minor (deferred) — REAL FORWARD GAP: FakeRadioTransport never answers
+  NODE_INFO_RELOAD_NONCE, so a reload in demo mode falls to `else -> ignored` and spins the full
+  30s until the watchdog clears it. Out of scope for Task 10's three files. CARRY TO TASK 31 (or a
+- **Task 10** — T3's discrimination depends on the strict > at RadioConnectionManager
+  :400 — relaxing it to >= would keep T3 passing while silently losing its mutant.
+- **Task 10** — two "nothing arrived" assertions are vacuous if drain() breaks; the
+  suite catches it elsewhere. Also MeshProtocol.kt's KDoc writes [D] as a doc link to a
+  nonexistent symbol.
+- **Task 15** — my brief's Interfaces line names AgeBucket as consumed, but nothing in
+  the five files references it — brief boilerplate, not an unmet requirement.
+- **Task 15** — AgeText's citation points a few lines early of the actual since_str
+  block; inherited from my brief's citation.
+- **Task 16** — SignalGauge KDoc says the draw scope "does no other arithmetic" but does
+  one subtraction (fillEndPx - fillStartPx) for the Canvas Size API. Pixel bookkeeping, not signal
+  math; the comment slightly overstates.
+- **Task 16** — tests 4 and 5 share the fixture stats(-5f); both justified but a reader
+  must check docstrings to see they are not duplicates.
+- **Task 18: minor (deferred) — PLAN DEFECT 10 (mine): my brief names a test "clearing runtime data
+  keeps the node database and the skip list", but the skip list is a snapshot() parameter, not
+  NodeDirectory state, so clearRuntimeData structurally cannot clear it. That half of the test
+- **Task 18** — spec section 7 still lists a fourth telemetry branch (LocalStats) that
+  the brief deliberately drops as dead code. Stale; strike at final review so it does not read as
+  an omission.
+- **Task 18** — redundant `if` guard at NodeDirectorySnapshot.kt:96; precisionBits
+  stripped twice (NodeRecord.fromProto already does it) so the local guard is defence in depth and
+  the comment does not say which line is which; RelayIndexTest's size assertion is subsumed by the
+- **Task 19** — several mesh_stats.py:<line> citations in the new comments are wrong
+  against the current file (actual: 1758, 1770/1768, 1767, 1798-1799). One of the wrong ones came
+  from MY brief. Undermines the file:line traceability every reviewer in this project relies on.
+- **Task 19** — FOLLOW-UP TICKET: MapLinks renders coordinates via raw Double.toString,
+  so a magnitude below 1e-3 emits scientific notation ("1.0E-7") and a node within ~1 cm of the
+  equator or prime meridian gets a malformed maps URL. Upstream has the identical behaviour.
+- **Task 20** — the report miscounts the long name as 99 chars (it is 95); the two
+  neighbour entries lack a comment explaining why those nodes were chosen.
+- **Task 21** — report says "nine discarding collectors" where there are now ten; a
+  comment says Internal.countNonNull where Kotlin Wire emits a top-level countNonNull; the optional
+  one-line assertThrows hardening against schema renumbering.
+- **Task 23** — a KDoc claims ui/relays/StatusStrip is "private to its own package" — it
+  is not, it is public; the real reason duplication was right is that StatusStrip hardcodes the
+  Total/Relayed pair. The duplication is correct, the stated justification is false.
+- **Task 23** — rename relays_status_paused / relays_local_node* to neutral keys.
+- **Task 23** — add never-heard and no-signal neighbour fixtures to SampleData.
+- **Task 24** — two doc comments misattribute the LabelledCount precedent to
+  RelayListScreen (it is in StatusStrip.kt:85); SignalBlock's fourth parameter (lastPacketAtMillis,
+  required by SignalGauge's flash animation) is unremarked in the diff.
+- **Task 25** — it correctly REFUSED to fix an out-of-scope KDoc in MatchingNodesTab.kt
+  (that file was not in the fix round's allowed list), leaving a slightly misattributed comment
+  about why PreviewClock is needed. Right discipline, small residue — carrying to the final review
+- **Task 26** — displayLocale() is now a FOURTH copy of the same LocalConfiguration
+  locale resolution (also in PositionLine.kt, RelayCard.kt, NeighbourCard.kt). Consistent with the
+  codebase rather than a new invention, but it is now a real extraction candidate — carrying to the
+- **Task 26** — remote_direction_hint renders above an empty list, explaining a
+  direction pattern before there is data to show one.
+- **Task 27** — the empty state could earn a dedicated string; and the PREVIEW NAME
+  "Carried by no relay - heard directly" bakes the very overclaim the UI text avoids into
+  developer-facing naming. Good catch — rename at the final review.
+- **Task 28** — skippedRelayNodes.sorted() runs in the composable body rather than
+  behind remember(); presentation-only ordering, matching RemoteNodesTab's precedent.
+
+---
+
+## Not deferred — the two open items
+
+These are not follow-ups. They are the state of the branch.
+
+- **Release signing.** `app/build.gradle.kts` signs the release variant with the debug key, and
+  the workflow publishes that APK to GitHub Releases on a tag. Fine for a build you install
+  yourself; not fine for one anybody else installs, and unfixable after the fact, since Android
+  refuses a signature change on update. Awaiting the owner's decision.
+- **Hardware acceptance.** `docs/acceptance-checklist.md` — 28 items, none run. CI proves the code
+  compiles and the tests pass; nothing in this branch has ever talked to a radio. The BLE
+  handshake, the demo-to-live transition, and every gauge against real SNR are unverified.
