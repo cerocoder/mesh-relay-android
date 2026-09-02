@@ -387,3 +387,19 @@ Ruling 38: `SignalSeries` carries measurements only, never its own `SignalStats`
   happen. So the screen takes the statistics it already has as parameters, and the series is
   measurements. Do not add `SignalStats` to `SignalSeries`. Cost if wrong: nothing; this deletes
   state rather than adding it.
+
+### 39
+
+Ruling 39: the app declares `location` as a second foreground-service type and gains
+  `FOREGROUND_SERVICE_LOCATION`, **at the owner's decision** rather than mine. From Android 10 a
+  backgrounded app receives location updates only while a foreground service of that type is
+  running, so with `connectedDevice` alone every measurement taken with the screen off fell back to
+  the local node's position; the owner chose to spend the permission so that measurements stay
+  phone-stamped with the screen off. The type is applied at runtime and only when the location
+  permission is actually granted (`MeshForegroundService.foregroundServiceType()`, reading
+  `LocationAvailability.granted()`): from Android 14, starting a foreground service with the
+  `location` type while that permission is missing throws `SecurityException`, and location is
+  deliberately optional here - a refusal is not an error, every measurement simply falls back to the
+  node - so a constant type would turn a user's refusal into a crash at the moment of connecting.
+  Cost if wrong: a third store-visible permission on the listing, and a crash class that exists only
+  if that runtime check is ever removed - which is why acceptance item H17 exists to catch it.

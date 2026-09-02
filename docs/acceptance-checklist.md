@@ -541,9 +541,11 @@ Walk a few metres and check the globes. Switch it off, walk again, check the glo
 descriptions. Separately, on a fresh install, deny the location permission at first connect.
 **Pass looks like:** on, pins follow the phone and say "from the phone"; off, they say "from the
 node" and the phone's GPS is not used. A refusal is **not** an error: the app connects, collects,
-and every measurement falls back to the node. Note whether measurements taken with the screen off
-still carry a phone position — that answer decides the `foregroundServiceType` question in
-`deferred-work.md`.
+and every measurement falls back to the node. Then, with **Collect in background** on and the
+location permission granted, lock the screen for several minutes while walking, and check the
+measurements taken during it: they must still carry a phone position, which is what the service's
+second foreground-service type (`location`, ruling 39) buys. A run of samples that all fall back
+to the node while the phone was moving is this item failing.
 **Warning:** the demo transport's local node has no coordinates, so with *Use phone location*
 off every globe is correctly disabled there regardless of anything else under test. Judge this
 item against a real node or the phone's own position, not a demo scenario, or a field issue gets
@@ -615,6 +617,22 @@ confirmation.
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
+### H17. Declining location, then connecting — the crash this must not do
+**Do:** On a fresh install (or after clearing the app's data and revoking location in system
+settings), grant Bluetooth but **deny** location, then connect to a node and let the foreground
+service start — the notification appearing in the shade is the moment under test. Leave it
+connected for a minute, then background the app and come back.
+**Pass looks like:** no crash, at all. The app connects, collects, the notification stands, and
+every measurement falls back to the node's position. Since ruling 39 the service declares
+`location` as a second foreground-service type, and from Android 14 starting it with that type
+while the permission is missing throws `SecurityException` — so the type is computed at runtime
+and left off when the grant is absent. This item is the only one on the checklist that would
+catch that check being removed, and it is a hard crash if it ever is. Run it on the newest
+Android available (14 or later); on older releases the failure mode does not exist.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
 ---
 
 ## Overall verdict
@@ -622,7 +640,7 @@ confirmation.
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 48
+- **Total items run:** _____ / 49
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

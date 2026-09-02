@@ -33,6 +33,16 @@
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE" />
 
+    <!-- The service declares "location" as a second type so that measurements keep
+         a phone position with the screen off: from Android 10 a backgrounded app
+         receives location updates only while a foreground service of that type is
+         running, and without it every sample taken in the background falls back to
+         the local node's position. From Android 14 this permission is what allows
+         the service to start with that type at all - but the *runtime* location
+         permission is still optional here, so MeshForegroundService adds the type
+         only when it is granted. -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_LOCATION" />
+
     <!-- From Android 13 on, without this the foreground service notification is
          simply not shown: the service runs, but the user cannot see that the
          connection is alive and cannot return to the app from the shade. -->
@@ -58,6 +68,6 @@
         <service
             android:name=".service.MeshForegroundService"
             android:exported="false"
-            android:foregroundServiceType="connectedDevice" />
+            android:foregroundServiceType="connectedDevice|location" />
     </application>
 </manifest>

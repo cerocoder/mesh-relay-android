@@ -151,14 +151,21 @@ These are not follow-ups. They are the state of the branch.
   permission launcher only fires on `PERMISSIONS_MISSING` or the explicit retry action, neither
   of which a location-only refusal triggers. Recorded as a consequence of ruling 31
   (`docs/decisions.md`), not a defect.
-- **Background position stamping.** From Android 10 an app receives location updates while
-  backgrounded only if its foreground service declares `android:foregroundServiceType="location"`;
-  this app's declares `connectedDevice`. So with the screen on every measurement is stamped, and
-  with the screen off under background collection, samples on API 29+ fall back to the local
-  node's position. Adding the type would also add `FOREGROUND_SERVICE_LOCATION` to the
-  store-visible permission set - a second permission change the Graph design did not ask for.
-  **Awaiting the owner's decision**; acceptance item H10 is what finds out what the phone
-  actually does.
+- **[CLOSED at the owner's decision]** **Background position stamping.** From Android 10 an app
+  receives location updates while backgrounded only if its foreground service declares
+  `android:foregroundServiceType="location"`; this app's declares `connectedDevice`. So with the
+  screen on every measurement is stamped, and with the screen off under background collection,
+  samples on API 29+ fall back to the local node's position. Adding the type would also add
+  `FOREGROUND_SERVICE_LOCATION` to the store-visible permission set - a second permission change
+  the Graph design did not ask for. **Awaiting the owner's decision**; acceptance item H10 is what
+  finds out what the phone actually does. *Closed: the owner chose to spend the permission. The
+  service now declares `connectedDevice|location` and the manifest carries
+  `FOREGROUND_SERVICE_LOCATION`, so measurements stay phone-stamped with the screen off (ruling 39,
+  `docs/decisions.md`). The type is computed at each start and the `location` half added only when
+  the location permission is granted - a `location`-typed foreground service without it is a
+  `SecurityException` on Android 14+, and location is optional in this app. H10 now verifies the
+  new behaviour rather than deciding the question, and new item H17 covers the crash the runtime
+  check prevents.*
 - **The series watch stays armed while the app is backgrounded.** `DisposableEffect` fires when
   the destination leaves the composition, and pressing Home does not - the window is not detached,
   so the composition outlives `onStop`. The engine keeps re-snapshotting the watched subject for a

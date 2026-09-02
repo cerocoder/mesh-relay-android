@@ -12,6 +12,7 @@ import android.os.Build
 import android.os.IBinder
 import com.cerocoder.meshrelay.MainActivity
 import com.cerocoder.meshrelay.R
+import com.cerocoder.meshrelay.location.LocationAvailability
 import com.cerocoder.meshrelay.withChosenLanguage
 
 /**
@@ -47,8 +48,11 @@ class MeshForegroundService : Service() {
             .build()
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
-            startForeground(NOTIFICATION_ID, notification, ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE)
+            startForeground(NOTIFICATION_ID, notification, foregroundServiceType())
         } else {
+            // Before Android 14 the two-argument form takes every type the manifest
+            // declares, and no permission is enforced at start: an app without the
+            // location grant simply receives no fixes. Nothing to compute here.
             startForeground(NOTIFICATION_ID, notification)
         }
 
@@ -58,6 +62,36 @@ class MeshForegroundService : Service() {
         // and the shade would show a notification for a connection that does
         // not exist.
         return START_NOT_STICKY
+    }
+
+    /**
+     * The service's types, decided at each start rather than fixed in the manifest.
+     *
+     * `connectedDevice` always: the connection to the node is what this service
+     * exists for. `location` as well, but **only while the location permission is
+     * actually granted** - and that condition is the whole point of the method.
+     * The manifest declares both types so that a backgrounded app keeps receiving
+     * location updates (from Android 10 it receives them only under a service of
+     * that type, and without it every measurement taken with the screen off falls
+     * back to the local node's position). But from Android 14 starting a foreground
+     * service with the `location` type while the permission is missing throws
+     * `SecurityException`, and location is deliberately optional in this app: a
+     * refusal is not an error, every measurement simply falls back to the node. So
+     * a constant `connectedDevice or location` would mean that every user who
+     * declines location kills the app the moment a connection is made - far worse
+     * than the coarser position they were opting into. The type is added when it
+     * can be honoured and left off when it cannot.
+     *
+     * The grant is read through [LocationAvailability] rather than checked here, so
+     * this cannot drift from the rest of the app: its `any`-not-`all` rule is the
+     * right one, a user who granted only "Approximate" holding a usable grant.
+     */
+    private fun foregroundServiceType(): Int {
+        var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE
+        if (LocationAvailability(this).granted()) {
+            types = types or ServiceInfo.FOREGROUND_SERVICE_TYPE_LOCATION
+        }
+        return types
     }
 
     /** A tap on the notification returns to the app rather than opening nothing. */
