@@ -700,8 +700,8 @@ measurement its rule is drawn at throughout.
 Under a fixed pitch equal to the mark size, tiling is meant to be exact and unconditional — a gap
 anywhere means the pitch and the mark size have drifted apart.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 57046e0
+  Notes: PASS on tiling, measured. Both metrics form ONE contiguous vertical run of 103 rows with no gap anywhere between marks - the pitch is the mark size, so consecutive marks meet edge to edge. Horizontally they stay discrete: every run is exactly 4 px wide, 412 full pixels per metric, and ZERO partially covered pixels, so the hard edges survive the change. The chart was young (about 50 measurements, roughly 200 px of a 1100 px plot), so it is partial and grows downward, which is the reopened F-7 trade the owner accepted. NOT yet seen: the changeover at 275 measurements where the content exceeds the plot and scrolling begins.
 
 ---
 
