@@ -61,6 +61,12 @@ dependencies {
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
     implementation(libs.activity.compose)
+    // androidx.lifecycle.lifecycleScope (MainActivity's Exit command) is only
+    // ever reached transitively today, through activity-compose's own graph -
+    // see docs/decisions.md ruling 48. Declared explicitly so a future
+    // activity-compose bump that stops exporting it is a version conflict CI
+    // catches, not a silent "unresolved reference" at compile time.
+    implementation(libs.lifecycle.runtime.ktx)
     implementation(libs.coroutines.android)
 
     implementation(libs.nordic.ble)

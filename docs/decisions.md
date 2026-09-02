@@ -601,3 +601,30 @@ Ruling 47: the plot's vertical pitch is fixed and equal to the mark size, not fi
   Cost if wrong: a young chart no longer fills the plot - at 107 measurements it covers 39% of it,
   a milder form of the F-7 the fitted scale closed - and that is the trade the owner accepted in
   exchange for exact tiling. F-7 is reopened, with the numbers, rather than left recorded as fixed.
+
+### 48
+
+Ruling (mine, following the review that caught it): ADD androidx.lifecycle:lifecycle-runtime-ktx,
+  version 2.9.4, explicitly (six field fixes, task 6 - the Exit command's `lifecycleScope`). It had
+  been reached only transitively, through activity-compose:1.13.0's own graph, with no line for it
+  in this project's dependencies. Traced by hand against the published Gradle module metadata
+  rather than assumed: the extension itself (`LifecycleOwnerKt.getLifecycleScope`) lives in
+  androidx.lifecycle:lifecycle-common, not in lifecycle-runtime-ktx, which today is a near-empty
+  artifact that only reaches it transitively, through lifecycle-runtime - and activity-compose already
+  resolves every androidx.lifecycle:* artifact in its graph to 2.9.4, lifecycle-common included, so
+  the version pinned here matches what was already being resolved rather than introducing a second
+  one to reconcile - the same move ruling 15 made for material-icons-core. Declaring
+  lifecycle-runtime-ktx rather than lifecycle-common directly, even though the latter holds the
+  actual bytecode: it is the artifact Android's own documentation names for `lifecycleScope`, and
+  the indirection through lifecycle-runtime is exactly what should keep working if that internal
+  wiring is reshuffled again.
+  Sharper than ruling 15's precedent, not merely a repeat of it: that one was a BOM-managed
+  resource artifact, where a drift would fail as a missing resource with a clear cause. This is an
+  API imported directly from source (`import androidx.lifecycle.lifecycleScope` in
+  `MainActivity.kt`); a future activity-compose release that stops exporting it would be a silent
+  compile break reading "unresolved reference: lifecycleScope", with nothing in the diff pointing at
+  the actual cause.
+  Cost if wrong: none found - the pinned version matches what the graph already resolves to, so
+  this can only make an already-working transitive dependency explicit, not change what compiles.
+  If a future bump does drop the export, CI catches it as a normal version conflict rather than
+  a confusing compile error, which is the entire point of the ruling.

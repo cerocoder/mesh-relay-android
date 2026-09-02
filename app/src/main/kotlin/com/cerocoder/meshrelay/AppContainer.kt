@@ -307,17 +307,32 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     }
 
     /**
-     * Release everything this process holds, in an order that matters.
+     * Releases the radio and the foreground service; the caller ends the process.
+     *
+     * Not a clean unwind of everything this process holds: [scope] keeps running
+     * its `collect` loops and the `while (isActive) { delay(...) }` notification
+     * updater, and the phone location source is never stopped. That is acceptable
+     * only because the caller kills the process immediately afterwards - do not
+     * reuse this expecting the app to keep running cleanly once it returns.
      *
      * The GATT disconnect is awaited before the service is stopped and before the
      * caller kills the process: tearing the process down with the link still open
      * leaves the radio holding a half-open connection, and the next connection
      * attempt then meets a node that thinks it is already connected.
+     *
+     * The intent flags are cleared *after* the disconnect - deliberately the
+     * opposite order from [requestDisconnect]. Clearing them first is correct
+     * there: the user is headed back to the device list to pick again, and the
+     * scanner is gated on exactly this flag so it can start the moment the intent
+     * drops. Here nobody is going to pick a device - clearing the flag early buys
+     * nothing and costs a low-latency scan running for the whole teardown window
+     * while the activity is still fully composed, which is the same "scan
+     * alongside a live GATT connection" failure this command exists to avoid.
      */
     suspend fun shutdown() {
+        connectionManager.disconnect()
         _connectRequested.value = false
         _requestedAddress.value = null
-        connectionManager.disconnect()
         stopForegroundService()
     }
 

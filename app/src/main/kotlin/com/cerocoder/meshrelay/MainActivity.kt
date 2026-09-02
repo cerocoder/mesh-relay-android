@@ -171,10 +171,22 @@ class MainActivity : ComponentActivity() {
                                 // system, not something this coroutine waits on - so the
                                 // lifecycle event that finishing eventually raises has no
                                 // chance to cancel anything before the process is gone
-                                // anyway. Belt and braces: the disconnect itself runs
-                                // inside RadioConnectionManager's own NonCancellable
-                                // block, so it would complete even if this coroutine were
-                                // cancelled mid-await.
+                                // anyway.
+                                //
+                                // If the activity is destroyed for some other reason while
+                                // shutdown() is still suspended (a rotation, a system
+                                // memory reclaim, the recreate() on a language change),
+                                // lifecycleScope IS cancelled mid-await. RadioConnectionManager's
+                                // own NonCancellable block only protects the radio: the ACL
+                                // disconnect still runs to completion, but this coroutine then
+                                // rethrows CancellationException on the way out of that block
+                                // instead of continuing, so stopForegroundService(),
+                                // finishAndRemoveTask() and exitProcess(0) are all skipped - the
+                                // notification and the recents entry both survive and the
+                                // process stays alive. The radio ending clean is the half that
+                                // matters and is guaranteed; the exit itself is not, and is not
+                                // restructured to survive this - a genuinely rare race, not
+                                // worth the added complexity.
                                 lifecycleScope.launch {
                                     container.shutdown()
                                     finishAndRemoveTask()

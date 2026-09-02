@@ -6,6 +6,7 @@ coroutines = "1.11.0"
 protobufs = "2.7.26"
 wire = "6.4.5"
 activityCompose = "1.13.0"
+lifecycleRuntimeKtx = "2.9.4"
 nordicBle = "2.11.0"
 nordicScanner = "1.6.0"
 
@@ -18,6 +19,10 @@ compose-material-icons-core = { module = "androidx.compose.material:material-ico
 compose-ui-tooling-preview = { module = "androidx.compose.ui:ui-tooling-preview" }
 compose-ui-tooling = { module = "androidx.compose.ui:ui-tooling" }
 activity-compose = { module = "androidx.activity:activity-compose", version.ref = "activityCompose" }
+# Declared explicitly rather than left implicit through activity-compose's own
+# transitive graph - see docs/decisions.md ruling 48. Version matches what that
+# graph already resolves lifecycle-common to, so pinning it here moves nothing.
+lifecycle-runtime-ktx = { module = "androidx.lifecycle:lifecycle-runtime-ktx", version.ref = "lifecycleRuntimeKtx" }
 coroutines-android = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-android", version.ref = "coroutines" }
 coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 meshtastic-protobufs = { module = "org.meshtastic:protobufs", version.ref = "protobufs" }
