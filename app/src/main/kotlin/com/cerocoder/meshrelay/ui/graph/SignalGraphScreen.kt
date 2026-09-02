@@ -188,6 +188,22 @@ fun SignalGraphScreen(
     val frame = remember(freeze) { if (freeze) live else null } ?: live
     val shown = frame.series
 
+    // Is there anything at all for the two switches to act on? Not "is there a
+    // trace": Freeze holds the *drawing*, and a live bar readout is a drawing, so
+    // it has work to do the moment either metric has a figure; Auto scale moves
+    // the bars' borders as well as the plot's (requirement 5), which is meaningful
+    // whenever the bars have data. Only the state where neither metric has a
+    // figure and no measurement is retained - spec section 8.8's empty state,
+    // whose branch below reads the same two `hasData` flags - leaves the pair with
+    // nothing to do.
+    //
+    // Read from `frame`, never from `live`. The frame is what is on screen, and
+    // tying enablement to it means the switch that turned Freeze on cannot be
+    // disabled by what arrives afterwards: a reset under a frozen chart empties
+    // the live values, and against those the reader would be locked out of the
+    // very switch that would release the chart.
+    val hasSomethingToAct = frame.rssiStats.hasData || frame.snrStats.hasData || shown.size > 0
+
     // Re-anchor as measurements arrive, so the row under the reader's eye does not
     // move. A decrease means the statistics were reset under this chart and the
     // session it was showing no longer exists, so the view goes back to the top.
@@ -254,8 +270,9 @@ fun SignalGraphScreen(
                 .fillMaxSize(),
         ) {
             // Requirement 20: label left, switch right, stacked and right-aligned
-            // under the app bar. Disabled with no measurements - there is nothing
-            // to freeze and nothing to scale.
+            // under the app bar. Disabled only in the fully empty state - no
+            // statistics and no measurements - where there is nothing to freeze
+            // and nothing to scale.
             Column(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -265,13 +282,13 @@ fun SignalGraphScreen(
                 LabelledSwitch(
                     label = stringResource(R.string.graph_freeze),
                     checked = freeze,
-                    enabled = shown.size > 0,
+                    enabled = hasSomethingToAct,
                     onCheckedChange = { freeze = it },
                 )
                 LabelledSwitch(
                     label = stringResource(R.string.graph_auto_scale),
                     checked = autoScale,
-                    enabled = shown.size > 0,
+                    enabled = hasSomethingToAct,
                     onCheckedChange = { autoScale = it },
                 )
             }

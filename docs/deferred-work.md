@@ -186,10 +186,15 @@ These are not follow-ups. They are the state of the branch.
 - **The crosshair does not appear until the plot is first touched.** Spec section 8.7's wording
   supports this; `Pic1.pdf`'s sketch shows a crosshair on an unopened screen. Two lines to seed
   row 0 if the owner wants it. **Awaiting the owner.**
-- **Freeze and Auto scale are both disabled when the bars have data but the series is empty.**
-  `SignalGraphScreen.kt` has `enabled = shown.size > 0` on both switches, not just one. Auto
-  scale could still usefully move the bars' borders in that state; of the two, disabling Freeze
-  over what is still a live bar readout is arguably the more defensible choice.
+- **[CLOSED at the owner's decision]** **Freeze and Auto scale are both disabled when the bars
+  have data but the series is empty.** `SignalGraphScreen.kt` has `enabled = shown.size > 0` on
+  both switches, not just one. Auto scale could still usefully move the bars' borders in that
+  state; of the two, disabling Freeze over what is still a live bar readout is arguably the more
+  defensible choice. *Closed: the owner ruled both switches usable in that state. Both now read
+  `frame.rssiStats.hasData || frame.snrStats.hasData || shown.size > 0` — anything to act on at
+  all. Freeze holds the drawing and a live bar readout is a drawing; Auto scale moves the bars'
+  borders. Spec section 8.8 is untouched: with neither metric holding a figure and no measurement
+  retained, the pair is still present and still disabled over the centred message.*
 - **`SignalSeries`'s constructor is public** while both its KDoc and `SignalSeriesBuffer`'s say the
   value is built only by `snapshot()`. `internal` would make the documented rule enforced rather
   than advisory.
