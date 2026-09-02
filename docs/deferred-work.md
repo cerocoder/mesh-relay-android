@@ -264,3 +264,20 @@ pin its claim a little more tightly than it does.
   clamps nothing (the clamping happens where its result is used) - the test name overstates what
   it pins.
 - Three of the Graph's Compose previews cannot show what they are named for.
+
+## The six field fixes (2026-09-02)
+
+- **Task 5 — node identity is the BLE address, not `my_node_num`.** At the owner's explicit
+  choice, `AppContainer.requestConnect` decides whether a connection is "a different node" by
+  comparing BLE addresses, not by anything from the handshake. That leaves two gaps, both
+  accepted rather than fixed:
+  - The *same* physical node reached at a new BLE address (a re-paired device, a randomized
+    address) reads as a different node and wipes statistics that did not need wiping. Harmless -
+    the mesh is unchanged, only the display resets.
+  - *Two different* physical nodes that happen to present the same BLE address would not trigger
+    a wipe, leaving one node's statistics on screen while actually connected to another. Stale
+    data, not a crash, and not observed - but not detectable by this check either.
+
+  A `my_node_num` cross-check on the handshake (comparing `NodeDirectory.localNodeNum` before and
+  after) would close the second gap and is small if the field ever shows it: deliberately not
+  added now, since the owner chose BLE-address identity knowing this trade.

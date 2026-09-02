@@ -154,6 +154,21 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      */
     val requestedAddress: StateFlow<String?> = _requestedAddress.asStateFlow()
 
+    /**
+     * The address whose statistics are currently on screen.
+     *
+     * Connecting to a *different* node must not leave the previous node's relays,
+     * neighbours and database on screen: they describe a different vantage point,
+     * and a relay byte means a different node from a different receiver.
+     * Reconnecting to the *same* address keeps everything, which is what makes a
+     * dropped link recover without losing an afternoon's survey.
+     *
+     * Identity is the BLE address at the owner's decision. The gap that leaves is
+     * recorded in `docs/deferred-work.md`: two different nodes reached at the same
+     * address would not trigger this.
+     */
+    private var statisticsAddress: String? = null
+
     init {
         // The engine consumes a source-agnostic frame stream, so this is the only
         // line in the application that knows the frames come from a radio at all. A
@@ -243,6 +258,8 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      * transport makes on its own.
      */
     fun requestConnect(address: String) {
+        if (statisticsAddress != null && statisticsAddress != address) engine.resetForNewNode()
+        statisticsAddress = address
         _requestedAddress.value = address
         _connectRequested.value = true
         connectionManager.connect(address)

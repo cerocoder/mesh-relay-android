@@ -172,6 +172,24 @@ class NodeDirectory(private val time: TimeSource) {
     }
 
     /**
+     * Forgets the mesh entirely - the node database included, and the identity of
+     * the local node with it.
+     *
+     * [clearRuntimeData] deliberately keeps the node database because reloading it
+     * costs a round trip to the radio, and a Reset is a fresh measurement of the
+     * same mesh. This is the other case: a *different* local node, whose database
+     * describes a different view. Every name, position and hop count in the old one
+     * may be wrong, and a wrong name on a relay is worse than no name.
+     */
+    fun clearAll() {
+        nodes.clear()
+        positions.clear()
+        telemetryRecords.clear()
+        localNodeNum = null
+        loadedAtMillis = null
+    }
+
+    /**
      * Where this device is, without building a snapshot to ask.
      *
      * The engine calls this once per measurement, and `snapshot()` copies every map

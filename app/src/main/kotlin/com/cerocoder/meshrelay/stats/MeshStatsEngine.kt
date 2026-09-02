@@ -62,6 +62,14 @@ class MeshStatsEngine(
         data object Reset : Command
 
         /**
+         * A different local node: not a fresh measurement of the same mesh, but a
+         * different vantage point on it. Reuses [resetStatistics] for everything
+         * Reset already clears, and additionally forgets the node database - see
+         * [NodeDirectory.clearAll].
+         */
+        data object ResetForNewNode : Command
+
+        /**
          * Nothing to apply - the loop's own build step is the whole point. Sent when
          * a screen subscribes, so it sees the state the engine already holds rather
          * than the empty snapshot it was left at while nobody was watching.
@@ -203,6 +211,9 @@ class MeshStatsEngine(
     fun setSortMode(mode: SortMode) { commands.trySend(Command.SetSort(mode)) }
     fun reset() { commands.trySend(Command.Reset) }
 
+    /** A different local node: see [Command.ResetForNewNode]. */
+    fun resetForNewNode() { commands.trySend(Command.ResetForNewNode) }
+
     /** Open a chart on [key], or pass null when it closes. */
     fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
 
@@ -227,6 +238,10 @@ class MeshStatsEngine(
                 publishedTotal = -1L
             }
             Command.Reset -> resetStatistics()
+            Command.ResetForNewNode -> {
+                resetStatistics()
+                directory.clearAll()
+            }
             Command.Refresh -> Unit
         }
     }
@@ -313,8 +328,20 @@ class MeshStatsEngine(
         }
     }
 
-    /** The two things every packet that counts as traffic moves, in one place so the
-     *  four early returns above cannot disagree about them. */
+    /**
+     * The two things every packet that counts as traffic moves, in one place.
+     *
+     * Called from three sites in [handleFrame], not symmetrically: the `from == 0`
+     * and the out-of-range `relay_node` early returns both call it before
+     * returning - the packet was heard, even though it cannot be attributed. The
+     * own-node guard just above is an early return too, but deliberately does
+     * *not* call it - our own transmission heard back is not traffic, by the
+     * owner's decision, so it must move no counter at all. The call after that
+     * guard is not a return; it is the fallthrough for every packet that survived
+     * every check, immediately before folding it into a relay or a neighbour. Do
+     * not add a call to the own-node guard for symmetry - that would silently
+     * start counting exactly the packets it exists to exclude.
+     */
     private fun countPacket(atMillis: Long) {
         counterState = counterState.copy(totalPackets = counterState.totalPackets + 1)
         lastPacketAtMillis = atMillis

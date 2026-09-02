@@ -438,6 +438,43 @@ class MeshStatsEngineTest {
     }
 
     @Test
+    fun `a new node forgets the node database as well as the statistics`() = runTest(StandardTestDispatcher()) {
+        // Reset keeps the node database on purpose - reloading it costs a round trip
+        // to the radio. A *different* node is the opposite case: that database
+        // describes somebody else's mesh view and every name in it may be wrong.
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct(from = 0x4242)))
+        runCurrent()
+        assertEquals(1, seen.last().relays.size)
+        assertEquals(1, seen.last().directory.count)
+
+        subject.resetForNewNode()
+        runCurrent()
+
+        assertTrue(seen.last().relays.isEmpty())
+        assertTrue(seen.last().neighbours.isEmpty())
+        assertEquals(0, seen.last().counters.totalPackets)
+        assertEquals(0, seen.last().directory.count)
+        assertNull(seen.last().directory.localNodeNum)
+    }
+
+    @Test
+    fun `an ordinary reset still keeps the node database`() = runTest(StandardTestDispatcher()) {
+        // The two must not converge: this is the distinction the new path exists for.
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed()))
+        runCurrent()
+
+        subject.reset()
+        runCurrent()
+
+        assertTrue(seen.last().relays.isEmpty())
+        assertEquals(1, seen.last().directory.count)
+    }
+
+    @Test
     fun `changing the sort mode reorders without losing anything`() = runTest(StandardTestDispatcher()) {
         val subject = engine(backgroundScope)
         collectSnapshots(subject)
