@@ -197,8 +197,6 @@
     <string name="node_no_matching_body">No node in the database ends with this byte. The relay may not have broadcast its node info yet.</string>
     <string name="node_not_in_db_title">Not in the node database</string>
     <string name="node_not_in_db_body">This node has been heard directly, but has not sent its details yet. They arrive with its next node info packet, or on the next database reload.</string>
-    <string name="node_open_google_maps">Google Maps</string>
-    <string name="node_open_osm">OpenStreetMap</string>
     <string name="node_open_meshview">Meshview</string>
 
     <!-- Remote nodes -->

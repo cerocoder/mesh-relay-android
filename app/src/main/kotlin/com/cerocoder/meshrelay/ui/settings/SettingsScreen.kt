@@ -44,6 +44,7 @@ import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.settings.MapProvider
 import com.cerocoder.meshrelay.settings.TimeFormat
 import com.cerocoder.meshrelay.stats.SortMode
+import com.cerocoder.meshrelay.ui.common.MapProviderLabels
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.common.SortModeLabels
@@ -147,7 +148,7 @@ fun SettingsScreen(
             }
             items(items = MapProvider.entries, key = { "map-provider-${it.name}" }) { provider ->
                 RadioOptionRow(
-                    label = stringResource(mapProviderLabelRes(provider)),
+                    label = stringResource(MapProviderLabels.labelOf(provider)),
                     selected = settings.mapProvider == provider,
                     onClick = { onUpdate { current -> current.copy(mapProvider = provider) } },
                 )
@@ -337,11 +338,6 @@ private fun languageLabelRes(option: LanguageOption): Int = when (option) {
 private fun gaugeModeLabelRes(mode: GaugeMode): Int = when (mode) {
     GaugeMode.SIMPLE -> R.string.gauge_simple
     GaugeMode.COMPLEX -> R.string.gauge_complex
-}
-
-private fun mapProviderLabelRes(provider: MapProvider): Int = when (provider) {
-    MapProvider.GOOGLE -> R.string.map_provider_google
-    MapProvider.OPEN_STREET_MAP -> R.string.map_provider_osm
 }
 
 private fun timeFormatLabelRes(format: TimeFormat): Int = when (format) {

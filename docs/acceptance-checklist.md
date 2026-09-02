@@ -773,12 +773,44 @@ like a hang you will tap twice; the second tap is harmless but worth knowing.
 
 ---
 
+## Group J — A 12/24 hour clock and one map link (2026-09-03)
+
+### J1. A 12 or 24 hour clock, everywhere the app prints one
+**Do:** Open Settings and find the new **Time** group, after Map provider. Note its default. Open a
+node's detail (**Last DB heard**) and a Graph (both **Time** fields, plus the crosshair on a subject
+with position data) on the default setting, then return to Settings, switch **Time**, and check the
+same three places again. While there, place the crosshair near midnight and near noon on a subject
+whose data spans them, in **12 hour format**. Switch the phone to **Español** and repeat the Graph
+check in both **Time** settings.
+**Pass looks like:** the group shows **12 hour format** and **24 hour format**, with **24 hour
+format** selected on a fresh install. Switching it changes all three absolute clocks at once — the
+Graph's two `Time` fields, the Graph crosshair, and a node card's **Last DB heard** — while any
+relative age (`5min ago`) on screen is unaffected, since it carries no clock at all. In 12 hour form,
+a time around midnight reads `12:0x:xx AM` and around noon `12:0x:xx PM`, never `00`. In Spanish,
+both forms still print the date day-before-month (`21/8/26`), and the labels fit.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+
+---
+
+### J2. One map link on a node panel, per the Map provider setting
+**Do:** Open a node panel for a subject with a stamped position. Note the map button next to
+**Meshview**. Go to Settings, switch **Map provider** to the other value, return to the same panel.
+**Pass looks like:** the panel shows **one** map button, not two, named for the chosen provider
+(**Google Maps** or **OpenStreetMap**), and tapping it opens that provider. Switching **Map
+provider** changes both the label and the destination. The **Meshview** button is unaffected either
+way — it is a different destination, not a map provider, and keeps its own condition.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 58
+- **Total items run:** _____ / 60
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

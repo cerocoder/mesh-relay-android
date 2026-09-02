@@ -25,12 +25,16 @@ import java.util.Locale
 
 /**
  * One line describing where a node is, plus small buttons for the external
- * map links [PositionLineText] cannot open itself, being a plain function with
+ * links [PositionLineText] cannot open itself, being a plain function with
  * no composition to reach a uri handler from. Ports
  * `render_position_oneline` (mesh_stats.py:1747-1800) and
- * the map links appended after it (mesh_stats.py:1868-1872, plus the
+ * the map link appended after it (mesh_stats.py:1868-1872, plus the
  * Meshview link at mesh_stats.py:1793-1794) as one flowing text line with
  * the links underneath as buttons, rather than more text appended to it.
+ *
+ * The map link is singular, not a pair - [com.cerocoder.meshrelay.settings.MapProvider]
+ * decides which one, and [MapProviderLabels] is what names it, so this and the
+ * settings screen's own radio group can never disagree on the label.
  *
  * Nothing here computes an age, a distance or a URL: [PositionLineText]
  * does the display formatting and [MapLinks] builds the link targets. This
@@ -97,24 +101,26 @@ fun PositionLine(
         val lon = info.lon
         if ((lat != null && lon != null) || meshviewUrl != null) {
             // FlowRow, not Row, and this is field issue F-3 rather than a
-            // preference. A positioned node offers three links at once, and a plain
+            // preference. A positioned node offers two links at once, and a plain
             // Row hands each child its measured width until the space runs out and
-            // then squeezes whatever is left: on a 1080 px phone the first two took
-            // 901 px between them and Meshview was measured at 111 px, which is
-            // narrower than one of its words. It did not clip - it wrapped, to about
-            // a character a line, and grew 958 px tall. On the relay screen that
-            // pushed the list (the weight(1f) sibling) down to a 128 px slit, and on
-            // a node card it rendered no label glyph at all: an invisible but still
-            // clickable strip where the action should have been. The links are also
-            // the widest text this app lays out and the ones that grow most in
+            // then squeezes whatever is left: on a 1080 px phone the first took
+            // most of that width and Meshview was measured narrower than one of
+            // its words. It did not clip - it wrapped, to about a character a
+            // line, and grew tall enough to push the list (the weight(1f) sibling
+            // on the relay screen) down to a sliver, and on a node card it
+            // rendered no label glyph at all: an invisible but still clickable
+            // strip where the action should have been. The links are also the
+            // widest text this app lays out and the ones that grow most in
             // Spanish, so they need a container that can take a second line.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (lat != null && lon != null) {
-                    TextButton(onClick = { uriHandler.openUri(MapLinks.googleMaps(lat, lon)) }) {
-                        Text(stringResource(R.string.node_open_google_maps))
-                    }
-                    TextButton(onClick = { uriHandler.openUri(MapLinks.openStreetMap(lat, lon)) }) {
-                        Text(stringResource(R.string.node_open_osm))
+                    // One link, not two: the Map provider setting decides which.
+                    // MapLinks.forProvider formats under Locale.ROOT - a Spanish
+                    // decimal comma would break the query string, which is why
+                    // coordinates never go through a display formatter.
+                    val mapProvider = LocalMapProvider.current
+                    TextButton(onClick = { uriHandler.openUri(MapLinks.forProvider(mapProvider, lat, lon)) }) {
+                        Text(stringResource(MapProviderLabels.labelOf(mapProvider)))
                     }
                 }
                 if (meshviewUrl != null) {
