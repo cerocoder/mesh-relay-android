@@ -653,8 +653,8 @@ with no perceptible delay, a drag still moves it and still does **not** scroll, 
 makes it and its globe disappear. A brief flicker of the crosshair during the double tap is
 expected and is documented in ruling 42.
 
-- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), builds 11cab7a then a4d3df1
-  Notes: PASS, measured twice. First run (11cab7a, round marks): Auto scale on, 1017 RSSI-blue pixels against 1274 SNR-green - both metrics present in comparable quantity, where a polyline left one all but absent. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe. Second run (a4d3df1, after the owner asked for hard 2x2 squares): every mark in the plot is exactly 2x2 physical pixels with ZERO partially covered pixels - 15 marks per metric, 60 full pixels each, connected-component analysis reporting only the (2,2) shape. The integral-coordinate approach gives hard edges without an antialias flag, so no Paint is allocated per draw.
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), builds 11cab7a, a4d3df1, 3d59f6e
+  Notes: PASS, measured three times. 11cab7a (round marks, Auto scale on): 1017 RSSI-blue pixels against 1274 SNR-green - both metrics present in comparable quantity, where a polyline left one all but absent. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe. a4d3df1 (hard 2x2 squares): every mark exactly 2x2, ZERO partially covered pixels. 3d59f6e (4x4 at the owner's request): every mark exactly 4x4, 240 full pixels per metric over 15 marks, still ZERO partial pixels - the integral-coordinate approach holds at the larger size, so no antialias flag and no per-draw Paint. NOT yet seen: the banding ruling 46 predicts from about 275 measurements, where 4 px marks 4 px apart begin to touch.
 
 ---
 
