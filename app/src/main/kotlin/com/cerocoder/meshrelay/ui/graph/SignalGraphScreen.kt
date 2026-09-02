@@ -93,58 +93,13 @@ private val SwitchLabelSpacing = 8.dp
  * would size the mark differently on every phone this app runs on - exactly the
  * opposite of what a fixed-pixel-count instruction means. This constant is
  * density-independent on purpose: the mark is the same 4x4 physical pixels on a
- * 450 dpi phone and a 160 dpi one alike. What *does* vary with the screen and
- * with how much is on it is the spacing between marks - `pxPerSample`, fitted
- * per [MIN_PX_PER_SAMPLE] - never the mark itself.
+ * 450 dpi phone and a 160 dpi one alike. **The vertical pitch between marks is
+ * this same constant, not merely equal to it** (ruling 47) - see `pxPerSample`
+ * below, at the one place it is set - so consecutive marks tile edge to edge
+ * with no background between them and no overlap, and there is no second figure
+ * to keep in sync with this one by hand.
  */
 private const val POINT_SIZE_PX = 4f
-
-/**
- * The shortest a measurement's row may be - the floor under the fitted scale, not
- * the scale itself. [ChartGeometry.fitPxPerSample] turns it into the working
- * value; this file computes that in exactly one place and passes it everywhere.
- *
- * **The scale used to be this constant, and that is what F-7 was.** At `1f`, one
- * physical pixel per measurement on a 450 dpi device, 69 measurements filled 87
- * of the plot's 1100 pixels - eight per cent - and the trace read as broken
- * rather than sparse. Ruling 41 doubled it to `2f`, which halved the
- * measurements needed to fill the plot without closing the issue: 550 of them is
- * still an hour and a half on a relay heard every ten seconds. Ruling 44 stopped
- * fixing the scale at all. The chart now fits the retained series to the plot and
- * falls back to this floor once fitting would crush the points together.
- *
- * **`2f` and not less**, because a young, still-fitting chart would otherwise be
- * crushed to a staircase - and it is also the changeover point, the series
- * length past which the chart scrolls again, which on the owner's 1100 px plot
- * is 550 measurements.
- *
- * **It no longer keeps consecutive dots apart.** At the 4x4 px [POINT_SIZE_PX]
- * square (ruling 46), a dot's half-extent is 2 px - exactly this floor, with no
- * room left over. Rows at the floor touch rather than sit apart, and once
- * fitting gives way to the floor, past the changeover, they overlap by up to 2
- * px: a long session's trace reads as a continuous band rather than as discrete
- * dots. That is an accepted consequence of the owner's chosen mark size, not a
- * defect - ruling 46 records it. It is not "fixed" here; the fix would be a
- * smaller mark or a larger floor, and a larger floor trades against how much
- * history fits on screen before the chart starts scrolling.
- *
- * A `Float` because requirement 13 says the coefficient may be fractional, and
- * because the fitted value above it almost always is.
- */
-private const val MIN_PX_PER_SAMPLE = 2f
-
-/**
- * The least travel that counts as scrollable, in pixels, for the purpose of
- * showing a scrollbar at all.
- *
- * One whole pixel, because a fraction of a pixel is not a distance anything can
- * be scrolled to. It exists because a fitted scale (ruling 44) makes the chart's
- * content height the round trip `size * (viewportPx / size)`, which in IEEE-754
- * misses `viewportPx` by about a ten-thousandth of a pixel in one direction or
- * the other, differently for each series length. [ChartScrollbar]'s KDoc has the
- * rest.
- */
-private const val MIN_SCROLLABLE_PX = 1f
 
 /**
  * Everything this screen draws at one instant, as one value.
@@ -274,23 +229,25 @@ fun SignalGraphScreen(
     // very switch that would release the chart.
     val hasSomethingToAct = frame.rssiStats.hasData || frame.snrStats.hasData || shown.size > 0
 
-    // How tall one measurement's row is - fitted to the plot while the series is
-    // short enough to fit, floored at MIN_PX_PER_SAMPLE after that (ruling 44,
-    // closing F-7). This is the only place it is computed; every consumer below
-    // takes this value, so no two of them can disagree about the scale.
+    // How tall one measurement's row is - fixed, and deliberately the same
+    // constant as POINT_SIZE_PX rather than merely equal to it (ruling 47, at
+    // the owner's instruction after asking why there was space between the
+    // marks: "Marks tile exactly, no gaps ever."). This is the only place
+    // pxPerSample is set; every consumer below takes this one value, so no two
+    // of them can disagree about the scale, and nobody can widen the pitch
+    // without also widening the mark - there is only one number to change.
     //
-    // **Derived from `shown`, never from `live`, and that is load-bearing.**
-    // Ruling 36 says Freeze holds the whole drawing, and a scale is part of a
-    // drawing: fitting to the live series would leave a frozen chart silently
-    // rescaling - every point creeping upwards - as packets kept arriving behind
-    // it. Reading the frozen frame's size is what makes Freeze mean "stop moving"
-    // on the vertical axis as well as the horizontal one.
+    // Verified exact under the centring convention SignalChart.drawMetric uses -
+    // topLeft = floor(centre) - size / 2 - row n (centred at 4n) covers
+    // [4n-2, 4n+2) and row n+1 (centred at 4n+4) covers [4n+2, 4n+6): contiguous,
+    // no gap, no overlap.
     //
-    // While the chart is fitting, this changes slightly with every measurement,
-    // so the plot compresses gently as it fills. Row 0 is the newest measurement
-    // at y=0, so the top edge stays put and the compression happens below it.
-    // That is inherent to fitting, not a defect to damp out.
-    val pxPerSample = ChartGeometry.fitPxPerSample(shown.size, viewportPx, MIN_PX_PER_SAMPLE)
+    // Replaces ChartGeometry.fitPxPerSample (ruling 44), which is deleted along
+    // with it - a young series is a partial plot again rather than a filled one,
+    // the trade ruling 47 records. The Freeze-sensitivity that made the fitted
+    // value load-bearing to compute from `shown` rather than `live` no longer
+    // applies: a fixed constant cannot rescale under a live series either way.
+    val pxPerSample = POINT_SIZE_PX
 
     // Re-anchor as measurements arrive, so the row under the reader's eye does not
     // move. A decrease means the statistics were reset under this chart and the
@@ -510,10 +467,11 @@ fun SignalGraphScreen(
  *
  * The rule is drawn at [ChartGeometry.yOf] of the *resolved* row rather than at
  * the raw touch height, so the line and the numbers beside it always describe the
- * same measurement even when the touch landed past the last one. Since ruling 44
- * the [pxPerSample] handed in is a fitted, arbitrary `Float` rather than a power
- * of two, so the round trip between the two is what `ChartGeometry`'s
- * `ROW_EPSILON` exists for - see its KDoc before touching either.
+ * same measurement even when the touch landed past the last one. The
+ * [pxPerSample] handed in is `POINT_SIZE_PX`, a power of two (ruling 47), so
+ * `ChartGeometry`'s `ROW_EPSILON` round trip is exact here and does no work
+ * today - it stays in place for the arbitrary `Float` an unfixed pitch would
+ * hand it again; see its KDoc before touching either.
  *
  * Both overlays are measured rather than offset by a guessed height. A fixed
  * `dp` would drift the moment the reader turns their system font size up, and
@@ -667,19 +625,22 @@ private fun BoxScope.Crosshair(
  * inverse of the thumb's position, so the thumb reaches the foot of its track at
  * the same moment the chart reaches its oldest measurement.
  *
- * Nothing is drawn at all when the whole series already fits: a scrollbar that
- * cannot scroll is an invitation to a gesture that does nothing. Since ruling 44
- * that is the normal state of a young chart rather than a rare one, because a
- * fitted scale puts the whole retained series on screen.
+ * Nothing is drawn at all when the whole series already fits the viewport
+ * outright, `contentPx <= viewportPx` - fewer than `viewportPx / POINT_SIZE_PX`
+ * measurements, 275 on the owner's 1100 px plot at the fixed pitch (ruling 47).
+ * A scrollbar that cannot scroll is an invitation to a gesture that does
+ * nothing.
  *
- * **The threshold is one whole pixel of travel, not a bare `>`.** A fitted scale
- * makes `contentPx` the product `size * (viewportPx / size)`, and in IEEE-754
- * that round trip lands a ten-thousandth of a pixel either side of `viewportPx`,
- * more or less at random with each new measurement. Against a bare comparison the
- * scrollbar would appear and vanish as the series grew, over a difference no
- * finger could scroll and no eye could see. Below one pixel there is nothing to
- * scroll to; at the real changeover the travel is a whole row - two pixels at the
- * floor - so nothing that can genuinely be scrolled is hidden by this.
+ * **The guard is the plain comparison, with nothing added for float noise.**
+ * Ruling 44's fitted scale made `contentPx` the round trip
+ * `size * (viewportPx / size)`, which in IEEE-754 could miss `viewportPx` by a
+ * fraction of a pixel in either direction and blink the bar in and out;
+ * `MIN_SCROLLABLE_PX` absorbed that. The pitch is fixed now, so `contentPx` is
+ * `size * POINT_SIZE_PX` and `viewportPx` arrives from `onSizeChanged` as a
+ * whole number of pixels - the two can only ever differ by a whole pixel or
+ * more, and a `< 1f` threshold is exactly equivalent to `<= 0`. Restored to the
+ * plain form; there is no float hazard left here for a named constant to guard
+ * against.
  */
 @Composable
 private fun ChartScrollbar(
@@ -689,7 +650,7 @@ private fun ChartScrollbar(
     onScrollBy: (Float) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (contentPx - viewportPx < MIN_SCROLLABLE_PX) return
+    if (contentPx <= viewportPx) return
 
     val trackColor = MaterialTheme.colorScheme.surfaceVariant
     val thumbColor = MaterialTheme.colorScheme.onSurfaceVariant

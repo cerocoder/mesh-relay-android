@@ -472,7 +472,12 @@ Ruling 43: a new global setting, `AppSettings.mapProvider` (`MapProvider.GOOGLE`
 Ruling 44: the plot's vertical scale is fitted to the viewport, not fixed - `PX_PER_SAMPLE`
   becomes `MIN_PX_PER_SAMPLE`, a floor under `ChartGeometry.fitPxPerSample`, at the owner's
   instruction after the second hardware run. This is option 1 of field issue F-7's three, chosen
-  by the owner. A fixed row height makes a young series a thin band at the top of an empty plot:
+  by the owner.
+  (Superseded by ruling 47: after asking why there was space between the marks, the owner chose a
+  fixed pitch equal to the mark size over this fit-to-viewport approach - "Marks tile exactly, no
+  gaps ever." `fitPxPerSample` and `MIN_SCROLLABLE_PX` are deleted, not layered under; the
+  reasoning below is kept verbatim as the record of why fitting was chosen at the time.)
+  A fixed row height makes a young series a thin band at the top of an empty plot:
   at `1f`, 69 measurements filled 87 of a 1100 px plot on a 450 dpi phone - eight per cent - and
   ruling 41's doubling to `2f` halved the problem without removing it, since 550 measurements is
   still an hour and a half on a relay heard every ten seconds. The rule now is **fit while it
@@ -568,3 +573,31 @@ Ruling 46: the plot's mark grows from the 2x2 physical-pixel square ruling 45 se
   spaced marks, not a regression to chase down - the remedy, if it is ever wanted, is a smaller
   mark or a larger `MIN_PX_PER_SAMPLE`, and the latter trades away how much history fits on screen
   before the chart starts scrolling.
+
+### 47
+
+Ruling 47: the plot's vertical pitch is fixed and equal to the mark size, not fitted to the
+  viewport - `ChartGeometry.fitPxPerSample` is deleted and `pxPerSample` in `SignalGraphScreen.kt`
+  becomes `POINT_SIZE_PX` itself, at the owner's instruction after asking why there was space
+  between the marks: "Marks tile exactly, no gaps ever." Offered a mark whose height follows the
+  pitch, a fixed pitch, and leaving the gaps as they were, the owner chose the fixed pitch.
+  **The pitch IS the mark size, not merely equal to it.** One constant, `POINT_SIZE_PX = 4f`, read
+  at the single place `pxPerSample` is set, so the tiling relationship cannot be broken by editing
+  one number and forgetting the other. Verified exact under the centring convention ruling 45 set:
+  `topLeft = floor(centre) - size / 2`, so row `n` covers `[4n-2, 4n+2)` and row `n+1` covers
+  `[4n+2, 4n+6)` - contiguous, no gap, no overlap.
+  **Supersedes ruling 44's fit-to-viewport outright, not layered under it.** `fitPxPerSample` and
+  its five tests are deleted rather than kept for later: it is the mechanism the owner has just
+  rejected, and an unused function whose KDoc argues for a behaviour the app no longer has is worse
+  than no function. `MIN_SCROLLABLE_PX` is deleted with it - it existed only to absorb the fitted
+  scale's `size * (viewportPx / size)` float round trip, and a fixed 4 px pitch makes `contentPx`
+  and `viewportPx` both whole numbers of pixels, so `ChartScrollbar`'s guard returns to the plain
+  `contentPx <= viewportPx` it would have been without ruling 44's problem to solve.
+  **`ROW_EPSILON` (ruling 35) is dormant again, and stays.** A fitted pitch was an arbitrary
+  `Float`, which is what made the epsilon load-bearing under ruling 44; `POINT_SIZE_PX = 4f` is a
+  power of two, so `yOf`'s round trip is exact again and the epsilon does no work at this value. It
+  is not removed: it is what would keep an arbitrary pitch safe if one is ever reintroduced, exactly
+  as it sat dormant between ruling 35 and ruling 44 the first time.
+  Cost if wrong: a young chart no longer fills the plot - at 107 measurements it covers 39% of it,
+  a milder form of the F-7 the fitted scale closed - and that is the trade the owner accepted in
+  exchange for exact tiling. F-7 is reopened, with the numbers, rather than left recorded as fixed.

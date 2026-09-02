@@ -30,11 +30,13 @@ data class ScaleRange(val min: Float, val max: Float)
  * are drawn - 5000 rows in a single `Canvas` inside a `verticalScroll` would be
  * a layer far past the maximum texture size and fails on real hardware. How tall
  * a row is - `pxPerSample` - is a parameter of every function that needs it and
- * is never a constant in here. Its single caller no longer passes a constant
- * either: it passes [fitPxPerSample], which fits the retained series to the plot
- * until the fit would crush the points together, and holds a floor after that
- * (ruling 44, field issue F-7). It may be fractional, and after that change it
- * usually is, which is why it is a `Float`.
+ * is never a constant in here. Its single caller now passes `POINT_SIZE_PX`
+ * itself (ruling 47): the pitch is fixed and equal to the mark size, so
+ * consecutive marks tile edge to edge instead of leaving background between
+ * them. It stays a `Float` parameter rather than a hardcoded pixel count because
+ * requirement 13 says the coefficient may be fractional and this file's own
+ * tests exercise it at several values - a fixed 4 px pitch is simply the one
+ * value the screen hands in today.
  */
 object ChartGeometry {
 
@@ -52,79 +54,25 @@ object ChartGeometry {
      * edge. The trace is points now - decision 40 - so that reason is gone; the
      * need for the row is not.)
      *
-     * **One row is exactly enough now, not comfortably enough.** The square's
-     * half-extent is 2 px in each direction - since ruling 46, equal to, not
-     * less than, the screen's floor of `2f` pixels per sample
-     * (`MIN_PX_PER_SAMPLE`), the smallest gap this chart ever puts between two
-     * rows and so the worst case. At that floor, a row centred exactly one
-     * row-gap beyond the viewport's edge reaches precisely to that edge and no
-     * further; a row two row-gaps beyond never reaches it. So one row of
-     * overscan still covers every row that could paint a visible pixel, but the
-     * margin ruling 41 gave this constant - "a full pixel to spare" - is gone:
-     * the half-extent now equals the floor exactly, with nothing left over.
-     * **If `POINT_SIZE_PX` is raised again past 4, this constant must go to
-     * 2** - a half-extent that exceeds the floor is exactly the case one row of
-     * overscan no longer covers.
+     * **One row is comfortably enough again, with a whole row of margin.**
+     * Ruling 47 fixed the pitch to equal `POINT_SIZE_PX`: at a 4 px pitch the
+     * square's 2 px half-extent is half the gap between rows, not the whole of
+     * it as ruling 46's floor left it, so a row two row-gaps beyond the
+     * viewport's edge is comfortably the first one that cannot reach it - one
+     * row of overscan has slack rather than sitting exactly on the boundary.
+     *
+     * **The rule for a future editor:** one row of overscan is sufficient
+     * exactly while the mark's half-extent does not exceed the pitch. That is
+     * guaranteed by construction now, because the pitch *is* the mark size
+     * (ruling 47) rather than a value that happens to match it - the two cannot
+     * drift apart, being the same constant. If a future change ever
+     * reintroduces a pitch not tied to `POINT_SIZE_PX` this way, recheck the
+     * half-extent against it before assuming one row is still enough.
      */
     const val OVERSCAN_ROWS = 1
 
     /** The series index this row draws. Storage is oldest-first; rows are newest-first. */
     fun indexOfRow(row: Int, size: Int): Int = size - 1 - row
-
-    /**
-     * How tall one row should be so that [size] rows exactly fill a plot
-     * [viewportPx] tall - but never shorter than [minPxPerSample].
-     *
-     * **The scale is derived, not fixed** (ruling 44, closing field issue F-7).
-     * A fixed row height means a young series is a thin band at the top of a
-     * mostly empty plot: at `1f` on a 450 dpi phone, 69 measurements filled 87 of
-     * the plot's 1100 pixels - eight per cent - and reading as broken rather than
-     * as sparse. Doubling the constant to `2f` halved the problem and did not
-     * remove it. Fitting removes it: while the series is short the plot is full,
-     * and it stays full as the series grows.
-     *
-     * **Fit while it fits, then scroll.** The two regimes are worth stating
-     * separately, because each is what the other is not:
-     *
-     * - While the retained series is shorter than the plot is tall, the fit wins
-     *   and the whole series is on screen. [maxScrollPx] is 0, so there is
-     *   nothing to scroll and the scrollbar correctly has no travel. That is not
-     *   a regression against the fixed scale that scrolled from the first
-     *   measurement; it is the fix. Nothing is hidden, so nothing needs revealing.
-     * - Past that point [minPxPerSample] takes over and the chart behaves exactly
-     *   as a fixed scale does: content grows past the viewport, scrolling
-     *   resumes, and a saturated 5000-sample buffer is 5000 * [minPxPerSample]
-     *   pixels of content. The changeover is at `viewportPx / minPxPerSample`
-     *   measurements - on the owner's 1100 px plot at a `2f` floor, 550 of them.
-     *
-     * **The floor is what stops the fit from being absurd.** Without it two
-     * measurements would be a plot-tall staircase, and - the reason it is `2f`
-     * rather than something smaller - a long series would be squeezed further
-     * below the size of the mark the chart draws with. It no longer keeps
-     * consecutive dots apart even at `2f`: since ruling 46 the mark is a 4x4
-     * physical-pixel square, whose 2 px half-extent equals this floor exactly,
-     * so rows at the floor touch and, once fitting gives way to it past the
-     * changeover, overlap by up to 2 px - a long session's trace reads as a band
-     * rather than as the discrete dots ruling 40 introduced. That is accepted
-     * (ruling 46), not fixed by raising this floor, which would trade against
-     * how much history fits on screen before the chart scrolls.
-     *
-     * **This is what makes `ROW_EPSILON` load-bearing.** A fitted scale is an
-     * arbitrary `Float` - 15.94 for 69 measurements in an 1100 px plot - and
-     * [yOf]'s subtract-then-add round trip does *not* cancel exactly at such a
-     * value, where at a power of two like the old fixed `2f` it did. The epsilon
-     * (ruling 35) was dormant then and is the only thing keeping the crosshair's
-     * numbers on the row its rule is drawn at now. It must not be simplified away.
-     *
-     * A [viewportPx] of `0` is the first composition, before `onSizeChanged` has
-     * measured the plot; the answer there must be the floor and not `0`, which
-     * would make every row zero-tall and stop [visibleRows] drawing anything at
-     * all. The clamp gives that on its own - a fit of nothing is `0`, and `0` is
-     * below the floor - so it needs no branch of its own. The one branch is for a
-     * [size] of `0`, where there is no fit to divide at all.
-     */
-    fun fitPxPerSample(size: Int, viewportPx: Float, minPxPerSample: Float): Float =
-        if (size <= 0) minPxPerSample else (viewportPx / size).coerceAtLeast(minPxPerSample)
 
     /** The height the whole series would occupy if every row were drawn at once. */
     fun contentHeightPx(size: Int, pxPerSample: Float): Float = size * pxPerSample
@@ -210,14 +158,17 @@ object ChartGeometry {
      * of a row covers that with a factor of two in hand, and is itself far below
      * one pixel at any scale this chart draws.
      *
-     * **It is doing work now, and it was not before.** Ruling 35 added it against
-     * a `pxPerSample` the screen fixed at a power of two, where the round trip
+     * **Dormant again, and that is fine.** Ruling 35 added this against a
+     * `pxPerSample` the screen fixed at a power of two, where the round trip
      * happened to be exact and no test but the one naming a fractional scale
-     * could tell it apart from nothing. Since ruling 44 the scale is
-     * [fitPxPerSample]'s answer - an arbitrary `Float` such as 15.94 - and the
-     * round trip is genuinely inexact. Do not remove this as dead defence: it is
-     * the only thing keeping the crosshair's numbers on the row its rule is
-     * drawn at.
+     * could tell it apart from nothing. Ruling 44's fitted scale made it
+     * genuinely load-bearing for a while - an arbitrary `Float` such as 15.94,
+     * where the round trip did not cancel without it. Ruling 47 fixed the pitch
+     * again, to `POINT_SIZE_PX`, itself a power of two, so the round trip is
+     * exact once more and this constant does no work at that value. Do not
+     * remove it as dead defence: it is what would keep the crosshair correct if
+     * an arbitrary pitch is ever reintroduced, exactly as it sat dormant between
+     * ruling 35 and ruling 44 the first time.
      */
     private const val ROW_EPSILON = 1e-3f
 

@@ -12,9 +12,9 @@ import org.junit.Test
  * here is that one inversion, done in one place.
  *
  * `pxPerSample` is 1 in every test but the ones that name it. It is passed
- * explicitly everywhere, never taken from a constant, so the fitted scale ruling
- * 44 introduced changes nothing here: `fitPxPerSample` is what the *screen* now
- * hands these functions, and it has its own tests at the end of this file.
+ * explicitly everywhere, never taken from a constant, so the fixed pitch ruling
+ * 47 introduced changes nothing here: `pxPerSample` is `POINT_SIZE_PX`, a value
+ * the *screen* now hands these functions directly rather than computing it.
  */
 class ChartGeometryTest {
 
@@ -328,65 +328,5 @@ class ChartGeometryTest {
         // plot (viewportPx still 0) is exactly that case.
         assertEquals(0f, ChartGeometry.overlayTopPx(0f, 20f, 60f, viewportPx = 0f), 0.0001f)
         assertEquals(0f, ChartGeometry.overlayTopPx(30f, 20f, 900f, viewportPx = 800f), 0.0001f)
-    }
-
-    @Test
-    fun `a series that fits is scaled to fill the plot exactly`() {
-        // The owner's plot and the count that showed F-7: 69 measurements that
-        // filled eight per cent of it at a fixed scale now fill all of it.
-        val fitted = ChartGeometry.fitPxPerSample(size = 69, viewportPx = 1100f, minPxPerSample = 2f)
-        assertEquals(1100f, ChartGeometry.contentHeightPx(69, fitted), 0.01f)
-        // Filling it exactly means there is nothing left to scroll, which is the
-        // fix and not a regression: the whole series is on screen.
-        assertEquals(0f, ChartGeometry.maxScrollPx(69, 1100f, fitted), 0.01f)
-    }
-
-    @Test
-    fun `the floor takes over past the changeover and the chart scrolls again`() {
-        // 1100 px at a floor of 2 changes over at 550 measurements. One below it
-        // still fits; one above it is already on the floor.
-        assertEquals(2f, ChartGeometry.fitPxPerSample(550, 1100f, 2f), 0.0001f)
-        assertTrue(ChartGeometry.fitPxPerSample(549, 1100f, 2f) > 2f)
-        assertEquals(2f, ChartGeometry.fitPxPerSample(551, 1100f, 2f), 0.0001f)
-
-        // A saturated buffer is 5000 rows at the floor, and scrolls exactly as a
-        // fixed scale did.
-        val saturated = ChartGeometry.fitPxPerSample(5000, 1100f, 2f)
-        assertEquals(2f, saturated, 0.0001f)
-        assertEquals(10_000f, ChartGeometry.contentHeightPx(5000, saturated), 0.01f)
-        assertEquals(8_900f, ChartGeometry.maxScrollPx(5000, 1100f, saturated), 0.01f)
-    }
-
-    @Test
-    fun `an empty or single-measurement series gets the floor, not a division`() {
-        // Nothing to fit: 1100/0 is an infinity and 0 would collapse the chart.
-        assertEquals(2f, ChartGeometry.fitPxPerSample(size = 0, viewportPx = 1100f, minPxPerSample = 2f), 0.0001f)
-        assertEquals(2f, ChartGeometry.fitPxPerSample(size = -1, viewportPx = 1100f, minPxPerSample = 2f), 0.0001f)
-        // One measurement is a legitimate fit, and the whole plot is its row: the
-        // dot is drawn at y=0 either way, so a plot-tall row costs nothing.
-        assertEquals(1100f, ChartGeometry.fitPxPerSample(size = 1, viewportPx = 1100f, minPxPerSample = 2f), 0.0001f)
-    }
-
-    @Test
-    fun `before the plot is measured the scale is the floor`() {
-        // The first composition, before `onSizeChanged` has run: viewportPx is
-        // still 0. Returning 0 would make every row zero-tall and `visibleRows`
-        // would refuse to draw anything at all.
-        assertEquals(2f, ChartGeometry.fitPxPerSample(size = 69, viewportPx = 0f, minPxPerSample = 2f), 0.0001f)
-        assertEquals(2f, ChartGeometry.fitPxPerSample(size = 0, viewportPx = 0f, minPxPerSample = 2f), 0.0001f)
-    }
-
-    @Test
-    fun `the fitted scale is arbitrary, and the row round trip survives it`() {
-        // This is what ROW_EPSILON is for. At the old fixed 2f - a power of two -
-        // the round trip was exact and the epsilon did no work; a fitted scale is
-        // 15.942028..., where it is the only thing keeping the crosshair's
-        // numbers on the row its rule is drawn at.
-        val fitted = ChartGeometry.fitPxPerSample(size = 69, viewportPx = 1100f, minPxPerSample = 2f)
-        assertEquals(15.942f, fitted, 0.001f)
-        for (row in 0 until 69) {
-            val y = ChartGeometry.yOf(row, scrollPx = 0f, pxPerSample = fitted)
-            assertEquals(row, ChartGeometry.rowAt(y, scrollPx = 0f, pxPerSample = fitted))
-        }
     }
 }

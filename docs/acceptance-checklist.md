@@ -648,7 +648,11 @@ once on the plot, drag the crosshair, and double tap it.
 clouds cross **both colours stay visible** — that is the whole reason for the change (ruling 40).
 Each mark is a hard-edged 4x4 pixel square — ruling 46, at the owner's instruction after seeing
 the 2x2 square from ruling 45 measured pixel-by-pixel on the phone — with no soft or antialiased
-fringe around it; a blurred or rounded-looking mark is a fail. A single tap places the crosshair
+fringe around it; a blurred or rounded-looking mark is a fail. Since ruling 47 fixed the vertical
+pitch to equal the mark size, consecutive marks of the same colour are expected to **touch edge to
+edge with no background gap between them, at any sample count** — that is tiling working as
+intended, not the merged-band failure a coarser floor could once produce; a visible gap between two
+consecutive same-colour marks is what would now be wrong. A single tap places the crosshair
 with no perceptible delay, a drag still moves it and still does **not** scroll, and a double tap
 makes it and its globe disappear. A brief flicker of the crosshair during the double tap is
 expected and is documented in ruling 42.
@@ -674,26 +678,30 @@ three buttons elsewhere in the app are unaffected either way.
 
 ---
 
-### H20. A young chart fills the plot instead of banding at the top
+### H20. A young chart tiles without gaps, and grows downward as it fills
 **Do:** Open a Graph on a subject with only a few dozen measurements — a fresh session, or a relay
-heard rarely — and look at the whole plot area. Watch it for a few minutes while new packets
-arrive. Then find or wait for a subject with more than 550 measurements (the changeover on this
-phone's 1100 px plot) and try the scrollbar on it.
-**Pass looks like:** the trace uses the **full height** of the plot rather than sitting as a thin
-band at the top of a mostly empty area — that is F-7, and fitting is the fix (ruling 44). The dots
-are spread apart and individually resolvable rather than merged. As measurements arrive the plot
-compresses gently, the top edge staying put with row 0 at the top; that is inherent to fitting and
-the question here is only whether it is distracting enough to matter. On the young chart the
-scrollbar has no travel and the plot does not scroll — correct, because nothing is hidden. Past
-550 measurements the chart scrolls again and the scrollbar gains a thumb that moves, exactly as it
-did before this change. The crosshair reads the same measurement its rule is drawn at throughout,
-at the fitted scale as well as at the floor.
-**Silent-failure watch:** the 12 dp scrollbar down the right edge **blinking on and off** as
-measurements arrive on the young chart. It should be absent the whole time, not flickering — if it
-flickers, `MIN_SCROLLABLE_PX` is not doing its job against the fitted scale's float round trip.
+heard rarely — and look closely at the space between consecutive marks, not just the overall fill.
+Watch it for a few minutes while new packets arrive. Then find or wait for a subject with more than
+275 measurements (where the plot fills on this phone's 1100 px plot at the fixed 4 px pitch) and
+try the scrollbar on it. Ruling 47 replaced the fit-to-viewport scale this item was originally
+written and passed against with a fixed pitch equal to the mark size — that earlier PASS described
+behaviour the app no longer has and is superseded, so the result below has been cleared and this
+item needs a fresh run.
+**Pass looks like:** consecutive marks **tile with no vertical gap between them, at any sample
+count** — that is the whole point of ruling 47, and is the property to look at closely rather than
+the overall fill. A young chart is **partial, not full**: it grows downward from the top as
+measurements arrive, row 0 pinned at the top, and is expected to cover well under half the plot for
+the first few dozen measurements (39% at 107, by calculation) rather than filling it the way ruling
+44's fit did — that is the accepted trade, not a regression to flag. The chart begins scrolling
+once the series passes **275 measurements** (`viewportPx / POINT_SIZE_PX` on this phone's 1100 px
+plot), at which point the scrollbar gains a thumb that moves. The crosshair reads the same
+measurement its rule is drawn at throughout.
+**Silent-failure watch:** any vertical gap between two consecutive marks, at any sample count.
+Under a fixed pitch equal to the mark size, tiling is meant to be exact and unconditional — a gap
+anywhere means the pitch and the mark size have drifted apart.
 
-- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 51249bf
-  Notes: PASS on the fitting half. A chart barely a minute old filled 91% of the plot (span 1003 px of 1100), against the 8% F-7 measured at a fixed scale with ten times as many measurements. The shortfall from 100% is inherent and correct: the last row sits at (size-1)/size of the viewport, so a young chart stops just short of the bottom and approaches it as it fills. The scrollbar column is entirely background while fitting, so the MIN_SCROLLABLE_PX guard is doing its job and no zero-travel bar is drawn. NOT yet run: the changeover past 550 measurements, where the floor takes over and scrolling resumes - that needs a subject roughly 90 minutes old.
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
 
 ---
 

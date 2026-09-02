@@ -485,7 +485,8 @@ first hours of a session cannot exercise the scrolling half of this screen.
 measurement, and nothing crashes. What is wrong is that the default scale makes a working feature
 look empty.
 
-**Status:** fixed - `ChartGeometry.fitPxPerSample`, plus the fix note below.
+**Status:** reopened - `ChartGeometry.fitPxPerSample` is deleted (ruling 47, superseding ruling 44
+below); a known accepted state now, not a defect. See the reopening note at the end of this entry.
 
 **Notes for whoever fixes it.** The machinery is already there and tested: `ChartGeometry` takes
 `pxPerSample` in every signature and `ChartGeometryTest` exercises it at 0.1, 1 and 4, including the
@@ -549,3 +550,24 @@ no scrolling to exercise.
 
 **Not verified on the phone at the time of this commit.** Nothing was compiled or run locally - CI
 is the gate on this branch - and the hardware run is H20.
+
+---
+
+**Reopened 2026-09-02, ruling 47.** The owner asked why there was space between the marks and,
+offered a mark whose height follows the pitch, a fixed pitch, or leaving the gaps, chose the fixed
+pitch: "Marks tile exactly, no gaps ever." `ChartGeometry.fitPxPerSample` is deleted outright, not
+kept as an alternative path - `pxPerSample` in `SignalGraphScreen.kt` is `POINT_SIZE_PX` itself,
+so the pitch and the 4x4 px mark can never drift apart.
+
+This is not a full return to the state this issue was originally filed against, and the numbers say
+so honestly. At the fixed 4 px pitch the plot fills at **275 measurements**, not 1100 - four times
+better than the 1 px scale filed here, and roughly **46 minutes** on a relay heard every ten
+seconds rather than the "just over three hours" recorded above. But a young chart is partial again,
+not full: at **107 measurements** - in the range the owner was looking at when asking for exact
+tiling - the trace covers only **39%** of the plot (428 of 1100 px), a milder recurrence of the
+same shape this issue describes.
+
+The owner weighed that and chose exact tiling over filling the plot, with the trade-off seen and
+accepted rather than overlooked. **This is recorded as a known accepted state, not an unfixed
+defect** - reopened so this file states plainly that the fit-to-viewport fix above is no longer in
+effect, rather than leaving a stale "fixed" status for the next reader to trust by mistake.
