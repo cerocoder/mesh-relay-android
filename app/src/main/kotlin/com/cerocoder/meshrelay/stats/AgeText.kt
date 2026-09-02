@@ -32,15 +32,35 @@ object AgeText {
     private const val HOUR = 60 * MINUTE
 
     /**
-     * [elapsedMillis] is `now - atMillis`. A negative value means the event is
-     * in the future - in practice, a timestamp of zero for a relay that has
-     * never sent a packet, subtracted from the current clock, would otherwise
-     * fall through to [RelativeAge.Seconds] and read "0s ago": the freshest
-     * thing on screen, for the one relay never heard from. So negative is
-     * [RelativeAge.Never] rather than clamped to zero.
+     * How far ahead of the displayed clock a timestamp may be and still be read
+     * as "just now".
+     *
+     * `RelativeTimeTicker` refreshes the displayed "now" every 1000 ms, so a
+     * packet can legitimately be up to one whole tick ahead of it. Two ticks of
+     * headroom absorbs that plus any scheduling delay, while staying far below
+     * any age a reader would notice being rounded.
+     */
+    private const val MAX_CLOCK_SKEW = 2 * SECOND
+
+    /**
+     * How long ago, in a shape a screen can render.
+     *
+     * A small *negative* elapsed time is a clock artefact, not a future event:
+     * the screens read "now" from `LocalRelativeClock`, which refreshes about
+     * once a second, so a packet that lands between two ticks is momentarily
+     * ahead of it. Those clamp to zero seconds - reading "Never" for the packet
+     * that arrived a moment ago was the defect this rule replaced.
+     *
+     * Beyond [MAX_CLOCK_SKEW] the timestamp is not a tick artefact but a
+     * nonsense value, and presenting it as the freshest thing on screen would be
+     * worse than admitting it cannot be placed.
+     *
+     * The genuine never-heard case does not come through here at all:
+     * [relativeTo] tests the zero sentinel before subtracting.
      */
     fun relative(elapsedMillis: Long): RelativeAge = when {
-        elapsedMillis < 0 -> RelativeAge.Never
+        elapsedMillis < -MAX_CLOCK_SKEW -> RelativeAge.Never
+        elapsedMillis < 0 -> RelativeAge.Seconds(0)
         elapsedMillis < MINUTE -> RelativeAge.Seconds((elapsedMillis / SECOND).toInt())
         elapsedMillis < HOUR -> RelativeAge.Minutes(
             minutes = (elapsedMillis / MINUTE).toInt(),
