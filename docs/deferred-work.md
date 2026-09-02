@@ -281,3 +281,57 @@ pin its claim a little more tightly than it does.
   A `my_node_num` cross-check on the handshake (comparing `NodeDirectory.localNodeNum` before and
   after) would close the second gap and is small if the field ever shows it: deliberately not
   added now, since the owner chose BLE-address identity knowing this trade.
+
+## Field fixes of 2026-09-02 — found by review, not yet built
+
+Both came out of reviews during `docs/superpowers/plans/2026-09-02-six-field-fixes.md`. Neither is a
+defect in what that plan shipped; both are work it deliberately did not widen into.
+
+- **[AGREED — implement next]** **Switching nodes must ask for confirmation.** The wipe added by
+  task 5 commits on *intent*, not on a successful handshake: `AppContainer.requestConnect` compares
+  the new BLE address against `statisticsAddress` and calls `engine.resetForNewNode()` before the
+  radio is contacted at all. So backing out to the device list and mistapping the adjacent row
+  destroys the session's relays, neighbours, series and node database before the other node has even
+  answered — with no confirmation and no undo, and statistics are not persisted. Mitigating, and the
+  reason this was not treated as a defect: that same mistap tears down the current link regardless,
+  so the connection was lost either way; only the statistics are the extra loss.
+
+  Notes for whoever builds it, so the shape is not rediscovered:
+  1. The confirmation has to sit **in front of** `requestConnect`, in `MainActivity`'s
+     `onSelectDevice` or in `DeviceListScreen` — `requestConnect` both wipes and connects, so a
+     dialog inside it would be asking after the fact.
+  2. It must appear **only when a wipe would actually happen**. First connect (`statisticsAddress`
+     null) and a repeat tap on the node already connected must stay silent — the repeat tap is the
+     designed way back into the statistics from the device list, and a dialog there would be noise
+     on the commonest action. That means exposing something like
+     `AppContainer.wouldDiscardStatistics(address: String): Boolean` rather than duplicating the
+     comparison in the interface.
+  3. `DeviceListScreen` has no confirmation dialog today. Match the shape `StatsTopBar` already uses
+     for Reset and Exit rather than inventing a third.
+  4. The text should name what is lost — statistics, node database, signal series — and that it is
+     not saved. Both locales, as ever.
+
+- **[PENDING — the owner's decision]** **The mirror of the own-node fix, in the Relays list.**
+  Task 4 removed our own node from Neighbours because it appears there with no SNR and no RSSI and
+  inflates the divisor every other neighbour's percentage uses. The same shape exists one list over
+  and is untouched: a packet from *another* node whose `relay_node` byte equals our own node's last
+  byte means **we** were the relay. Those echoes carry `rx_rssi == 0`, so `PacketClassifier.signalOf`
+  returns null and no SNR or RSSI is folded — but `foldRelayed` still increments that row's
+  `packetCount` and `totalRelayedPackets`, and `sortedRelays`' `share()` divides by that total. So a
+  signal-less row sits in a list about signal quality and skews every real relay's percentage.
+
+  **Why this is not simply "do what task 4 did".** Task 4's exclusion is exact: it compares a whole
+  node number, `ingest.fromNode == directory.localNodeNum`. Here the only thing available is a single
+  byte, and `Geo.lastByteOfNodeNum` maps `0x00` to `0xff`, so several real nodes can answer to our
+  byte. Excluding on the byte alone would suppress a genuine third-party relay that happens to share
+  it — trading a skewed percentage for a missing relay, which is the worse failure for a tool used to
+  decide where a repeater goes. Worth weighing before building:
+  1. exclude the byte entirely (simple, and can hide a real relay);
+  2. keep the row but drop it from `totalRelayedPackets` so other percentages are right (narrower,
+     but leaves a signal-less row on screen);
+  3. exclude only when the byte is unambiguous — `NodeDirectorySnapshot.matchingNodeNums(byte)`
+     returns exactly one node and it is ours — which is the same honesty rule the relay *naming* already
+     follows, and degrades to "leave it alone" when the byte is shared.
+
+  First step is cheap and is the owner's: look at the Relays list on the phone for a byte equal to the
+  last byte of the local node number, and say whether it is actually there and how large its share is.
