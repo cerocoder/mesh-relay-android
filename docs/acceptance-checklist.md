@@ -706,12 +706,79 @@ anywhere means the pitch and the mark size have drifted apart.
 ---
 
 
+## Group I — The six field fixes of 2026-09-02
+
+Build `d3277fb`. Item I4 **cannot be checked on a demo scenario**: the demo never emits packets from
+its own local node, so our node's absence from Neighbours there proves nothing. Use a real node.
+
+### I1. Scrolling does not flash the packet marker
+**Do:** On **Relays**, and again on **Neighbours**, scroll and fling hard, both directions.
+**Pass looks like:** the yellow "a packet just landed" marker appears on **one row at a time**, only
+on rows whose packet count is visibly moving. The defect looked like **many rows lighting at once**
+as they scrolled into view — that is the discriminator, not whether any yellow appears at all. The
+marker must still work: sit still on a busy relay and confirm it does flash.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### I2. A packet that just arrived reads 0, not "Never"
+**Do:** Watch the age on a busy relay's card for a minute.
+**Pass looks like:** it reads `0sec ago` when a packet lands, never `Never`. A relay genuinely never
+heard from must still read `Never` — that case has not been broken.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### I3. The database fields say so
+**Do:** Open a node card with database values, in English and in Spanish.
+**Pass looks like:** **Last DB SNR** and **Last DB heard** (Spanish: `Último SNR de la DB`,
+`Última recepción de la DB` — "DB" is left untranslated, matching the existing `source_db`).
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### I4. Our own node is out of the statistics — REAL NODE ONLY
+**Do:** Connect to a real node. Check **Neighbours**, the Direct count, and then open a Graph on any
+relay with *Use phone location* **off**.
+**Pass looks like:** your own node is absent from Neighbours; Direct counts only other nodes' traffic;
+and **the crosshair globe still resolves**. That last check is the important one — it proves our own
+position still reaches the node directory. If the globe went dead, the guard was placed one step too
+early and every node-stamped measurement lost its pin, with nothing on screen to say why.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### I5. A different node starts from nothing
+**Do:** Connect to node A (or a demo), let statistics build, then connect to a **different** one.
+Then reconnect to that same one again.
+**Pass looks like:** switching wipes relays, neighbours, counters and the node database; reconnecting
+to the same one loses nothing. Note there is **no confirmation yet** — that is agreed and pending in
+`deferred-work.md`, so a mistap on the device list currently costs the session.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### I6. Exit releases the process
+**Do:** Overflow menu → **Exit** → confirm. Try it once from a healthy connection and once while
+disconnected or retrying.
+**Pass looks like:** a confirmation first; then the notification clears, the app leaves recents, and
+`adb shell pidof com.cerocoder.meshrelay` returns nothing. **Then reconnect immediately** — a fast,
+normal connect means the GATT link was torn down cleanly. A slow first connect, or a failure, is the
+symptom of a half-open link and is the one failure this command must not cause.
+**Watch for:** up to ~5 seconds between confirming and the app vanishing, with no spinner. If it feels
+like a hang you will tap twice; the second tap is harmless but worth knowing.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 52
+- **Total items run:** _____ / 58
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT
