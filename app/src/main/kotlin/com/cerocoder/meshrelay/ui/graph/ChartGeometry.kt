@@ -41,27 +41,26 @@ object ChartGeometry {
     /**
      * One row of overscan at each edge.
      *
-     * A measurement is drawn as a disc of some radius, not as a mathematical
-     * point, so a row whose centre sits just *outside* the viewport still paints
-     * part of itself inside it. A window clipped exactly to the viewport would
-     * never draw those rows, and points would pop in and out at the top and
-     * bottom edges instead of sliding across them.
+     * A measurement is drawn as a 2x2 physical-pixel square, not as a
+     * mathematical point (decision 45), so a row whose centre sits just
+     * *outside* the viewport can still paint part of itself inside it. A window
+     * clipped exactly to the viewport would never draw those rows, and points
+     * would pop in and out at the top and bottom edges instead of sliding across
+     * them.
      *
      * (This row used to buy the polyline segments that join across the viewport
      * edge. The trace is points now - decision 40 - so that reason is gone; the
      * need for the row is not.)
      *
-     * **One row is enough while the point radius stays under `pxPerSample`
-     * pixels.** The nearest undrawn row above the viewport sits between two and
-     * three rows above the top edge, and the nearest one below sits between one
-     * and two rows below the bottom - so the bottom is the tighter of the two,
-     * with one row of margin in the worst case. At the screen's floor of `2f`
-     * pixels per sample - which since ruling 44 is the *smallest* value it ever
-     * passes, so it is also the worst case - and its `1.dp` radius that margin is
-     * 2 px against a radius of about
-     * 2.8 px on a 450 dpi phone, so a point centred just past the bottom edge can
-     * still clip under a pixel of itself in and out. If that radius is tuned
-     * upwards on the phone, this constant is what has to grow with it.
+     * **One row is comfortably enough.** The square's half-extent is 1 px in
+     * each direction, so a row's centre has to land within 1 px of the
+     * viewport's edge before any of its square crosses that edge. Even at the
+     * screen's floor of `2f` pixels per sample - the smallest gap this chart
+     * ever puts between two rows, and so the worst case - that 1 px half-extent
+     * is only half the gap between rows, meaning no row more than one away from
+     * the boundary can ever reach into the viewport. One row of overscan covers
+     * the worst case with a full pixel to spare, and has more room still at
+     * every fitted scale above the floor.
      */
     const val OVERSCAN_ROWS = 1
 
@@ -97,10 +96,11 @@ object ChartGeometry {
      * **The floor is what stops the fit from being absurd.** Without it two
      * measurements would be a plot-tall staircase, and - the reason it is `2f`
      * rather than something smaller - a long series would be squeezed below the
-     * point radius the chart draws with, merging consecutive dots into the solid
-     * band that ruling 40's discrete points exist to avoid. `2f` gives each dot
-     * two pixels of vertical room at a `1.dp` radius, which is the value ruling
-     * 41 established by measurement on hardware.
+     * size of the mark the chart draws with, merging consecutive dots into the
+     * solid band that ruling 40's discrete points exist to avoid. `2f` gives
+     * each dot's 2x2 physical-pixel square (decision 45) two pixels of vertical
+     * room - the same margin ruling 41 established by measurement on hardware,
+     * back when the mark was still a `1.dp` circle.
      *
      * **This is what makes `ROW_EPSILON` load-bearing.** A fitted scale is an
      * arbitrary `Float` - 15.94 for 69 measurements in an 1100 px plot - and
@@ -143,7 +143,7 @@ object ChartGeometry {
      *
      * **Deliberately not [visibleRows].** That function answers a different
      * question - which rows must be *drawn* - and its answer is wider, because a
-     * point centred just outside the viewport still paints part of its disc
+     * point centred just outside the viewport still paints part of its square
      * inside it and so has to be drawn. An overscan row is by definition not
      * displayed.
      *

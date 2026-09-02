@@ -644,12 +644,13 @@ Android available (14 or later); on older releases the failure mode does not exi
 ### H18. Points, the doubled scale, and dismissing the crosshair
 **Do:** Open a Graph with a good spread of measurements and switch **Auto scale** on. Then tap
 once on the plot, drag the crosshair, and double tap it.
-**Pass looks like:** the trace is discrete dots, not joined lines, and where the RSSI and SNR
+**Pass looks like:** the trace is discrete marks, not joined lines, and where the RSSI and SNR
 clouds cross **both colours stay visible** — that is the whole reason for the change (ruling 40).
-Dots are legible rather than merged into a blob at the doubled scale; if they merge, `PointRadius`
-is the constant to lower. A single tap places the crosshair with no perceptible delay, a drag
-still moves it and still does **not** scroll, and a double tap makes it and its globe disappear.
-A brief flicker of the crosshair during the double tap is expected and is documented in ruling 42.
+Each mark is a hard-edged 2x2 pixel square — ruling 45, at the owner's instruction after reading
+the chart on hardware — with no soft or antialiased fringe around it; a blurred or rounded-looking
+mark is a fail. A single tap places the crosshair with no perceptible delay, a drag still moves
+it and still does **not** scroll, and a double tap makes it and its globe disappear. A brief
+flicker of the crosshair during the double tap is expected and is documented in ruling 42.
 
 - [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 11cab7a
   Notes: PASS, measured rather than eyeballed. Auto scale on, 48 measurements: 1017 RSSI-blue pixels against 1274 SNR-green in the plot - both metrics present in comparable quantity, where a polyline left one all but absent. Median blob width 5 px for both (a 1 dp radius at density 450) and a median of 3 discrete blobs per row, so individual measurements are resolvable and not merged. PointRadius needs no tuning at this density. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe entirely.

@@ -9,11 +9,13 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.layout.onSizeChanged
 import com.cerocoder.meshrelay.stats.model.SignalSeries
+import kotlin.math.floor
 
 /**
  * The plot itself: two clouds of points, virtualised, drawn newest-at-the-top.
@@ -57,7 +59,7 @@ fun SignalChart(
     snrRange: ScaleRange,
     rssiColor: Color,
     snrColor: Color,
-    pointRadiusPx: Float,
+    pointSizePx: Float,
     onViewportHeight: (Float) -> Unit,
     onCrosshairAt: (Float) -> Unit,
     onCrosshairCleared: () -> Unit,
@@ -109,20 +111,20 @@ fun SignalChart(
         val window = ChartGeometry.visibleRows(scrollPx, size.height, series.size, pxPerSample)
         if (window.isEmpty) return@Canvas
 
-        drawMetric(series, window, scrollPx, pxPerSample, rssiRange, rssiColor, pointRadiusPx) { series.rssi(it) }
-        drawMetric(series, window, scrollPx, pxPerSample, snrRange, snrColor, pointRadiusPx) { series.snr(it) }
+        drawMetric(series, window, scrollPx, pxPerSample, rssiRange, rssiColor, pointSizePx) { series.rssi(it) }
+        drawMetric(series, window, scrollPx, pxPerSample, snrRange, snrColor, pointSizePx) { series.snr(it) }
     }
 }
 
 /**
- * One metric's points over [window]: one filled circle per row, always.
+ * One metric's points over [window]: one filled square per row, always.
  *
  * **The single-row case is gone because it became the general case.** The
  * polyline this replaced needed a special branch for a one-row window - a `Path`
  * with one `moveTo` and no `lineTo` strokes nothing at all, so "one measurement"
  * rendered as an empty chart - and needed the caller to hand it a stroke width
- * that a one-row window then had to reinterpret as a radius. A loop of circles
- * needs neither: one measurement is one circle, five thousand are five thousand,
+ * that a one-row window then had to reinterpret as a radius. A loop of squares
+ * needs neither: one measurement is one square, five thousand are five thousand,
  * and there is no shape a window of any length can degenerate into.
  *
  * Not `inline`, though it takes a lambda and runs per frame: an inline function
@@ -137,19 +139,26 @@ private fun DrawScope.drawMetric(
     pxPerSample: Float,
     range: ScaleRange,
     color: Color,
-    pointRadiusPx: Float,
+    pointSizePx: Float,
     valueOf: (index: Int) -> Float,
 ) {
     val widthPx = size.width
+    val halfPointSizePx = pointSizePx / 2f
 
     for (row in window.firstRow..window.lastRow) {
-        drawCircle(
+        // floor()'d before the half-size offset is applied, and that order is
+        // load-bearing (decision 45, owner's instruction after reading the chart
+        // on hardware): canvas units here are physical pixels, and an
+        // axis-aligned rect whose edges sit on exact integer pixel boundaries
+        // covers whole pixels only, so the rasteriser has no partial coverage to
+        // antialias. A fractional centre would land the rect mid-pixel and bring
+        // the soft fringe straight back - do not "simplify" this away.
+        val x = floor(xOfRow(series, row, range, widthPx, valueOf))
+        val y = floor(ChartGeometry.yOf(row, scrollPx, pxPerSample))
+        drawRect(
             color = color,
-            radius = pointRadiusPx,
-            center = Offset(
-                x = xOfRow(series, row, range, widthPx, valueOf),
-                y = ChartGeometry.yOf(row, scrollPx, pxPerSample),
-            ),
+            topLeft = Offset(x - halfPointSizePx, y - halfPointSizePx),
+            size = Size(pointSizePx, pointSizePx),
         )
     }
 }

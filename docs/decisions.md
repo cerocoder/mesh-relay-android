@@ -503,3 +503,33 @@ Ruling 44: the plot's vertical scale is fitted to the viewport, not fixed - `PX_
   while the chart is fitting the scale changes with every measurement, so the plot compresses
   gently as it fills, with the top edge fixed at row 0. Acceptance item H20 is what settles
   whether that compression reads as distracting on the phone.
+
+### 45
+
+Ruling 45: the plot's mark is a hard-edged 2x2 physical-pixel square, not the `1.dp` antialiased
+  circle ruling 41 established - at the owner's instruction after reading the chart on hardware:
+  "the point is not a square. The point MUST be a square with 2x2 pix. Don't antialias them." A
+  footprint measured on the owner's 450 dpi device showed the circle rendering as a roughly 5x4
+  blob with a soft, partially-covered pixel on every edge. `SignalChart.drawMetric` now calls
+  `drawRect` with `Size(pointSizePx, pointSizePx)`; `SignalGraphScreen`'s `PointRadius = 1.dp` is
+  gone, replaced by `POINT_SIZE_PX = 2f`, a plain `Float` never converted through `LocalDensity`.
+  **Pixels, not `dp`.** Canvas units here are already physical pixels; a `dp` value would size the
+  mark differently on every phone this app runs on, which is the opposite of what "2x2 pix" asks
+  for. The mark stays a fixed physical size on every screen; the spacing between marks - the
+  fitted `pxPerSample` - is what varies with the device and the data, never the mark itself.
+  **Integral coordinates, not an antialiasing flag.** `drawMetric` takes `floor()` of the
+  geometry's x and y before building the rect, so every mark's edges land on exact integer pixel
+  boundaries; an axis-aligned rect at integer boundaries covers whole pixels only, so the
+  rasteriser has no partial coverage to soften and the edges come out hard with nothing to
+  disable. `drawIntoCanvas` with a `Paint(isAntiAlias = false)` was rejected: it allocates a
+  `Paint` object on every draw call, twice a frame (once per metric), and integral coordinates
+  already give the same hard edge for free.
+  **Centring convention:** the square's top-left is `floor(centre) - pointSizePx / 2` in each
+  axis - `floor(centre) - 1` at the 2 px size specified here - so the square's geometric centre
+  lands on the snapped sample point rather than at its corner.
+  `ChartGeometry.OVERSCAN_ROWS` stays at one row: the square's half-extent is 1 px, comfortably
+  inside the `2f` floor `MIN_PX_PER_SAMPLE` guarantees between rows, so one row of overscan still
+  has room to spare.
+  Cost if wrong: a 2 px mark is small on a high-density screen and may read fainter than the old
+  circle's roughly 3 px fill - that is the first thing to raise if the chart reads as too faint on
+  the phone, and the fix is a larger `POINT_SIZE_PX`, kept in whole pixels.

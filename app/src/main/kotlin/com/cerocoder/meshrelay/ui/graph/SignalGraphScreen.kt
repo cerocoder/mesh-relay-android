@@ -72,24 +72,6 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private val CrosshairStroke = 1.dp
-/**
- * The radius of one measurement's dot.
- *
- * Deliberately not the 1.5 dp stroke the polyline used before decision 40: at
- * this project's target densities that is roughly 4 px, and at the
- * [MIN_PX_PER_SAMPLE] floor of 2 px per row it would merge consecutive samples of
- * one metric into a solid blob - which would reproduce the very overlap decision
- * 40 exists to remove.
- *
- * The constraint, for whoever tunes it on a phone: small enough that where the
- * RSSI and SNR clouds cross, both stay visible, and large enough that
- * consecutive samples of one metric still read as a trace rather than as
- * confetti. The floor is the case to judge it against - the fitted scale is only
- * ever taller, so a radius that works at the floor works everywhere. If it grows
- * past [MIN_PX_PER_SAMPLE] pixels, [ChartGeometry.OVERSCAN_ROWS] has to grow with
- * it - that KDoc says why.
- */
-private val PointRadius = 1.dp
 private val ScrollbarWidth = 12.dp
 private val ScrollbarCorner = 6.dp
 private val GlobeSize = 40.dp
@@ -97,6 +79,22 @@ private val ScreenPadding = 16.dp
 private val CrosshairLabelPadding = 8.dp
 private val LabelSpacing = 12.dp
 private val SwitchLabelSpacing = 8.dp
+
+/**
+ * The side length of one measurement's mark, in physical pixels - decision 45,
+ * at the owner's instruction after reading the chart on hardware: *"the point is
+ * not a square. The point MUST be a square with 2x2 pix. Don't antialias them."*
+ *
+ * **Pixels, not `dp`, and deliberately so.** Canvas units in [SignalChart] are
+ * already physical pixels, so converting a `dp` value through [LocalDensity]
+ * would size the mark differently on every phone this app runs on - exactly the
+ * opposite of what a "2x2 pix" instruction means. This constant is
+ * density-independent on purpose: the mark is the same 2x2 physical pixels on a
+ * 450 dpi phone and a 160 dpi one alike. What *does* vary with the screen and
+ * with how much is on it is the spacing between marks - `pxPerSample`, fitted
+ * per [MIN_PX_PER_SAMPLE] - never the mark itself.
+ */
+private const val POINT_SIZE_PX = 2f
 
 /**
  * The shortest a measurement's row may be - the floor under the fitted scale, not
@@ -112,12 +110,12 @@ private val SwitchLabelSpacing = 8.dp
  * fixing the scale at all. The chart now fits the retained series to the plot and
  * falls back to this floor once fitting would crush the points together.
  *
- * **`2f` and not less**, because a dot has a radius: at the `1.dp` [PointRadius]
- * below, two pixels of vertical room per measurement is what keeps consecutive
- * dots apart, and squeezing further merges them into the solid band ruling 40's
- * discrete points exist to avoid. It is also the changeover point - the series
- * length past which the chart scrolls again - which on the owner's 1100 px plot
- * is 550 measurements.
+ * **`2f` and not less**, because a dot has a footprint: at the 2x2 px
+ * [POINT_SIZE_PX] square (decision 45), two pixels of vertical room per
+ * measurement is what keeps consecutive dots apart, and squeezing further merges
+ * them into the solid band ruling 40's discrete points exist to avoid. It is
+ * also the changeover point - the series length past which the chart scrolls
+ * again - which on the owner's 1100 px plot is 550 measurements.
  *
  * A `Float` because requirement 13 says the coefficient may be fractional, and
  * because the fitted value above it almost always is.
@@ -308,7 +306,6 @@ fun SignalGraphScreen(
 
     val labelRows = ChartGeometry.labelRows(effectiveScroll, viewportPx, shown.size, pxPerSample)
     val locale = displayLocale()
-    val pointRadiusPx = with(LocalDensity.current) { PointRadius.toPx() }
 
     // A wheel notch or a hardware scroll only: a touch drag on the plot belongs
     // to the crosshair, which consumes it before this ever sees it.
@@ -439,7 +436,7 @@ fun SignalGraphScreen(
                         snrRange = snrRange,
                         rssiColor = RssiTrack,
                         snrColor = SnrTrack,
-                        pointRadiusPx = pointRadiusPx,
+                        pointSizePx = POINT_SIZE_PX,
                         onViewportHeight = { viewportPx = it },
                         onCrosshairAt = { crosshairY = it },
                         onCrosshairCleared = { crosshairY = null },
