@@ -37,7 +37,6 @@ import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.settings.AppSettings
 import com.cerocoder.meshrelay.settings.GaugeMode
-import com.cerocoder.meshrelay.settings.MapProvider
 import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.SeriesKey
@@ -211,7 +210,6 @@ fun MeshRelayNavHost(
             snapshot = snapshot,
             series = series,
             gaugeMode = settings.gaugeMode,
-            mapProvider = settings.mapProvider,
             container = container,
             onBack = { backStack.pop() },
             modifier = modifier,
@@ -427,7 +425,6 @@ private fun GraphDestination(
     snapshot: StatsSnapshot,
     series: SignalSeries?,
     gaugeMode: GaugeMode,
-    mapProvider: MapProvider,
     container: AppContainer,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -458,7 +455,6 @@ private fun GraphDestination(
                 rssiStats = relay.rssi,
                 snrStats = relay.snr,
                 gaugeMode = gaugeMode,
-                mapProvider = mapProvider,
                 lastPacketAtMillis = relay.lastPacketAtMillis,
                 onBack = onBack,
                 modifier = modifier,
@@ -475,7 +471,6 @@ private fun GraphDestination(
                 rssiStats = neighbour.rssi,
                 snrStats = neighbour.snr,
                 gaugeMode = gaugeMode,
-                mapProvider = mapProvider,
                 lastPacketAtMillis = neighbour.lastPacketAtMillis,
                 onBack = onBack,
                 modifier = modifier,

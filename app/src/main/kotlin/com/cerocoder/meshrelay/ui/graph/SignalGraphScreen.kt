@@ -56,11 +56,11 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
-import com.cerocoder.meshrelay.settings.MapProvider
 import com.cerocoder.meshrelay.stats.SignalScales
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.ui.common.LocalMapProvider
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.MapLinks
 import com.cerocoder.meshrelay.ui.common.StatsFormat
@@ -151,7 +151,6 @@ fun SignalGraphScreen(
     rssiStats: SignalStats,
     snrStats: SignalStats,
     gaugeMode: GaugeMode,
-    mapProvider: MapProvider,
     lastPacketAtMillis: Long,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
@@ -419,7 +418,6 @@ fun SignalGraphScreen(
                             pxPerSample = pxPerSample,
                             viewportPx = viewportPx,
                             locale = locale,
-                            mapProvider = mapProvider,
                         )
                     }
                 }
@@ -487,13 +485,16 @@ private fun BoxScope.Crosshair(
     pxPerSample: Float,
     viewportPx: Float,
     locale: Locale,
-    mapProvider: MapProvider,
 ) {
     val row = ChartGeometry.rowAtClamped(touchY, scrollPx, pxPerSample, series.size)
     val index = ChartGeometry.indexOfRow(row, series.size)
     val y = ChartGeometry.yOf(row, scrollPx, pxPerSample)
     val position = series.positionOf(index)
     val uriHandler = LocalUriHandler.current
+    // The one delivery mechanism for this preference, not a second one: PositionLine
+    // reads the same LocalMapProvider, rather than this composable taking a
+    // mapProvider parameter threaded down from SignalGraphScreen.
+    val mapProvider = LocalMapProvider.current
 
     // onSurface rather than a new entry in Color.kt: it reads in both themes, and
     // the two metric colours are the ones that carry meaning here.
@@ -571,7 +572,7 @@ private fun BoxScope.Crosshair(
             // Spanish decimal comma would break the query string. Which service
             // it opens is AppSettings.mapProvider (decision 43); this globe is
             // one tap target with no room to offer both, unlike PositionLine's
-            // three separate buttons.
+            // own map button.
             position?.let {
                 uriHandler.openUri(MapLinks.forProvider(mapProvider, it.latitude, it.longitude))
             }
@@ -786,7 +787,6 @@ private fun SignalGraphPopulatedPreview() {
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             onBack = {},
         )
@@ -807,7 +807,6 @@ private fun SignalGraphSingleMeasurementPreview() {
             rssiStats = SampleData.graphSingleRssiStats,
             snrStats = SampleData.graphSingleSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = SampleData.graphSeriesSingle.atMillis(0),
             onBack = {},
         )
@@ -827,7 +826,6 @@ private fun SignalGraphEmptyPreview() {
             rssiStats = SignalStats.EMPTY,
             snrStats = SignalStats.EMPTY,
             gaugeMode = GaugeMode.COMPLEX,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = 0L,
             onBack = {},
         )
@@ -846,7 +844,6 @@ private fun SignalGraphAutoScalePreview() {
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.SIMPLE,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             onBack = {},
         )
@@ -866,7 +863,6 @@ private fun SignalGraphFrozenPreview() {
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             onBack = {},
         )
@@ -884,7 +880,6 @@ private fun SignalGraphDarkPreview() {
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
-            mapProvider = MapProvider.GOOGLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             onBack = {},
         )

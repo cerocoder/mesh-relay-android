@@ -101,17 +101,23 @@ fun PositionLine(
         val lon = info.lon
         if ((lat != null && lon != null) || meshviewUrl != null) {
             // FlowRow, not Row, and this is field issue F-3 rather than a
-            // preference. A positioned node offers two links at once, and a plain
-            // Row hands each child its measured width until the space runs out and
-            // then squeezes whatever is left: on a 1080 px phone the first took
-            // most of that width and Meshview was measured narrower than one of
-            // its words. It did not clip - it wrapped, to about a character a
-            // line, and grew tall enough to push the list (the weight(1f) sibling
-            // on the relay screen) down to a sliver, and on a node card it
-            // rendered no label glyph at all: an invisible but still clickable
-            // strip where the action should have been. The links are also the
-            // widest text this app lays out and the ones that grow most in
-            // Spanish, so they need a container that can take a second line.
+            // preference. Measured when this row carried three links at once -
+            // Google Maps, OpenStreetMap and Meshview, before the Map provider
+            // setting collapsed the first two into one: a plain Row hands each
+            // child its measured width until the space runs out and then
+            // squeezes whatever is left. On a 1080 px phone the first two took
+            // 901 px between them and Meshview was measured at 111 px, which is
+            // narrower than one of its words. It did not clip - it wrapped, to
+            // about a character a line, and grew 958 px tall. On the relay
+            // screen that pushed the list (the weight(1f) sibling) down to a
+            // 128 px slit, and on a node card it rendered no label glyph at
+            // all: an invisible but still clickable strip where the action
+            // should have been. The row carries two links now, not three, but
+            // the links are still the widest text this app lays out and the
+            // ones that grow most in Spanish, so they still need a container
+            // that can take a second line rather than a plain Row - the
+            // measurement above is the evidence that choice was never a taste
+            // call.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (lat != null && lon != null) {
                     // One link, not two: the Map provider setting decides which.

@@ -267,14 +267,19 @@ class StatsFormatTest {
 
     @Test
     fun `nodeDatabaseLastHeard renders an absolute date, not a relative age`() {
-        // Not pinned to a literal rendering: the date half is FormatStyle.SHORT,
-        // which - verified against real java.time output (OpenJDK 17) - renders
-        // a two-digit year under Locale.US ("8/26/25"), not a four-digit one, so
-        // this only pins that the year 2025 appears in *some* form (either width)
-        // and that no relative "n ago"/"Xs ago" wording (what AgeText produces
-        // elsewhere in this app) is present. Kills a mutant that reintroduces
-        // relative, AgeText-style output for this one field (mesh_stats.py:1891
-        // is the field that must render absolutely, not relatively).
+        // Not pinned to a literal rendering: CLDR's own date output differs
+        // between the JDK 17 this was checked against locally and the JDK 21
+        // CI runs on. This only pins that the result is an absolute calendar
+        // date: it must contain the four-digit year - FormatStyle.MEDIUM,
+        // verified against real java.time output (OpenJDK 17), does not
+        // truncate it the way FormatStyle.SHORT does - which no relative
+        // "n ago"/"Xs ago" rendering (what AgeText produces elsewhere in this
+        // app) ever would, and must not contain the word "ago" itself. The year
+        // is load-bearing here specifically: unlike graphTimestamp's running
+        // log, this field's own KDoc is why it can genuinely be weeks old.
+        // Kills a mutant that reintroduces relative, AgeText-style output for
+        // this one field (mesh_stats.py:1891 is the field that must render
+        // absolutely, not relatively).
         val result = StatsFormat.nodeDatabaseLastHeard(
             1_756_219_512,
             Locale.US,
@@ -282,7 +287,7 @@ class StatsFormatTest {
             ZoneId.of("Europe/Madrid"),
         )
         assertTrue("expected a non-blank result, got <$result>", result.isNotBlank())
-        assertTrue("expected the year 2025 in <$result>", result.contains("2025") || result.contains("25"))
+        assertTrue("expected the year 2025 in <$result>", result.contains("2025"))
         assertTrue("expected no relative-age wording in <$result>", !result.contains("ago"))
     }
 

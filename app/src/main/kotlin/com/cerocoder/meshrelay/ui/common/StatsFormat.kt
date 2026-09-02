@@ -272,31 +272,39 @@ object StatsFormat {
 
     /**
      * A node database timestamp (`NodeRecord.lastHeardEpochSeconds`) as an
-     * absolute, locale-ordered local date and time. Ports the `%Y-%m-%d
-     * %H:%M:%S` mesh_stats.py:1891 builds via `datetime.fromtimestamp(ts)` -
-     * but locale-aware rather than the original's fixed ISO-like pattern: a
-     * Spanish reader expects day-before-month, which
+     * absolute local date and time, date first. Ports the `%Y-%m-%d %H:%M:%S`
+     * mesh_stats.py:1891 builds via `datetime.fromtimestamp(ts)` - but
+     * locale-aware rather than the original's fixed ISO-like pattern: a Spanish
+     * reader expects day-before-month, which
      * [DateTimeFormatter.ofLocalizedDate] resolves from [locale] instead of a
-     * hardcoded pattern string. [FormatStyle.SHORT] is the date style used - the
-     * only built-in style that stays numeric, matching what the rest of this
-     * app's absolute timestamps show (see [graphTimestamp]).
+     * hardcoded pattern string. The composition order (date, then clock) is
+     * fixed by this function, not by [locale] - unlike [graphTimestamp]'s
+     * running-log fields, this is the one field in the app where the year is
+     * load-bearing (see below), so [FormatStyle.MEDIUM] is the date style used
+     * here rather than [FormatStyle.SHORT]: `SHORT` truncates the year to two
+     * digits under `Locale.US` (`8/26/25`, verified against real `java.time`
+     * output, OpenJDK 17), and a database entry that can be weeks old needs the
+     * full year to read unambiguously.
      *
      * The clock half is built from [clockPattern] and governed by [timeFormat],
      * not by [locale] - see [clockPattern]'s own KDoc for why a pattern rather
      * than a localized formatter. It always includes seconds, matching the
      * original's `%S`. This used to be one call to
-     * [DateTimeFormatter.ofLocalizedDateTime]; it is split into its two halves
-     * now for the same reason [graphTimestamp] is, so both clocks in the app are
-     * built by one rule. Unlike [FormatStyle.LONG]/`FULL`, neither half prints a
-     * zone name, which would require a zone-aware temporal
-     * ([java.time.ZonedDateTime]) this function deliberately does not carry
-     * past formatting (see below).
+     * [DateTimeFormatter.ofLocalizedDateTime]; splitting it into its own date
+     * and clock halves is what lets [timeFormat] govern the clock at all,
+     * without the date losing its shape - unlike [FormatStyle.LONG]/`FULL`,
+     * neither half prints a zone name, which would require a zone-aware
+     * temporal ([java.time.ZonedDateTime]) this function deliberately does not
+     * carry past formatting (see below).
      *
      * This is the one field in this app that renders an absolute time rather
      * than a relative [AgeLabel] age - see `NodeCard`'s own KDoc for why: a
      * database entry, unlike every session-scoped signal history elsewhere in
      * this app, can genuinely be weeks old, and `AgeText` has no week/month
-     * bucket because it was built for ages that never exceed a few hours.
+     * bucket because it was built for ages that never exceed a few hours. That
+     * is also why the year is load-bearing here in a way it is not for
+     * [graphTimestamp]'s own running log, whose measurements are never more
+     * than a session old.
      *
      * [zone] defaults to [ZoneId.systemDefault] - the device's own configured
      * zone - matching the original's `datetime.fromtimestamp`, which reads
@@ -307,9 +315,9 @@ object StatsFormat {
      */
     fun nodeDatabaseLastHeard(epochSeconds: Int, locale: Locale, timeFormat: TimeFormat, zone: ZoneId = ZoneId.systemDefault()): String {
         val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
+        val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.MEDIUM).withLocale(locale)
         val time = DateTimeFormatter.ofPattern(clockPattern(timeFormat), locale)
-        val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
-        return "${time.format(localDateTime)} ${date.format(localDateTime)}"
+        return "${date.format(localDateTime)}, ${time.format(localDateTime)}"
     }
 
     /**

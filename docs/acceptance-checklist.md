@@ -789,6 +789,14 @@ relative age (`5min ago`) on screen is unaffected, since it carries no clock at 
 a time around midnight reads `12:0x:xx AM` and around noon `12:0x:xx PM`, never `00`. In Spanish,
 both forms still print the date day-before-month (`21/8/26`), and the labels fit.
 
+**Check specifically: Last DB heard's own date.** This field's *date* is untouched by the Time
+setting — only its clock changes — and it must keep the shape it always had: a full month name and a
+**four-digit year**, date first and the clock after (e.g. `Aug 26, 2025, 16:45:12`), never a short
+numeric date and never a two-digit year (`8/26/25`). This is the one field in the app where the year
+matters — a database entry can genuinely be weeks old — and it is what this round of fixes repaired
+after an earlier draft accidentally reshaped it. Check it in both Time settings and in Spanish
+(`26 ago 2025, 16:45:12`).
+
 - [ ] Ran on: __________________ Result: __________________________________________________
 
 ---
