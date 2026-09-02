@@ -142,3 +142,53 @@ These are not follow-ups. They are the state of the branch.
   it is the honest reading of a nullable field, and a transport that completes a handshake without
   `my_info` would land on it. If it is ever to be *tested*, a demo transport that omits `my_info`
   is what would do it.
+
+## The Graph command (2026-09-02)
+
+- **Background position stamping.** From Android 10 an app receives location updates while
+  backgrounded only if its foreground service declares `android:foregroundServiceType="location"`;
+  this app's declares `connectedDevice`. So with the screen on every measurement is stamped, and
+  with the screen off under background collection, samples on API 29+ fall back to the local
+  node's position. Adding the type would also add `FOREGROUND_SERVICE_LOCATION` to the
+  store-visible permission set - a second permission change the Graph design did not ask for.
+  **Awaiting the owner's decision**; acceptance item H10 is what finds out what the phone
+  actually does.
+- **The series watch stays armed while the app is backgrounded.** `DisposableEffect` fires when
+  the destination leaves the composition, and pressing Home does not - the window is not detached,
+  so the composition outlives `onStop`. The engine keeps re-snapshotting the watched subject for a
+  chart nobody is looking at. Bounded rather than a leak: snapshot building continues while
+  backgrounded anyway, because `collectAsState` keeps the snapshot subscribed, so this is extra
+  array copying and not a new wake-up path. `repeatOnLifecycle(STARTED)` around the watch would
+  close it. **Awaiting the owner's decision** - changing when a watch arms is a design choice.
+- **A NaN `rx_snr` propagates into the scales.** `SignalStats.plus` uses `minOf`/`maxOf`, which
+  propagate NaN, so one malformed packet makes a node's statistics NaN and `scaleRange` returns
+  `ScaleRange(NaN, NaN)` under Auto scale. **Pre-existing and wider than the Graph** - the same
+  statistics already feed every gauge in the application. Not introduced by this branch; recorded
+  because the Graph is where it was noticed.
+- **The zoom control** (2x, 4x pixels per measurement, and fractions below 1 for scaling down).
+  `ChartGeometry` takes `pxPerSample` in every signature and is tested at 0.1, 1 and 4;
+  `SignalGraphScreen` fixes it at 1. Deferred at the owner's request; adding a control is a value
+  to pass, not a restructuring.
+- **Persisting series across launches.** Statistics remain a single session, per decision 8 of the
+  stage-1 spec. Exporting a chart or its data is out of scope for the same reason.
+- **A chart for a remote node.** `Screen.RemoteNode` has no Graph command: the measurements there
+  belong to the relay that carried them, which has its own chart.
+- **SNR prints to whole units in the bars and to a tenth in the crosshair**, on the same screen -
+  the same reading can appear as `4` above the plot and `4,5` below the rule. `Pic1.pdf` shows
+  `4.5 dB` in the crosshair, so the crosshair is right and the bars' precision is the older
+  choice. **Awaiting the owner.**
+- **The crosshair does not appear until the plot is first touched.** Spec section 8.7's wording
+  supports this; `Pic1.pdf`'s sketch shows a crosshair on an unopened screen. Two lines to seed
+  row 0 if the owner wants it. **Awaiting the owner.**
+- **Auto scale is disabled when the bars have data but the series is empty**, though it could
+  still usefully move the bars' borders in that state.
+- **`SignalSeries`'s constructor is public** while both its KDoc and `SignalSeriesBuffer`'s say the
+  value is built only by `snapshot()`. `internal` would make the documented rule enforced rather
+  than advisory.
+- **`SignalSeriesBuffer.clear()` is unreferenced.** `resetStatistics()` clears the map and discards
+  the buffers whole. The method is spec-mandated (section 5.2) and tested, so it is not dead by
+  accident - but a reader will ask.
+- **`LocationAvailability.granted()`'s any-vs-all semantics have no test.** It is the
+  behaviourally interesting half of the class (a user granting only "Approximate" must count as
+  granted) and needs a `Context`, so covering it means Robolectric, which this project does not
+  use.

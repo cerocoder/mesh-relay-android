@@ -451,12 +451,132 @@ same phone).
 
 ---
 
+## Group H — The Graph command (added 2026-09-02)
+
+Nothing in this group has ever been run. CI proves the branch compiles and its unit tests pass;
+no reviewer has seen a pixel of it, and this project has no Compose test harness.
+
+### H1. The overflow menu reaches the Graph from both subjects
+**Do:** Open a **relay** detail screen. Confirm a `⋮` button in the top right, tap it, tap
+**Graph**. Go back, open a **neighbour** detail screen, and do the same.
+**Pass looks like:** the button appears on both; both open a chart titled for that subject.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H2. The chart matches the drawing
+**Do:** With a relay that has heard a few hundred packets, read the screen against `Pic1.pdf`.
+**Pass looks like:** title, two switches stacked and right-aligned under the app bar, the RSSI and
+SNR bars, a `Time` field above the plot, the scrollable plot, a `Time` field below it. Two lines,
+green for SNR and blue for RSSI — the same colours as the bars.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H3. Newest at the top, and arriving data does not yank the view
+**Do:** Watch a live relay. Scroll down into the history and wait for new packets to arrive.
+**Pass looks like:** the newest measurement is at the top; while scrolled down, the measurement
+under your eye does not move as new ones arrive.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H4. Freeze holds the drawing; collection continues
+**Do:** Switch **Freeze** on over a busy relay. Wait a minute. Switch it off.
+**Pass looks like:** nothing on screen moves while frozen — not the plot, not the bars, not the
+scales. Switching off redraws complete, including everything collected while it was held.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H5. Auto scale moves both the bars and the plot
+**Do:** Switch **Auto scale** on. It is off by default.
+**Pass looks like:** the left and right borders of *both bars* and of the plot become the observed
+minimum and maximum. Turn Freeze on as well and confirm the scale then holds.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H6. The crosshair and the globe
+**Do:** Touch the plot. Drag the line up and down. Tap the globe.
+**Pass looks like:** a horizontal rule with the timestamp above it, RSSI and SNR below it in their
+own colours, and a globe at its right. Google Maps opens at that measurement's position. On a
+measurement with no stored position the globe is greyed out. With TalkBack on, the globe says
+whether the position came from the node or from the phone.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H7. The gesture split — the most likely thing to feel wrong
+**Do:** On the plot, drag slowly, then flick fast. Then drag the scrollbar on the right edge.
+**Pass looks like:** a drag on the plot moves the crosshair and does **not** also scroll; the
+scrollbar is what scrolls. Also confirm the 12 dp scrollbar is actually grabbable — it is below
+the 48 dp interactive minimum, and the whole bar rather than just the thumb is draggable.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H8. The `Time` fields name the rows actually on screen
+**Do:** Scroll to a position that is neither end. Compare both `Time` fields against the topmost
+and bottom points you can see, using the crosshair to read each one.
+**Pass looks like:** they match exactly. Off by one measurement means the label window regressed
+to the drawing window.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H9. Spanish
+**Do:** Switch the app to Spanish and repeat H2 and H6. Then raise the system font scale.
+**Pass looks like:** `Escala automática` fits beside its switch without wrapping badly or
+clipping; the `Hora:` fields fit on one line; the crosshair's three labels ellipsise rather than
+cut mid-glyph and do not collide with the globe. **Read this off `uiautomator dump`, not off a
+screenshot** — every layout defect in this project was found in `bounds`.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H10. Use phone location, and refusing it
+**Do:** Confirm **Use phone location** is on by default in Settings with its summary underneath.
+Walk a few metres and check the globes. Switch it off, walk again, check the globes' spoken
+descriptions. Separately, on a fresh install, deny the location permission at first connect.
+**Pass looks like:** on, pins follow the phone and say "from the phone"; off, they say "from the
+node" and the phone's GPS is not used. A refusal is **not** an error: the app connects, collects,
+and every measurement falls back to the node. Note whether measurements taken with the screen off
+still carry a phone position — that answer decides the `foregroundServiceType` question in
+`deferred-work.md`.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H11. Rotation, reset and subject switching
+**Do:** Rotate the phone with the Graph open, frozen and scrolled down — **on a deliberately quiet
+relay**, one that has not heard a packet in a while. Then reset the statistics from Settings with a
+chart open. Then go Graph → back → a *different* subject's Graph, quickly.
+**Pass looks like:** it comes back frozen, on the same subject, with the trace still there (scroll
+position is not saved and returning to the top is expected). The reset falls to the empty state
+rather than crashing. No frame of the previous subject's trace appears. The quiet-relay rotation is
+the one path whose correctness was argued from framework source rather than observed.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H12. Backgrounded with a chart open
+**Do:** Open the Graph on a busy relay, press Home, return after several minutes.
+**Pass looks like:** the chart is live and complete. Note any battery or CPU attributable to the
+watch staying armed while backgrounded — that is a known, recorded consequence, and this item is
+how its size gets measured.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 32
+- **Total items run:** _____ / 44
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

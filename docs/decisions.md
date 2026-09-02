@@ -278,3 +278,100 @@ Ruling 28: do NOT delete this SDD workspace yet, though the final review is clea
   git-ignored directory survives slightly longer than the process intends. Delete it once the user
   confirms the seventh gate is green.
 
+
+### 29
+
+Ruling 29: 5000 measurements per relay and per neighbour, in six primitive arrays.
+  25 bytes per measurement, so 125 KB per subject, about 7.5 MB for a typical session of sixty
+  subjects and about 32 MB in the theoretical worst case - the largest allocation in the
+  application, stated here rather than discovered in a heap dump. An object per measurement
+  would cost more than twice that. Cost if wrong: a low-memory phone in a long survey.
+  `SignalSeriesBuffer.MAX_SAMPLES` is the one line to change.
+
+### 30
+
+Ruling 30: *Use phone location* ON falls back to the node; OFF never falls back to the phone.
+  The asymmetry is deliberate. ON is a preference for precision, so a missing fix degrades to
+  the node's position rather than leaving the globe blank, and the origin recorded with each
+  sample keeps it honest. OFF is a request that the phone's GPS not be used, so honouring it
+  means a sample with no position at all. Cost if wrong: a reader who assumes symmetry misreads
+  the pins. Pinned by two engine tests.
+
+### 31
+
+Ruling 31: the application gains unrestricted ACCESS_FINE_LOCATION and ACCESS_COARSE_LOCATION.
+  Visible on any store or F-Droid-style listing. The `maxSdkVersion="30"` entry that existed for
+  pre-Android-12 BLE scanning is superseded. BLUETOOTH_SCAN keeps `neverForLocation`, which stays
+  true: the fix comes from the GNSS, not from a scan. A `uses-feature` entry declares
+  `android.hardware.location.gps` **not required**, because ACCESS_FINE_LOCATION otherwise implies
+  a required GNSS feature and would filter the app off GPS-less devices - which would contradict
+  code that treats a missing GPS provider as survivable. Cost if wrong: a permission the user did
+  not expect. The *Use phone location* switch is the escape hatch, and it stops the updates
+  rather than ignoring them.
+
+### 32
+
+Ruling 32: the graph area's drag moves the crosshair; the scrollbar scrolls.
+  Only one of the two can win a touch gesture. Requirement 9 asks for a crosshair on the plot and
+  `Pic1.pdf` draws a scrollbar down the right edge, so the plot owns the crosshair and the bar
+  owns scrolling. Cost if wrong: the biggest target on the screen does not scroll, which is
+  unusual on a phone. This is the item to judge in the hand, not in a review.
+
+### 33
+
+Ruling 33: the series publish guard is `(key, resetEpoch, totalAppended)`, not `(key, totalAppended)`.
+  `resetStatistics()` clears the series map so a fresh buffer restarts at 0, but the command loop
+  drains every queued command before publishing once. A reset plus N frames arriving in one batch
+  therefore takes `totalAppended` N -> 0 -> N with entirely different contents; a two-term guard
+  sees no change and the chart keeps drawing the session that was reset away. Narrow, real, and
+  invisible to any test that does not queue a reset and packets together. Cost if wrong: one Int
+  field and one comparison term.
+
+### 34
+
+Ruling 34: the series publish is gated on `watchedSeries != null` alone. The subscriber-count
+  gate was removed, **deliberately overriding spec section 6.4**, which names both.
+  `subscriptionCount` is a conflating StateFlow: unsubscribe, miss a publish, resubscribe before
+  the engine's collector is dispatched, and `map { it > 0 }.distinctUntilChanged()` sees
+  `true -> true`, emits no refresh, and a quiet relay's chart holds a stale series indefinitely.
+  The two gates were redundant - `watchedSeries` is non-null only while a chart is open, which is
+  exactly when publishing is wanted - so removing the count closes the hole structurally instead
+  of making correctness depend on effect ordering in the navigation host. Cost if wrong: one
+  subject's series copied on change while a chart is open even if its collector momentarily has
+  no subscriber. Do not restore the second gate.
+
+### 35
+
+Ruling 35: `ChartGeometry.rowAt` adds a `ROW_EPSILON` of 1e-3 rows before flooring.
+  `yOf` computes `row * pxPerSample - scrollPx` and `rowAt` undoes it by adding `scrollPx` back;
+  in IEEE-754 those two operations do not cancel exactly unless `pxPerSample` is a power of two.
+  Measured over 25 000 (row, scroll) pairs per coefficient: exact at 1, 2, 4, 0.5 and 0.25; at
+  0.1 the round trip fails for about 16% of rows, which would put the crosshair's timestamp and
+  dBm on a different measurement from the one its rule is drawn on. Harmless today - every call
+  site passes 1f - but requirement 13 says the coefficient may be a fraction, and a documented
+  guarantee that is false is worse than an absent feature. The magnitude: the relative error is
+  about 1e-7 of `row`, so ~5e-4 at the 5000-sample ceiling; a thousandth of a row covers it with
+  a factor of two spare and is far below one pixel. Cost if wrong: `rowAt` biases by a thousandth
+  of a row.
+
+### 36
+
+Ruling 36: Freeze holds the whole drawing, not just the series.
+  The captured frame carries both `SignalStats` and `lastPacketAtMillis` as well as the series, so
+  the bars and both horizontal scales are held too. Without it, Freeze plus Auto scale let one
+  stronger packet widen the session maximum, and every point of a "frozen" trace slides sideways
+  while the bars redraw underneath. Requirement 4 is "Freeze holds the drawing", and the bars and
+  the plot are one drawing. Consequence, stated rather than discovered: the bars stop updating
+  while frozen. Cost if wrong: a reader who wanted a live readout beside a held plot does not get
+  one, and says so on the phone.
+
+### 37
+
+Ruling 37: the two `Time` fields use an un-overscanned, `ceil`-bounded window.
+  The polyline needs one row of overscan at each edge so its segments join across the boundary;
+  the labels must not inherit it, or they name measurements that are not on screen. And the bounds
+  must be `ceil`, not `floor`: a row is displayed exactly when `scrollPx <= row * p < scrollPx +
+  viewportPx`, so a row sitting exactly *on* the bottom edge is not displayed - which at
+  `pxPerSample = 1f` and an integer plot height is every viewport. `visibleRows` keeps its overscan
+  for drawing; `displayedRows` is the label window. Cost if wrong: both labels off by one
+  measurement whenever the chart is scrolled off either extreme.
