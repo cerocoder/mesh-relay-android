@@ -145,6 +145,12 @@ These are not follow-ups. They are the state of the branch.
 
 ## The Graph command (2026-09-02)
 
+- **A user who grants Bluetooth but denies location has no in-app route back to the permission
+  dialog, only system settings.** Location is deliberately not part of `BleReadiness` - a
+  refusal is not an error, and every measurement falls back to the node's position - and the
+  permission launcher only fires on `PERMISSIONS_MISSING` or the explicit retry action, neither
+  of which a location-only refusal triggers. Recorded as a consequence of ruling 31
+  (`docs/decisions.md`), not a defect.
 - **Background position stamping.** From Android 10 an app receives location updates while
   backgrounded only if its foreground service declares `android:foregroundServiceType="location"`;
   this app's declares `connectedDevice`. So with the screen on every measurement is stamped, and
@@ -180,8 +186,10 @@ These are not follow-ups. They are the state of the branch.
 - **The crosshair does not appear until the plot is first touched.** Spec section 8.7's wording
   supports this; `Pic1.pdf`'s sketch shows a crosshair on an unopened screen. Two lines to seed
   row 0 if the owner wants it. **Awaiting the owner.**
-- **Auto scale is disabled when the bars have data but the series is empty**, though it could
-  still usefully move the bars' borders in that state.
+- **Freeze and Auto scale are both disabled when the bars have data but the series is empty.**
+  `SignalGraphScreen.kt` has `enabled = shown.size > 0` on both switches, not just one. Auto
+  scale could still usefully move the bars' borders in that state; of the two, disabling Freeze
+  over what is still a live bar readout is arguably the more defensible choice.
 - **`SignalSeries`'s constructor is public** while both its KDoc and `SignalSeriesBuffer`'s say the
   value is built only by `snapshot()`. `internal` would make the documented rule enforced rather
   than advisory.
@@ -192,3 +200,55 @@ These are not follow-ups. They are the state of the branch.
   behaviourally interesting half of the class (a user granting only "Approximate" must count as
   granted) and needs a `Context`, so covering it means Robolectric, which this project does not
   use.
+- **[CLOSED by this fix wave]** `NodeDirectoryTest`'s first agreement assertion (`the directory
+  and its snapshot agree on where we are`) passed vacuously if both sides returned `null` - if
+  `applyNodeInfo` ever stopped recording `dbPosition`, the database-fallback branch would go
+  silently untested. Closed: an `assertNotNull` plus a value assertion on the database-derived
+  latitude now pin that branch directly.
+- **Two `MAX_SAMPLES` constants live a package apart.** `SignalHistory`'s is 500;
+  `SignalSeriesBuffer`'s is 5000. Both are deliberate (ruling 29 sizes the latter), but a reader
+  scanning for "the" sample cap will find two answers.
+- **`publishedEpoch` is not reset in the `WatchSeries` command handler.** Opening a watch resets
+  `publishedKey` to `null` and `publishedTotal` to `-1`, which is what actually forces the next
+  republish through the `(key, resetEpoch, totalAppended)` guard (ruling 33) - `publishedEpoch`
+  itself is left stale. Correct today only because the `key` term of the guard already fails on
+  its own; a change to how `publishedKey` is reset on watch would make the stale epoch load-
+  bearing and wrong.
+- **`positionForSample()` allocates on the node-fallback path**, via `PositionHistory.best`.
+  Every other path through it is allocation-free. Not measured as a problem at the sampling rates
+  this app sees; noted for whoever next profiles the engine.
+- **The chart-geometry task's implementation report garbles its own inversion argument** (around
+  the report's line 53) - the conclusion and the supporting table are correct, only the prose
+  connecting them is tangled. Report narrative only; the shipped `ChartGeometry` code is
+  unaffected.
+- **`ChartGeometry.overlayTopPx` is scope rather than compulsion.** Five of the six additions
+  `ChartGeometry` gained for the crosshair overlay were forced by the project's no-arithmetic-
+  in-a-composable rule; this sixth one was a judgement call to keep the clamping logic in one
+  place rather than a strict requirement of that rule.
+- **`GraphFrame` is reallocated every recomposition, including while frozen.** Freeze holds what
+  the frame contains (ruling 36) but not the frame object itself, so a frozen screen still
+  discards and rebuilds an unchanged `GraphFrame` on every recomposition. Allocation churn only -
+  nothing on screen is wrong.
+
+### Test-quality notes, none blocking
+
+Small, individually trivial gaps found while reviewing the Graph's test suite. None of them lets
+a wrong answer through in a way a later reviewer wouldn't also catch; each is a test that could
+pin its claim a little more tightly than it does.
+
+- `StampedPosition`'s KDoc claims `roundToInt` saturates on an out-of-range value; no test feeds
+  an out-of-range `Double` through `fromDegrees`, so the guarantee is documentation-only.
+- `SignalSeriesTest`'s "the snapshot does not change when the buffer does" asserts only sizes,
+  never reads back a value from the taken snapshot to show it is unaffected.
+- `SignalSeriesBufferTest`'s `clear` test comment claims a head-reset guarantee the test cannot
+  actually check (a ring buffer is correct starting from any head position).
+- `SignalSeries.EMPTY`'s "answers every question" test checks two of its six accessors.
+- `require(capacity > 0)` is the one untested branch in `SignalSeriesBuffer`.
+- `NodeDirectoryTest`'s "node mode never falls back to the phone" pins the no-fallback half of
+  the rule but not that NODE mode does use the node's own position.
+- `LocationAvailabilityTest`'s second test asserts `size == 2`, which its first test already
+  implies - redundant rather than a second guard.
+- `the scroll cannot go past the end of a saturated series` tests `maxScrollPx`, which itself
+  clamps nothing (the clamping happens where its result is used) - the test name overstates what
+  it pins.
+- Three of the Graph's Compose previews cannot show what they are named for.

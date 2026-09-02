@@ -375,3 +375,15 @@ Ruling 37: the two `Time` fields use an un-overscanned, `ceil`-bounded window.
   `pxPerSample = 1f` and an integer plot height is every viewport. `visibleRows` keeps its overscan
   for drawing; `displayedRows` is the label window. Cost if wrong: both labels off by one
   measurement whenever the chart is scrolled off either extreme.
+
+### 38
+
+Ruling 38: `SignalSeries` carries measurements only, never its own `SignalStats` -
+  **deliberately overriding spec section 5.4**, which says it should carry them. Spec section 8.4
+  promises the auto scale range is "the same two figures the bars print beside themselves", and
+  the bars print `RelayStats`/`NeighbourStats.snr`/`.rssi` straight from `StatsSnapshot`. Two
+  copies of the same statistic, arriving on two different channels at two different instants, is
+  precisely how the bar and the plot come to disagree - the one thing section 8.4 says cannot
+  happen. So the screen takes the statistics it already has as parameters, and the series is
+  measurements. Do not add `SignalStats` to `SignalSeries`. Cost if wrong: nothing; this deletes
+  state rather than adding it.

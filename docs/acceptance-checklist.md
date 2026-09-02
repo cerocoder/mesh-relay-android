@@ -544,6 +544,10 @@ node" and the phone's GPS is not used. A refusal is **not** an error: the app co
 and every measurement falls back to the node. Note whether measurements taken with the screen off
 still carry a phone position — that answer decides the `foregroundServiceType` question in
 `deferred-work.md`.
+**Warning:** the demo transport's local node has no coordinates, so with *Use phone location*
+off every globe is correctly disabled there regardless of anything else under test. Judge this
+item against a real node or the phone's own position, not a demo scenario, or a field issue gets
+logged against behaviour that is actually correct.
 
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
@@ -569,6 +573,48 @@ how its size gets measured.
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
+### H13. The two empty states
+**Do:** Open a Graph on a subject with no signal data at all. Then open one on a subject whose
+bars have data but whose series is empty.
+**Pass looks like:** the first shows one centred message with both switches present and disabled
+and **no second copy** from the signal block; the second shows the bars plus one message below
+them. Nothing else on the checklist looks at these, and a ruling exists specifically so
+`detail_no_signal_data` cannot render twice.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H14. A saturated series
+**Do:** On a long-running busy relay, scroll to the oldest measurement.
+**Pass looks like:** the scrollbar thumb sits flush at the foot of its track with the oldest row
+at the bottom, and the chart does not scroll into empty space. Nothing checks past 5 000 samples,
+which is where the ring buffer wraps, where `size` stops growing while `totalAppended` keeps
+moving, and where the scroll clamp becomes load-bearing.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H15. The crosshair holds its measurement as packets arrive
+**Do:** Touch the plot to place the crosshair on a measurement, then watch a live relay for
+several minutes without touching the screen again.
+**Pass looks like:** while the buffer is unsaturated, the crosshair still names the same
+measurement afterwards. Note that past 5 000 samples it cannot, because the row and the index
+stop advancing together. H3 checks that the view does not yank; nothing else checks that a
+crosshair left in place still names what it named.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### H16. Degenerate Auto scale
+**Do:** Switch Auto scale on for a relay with a single measurement, and separately for one whose
+history is perfectly flat.
+**Pass looks like:** the fixed scale is used, not a zero-width range — every point stacked
+against the left edge would read as a dead link. This is unit-tested; this item is the visual
+confirmation.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
 ---
 
 ## Overall verdict
@@ -576,7 +622,7 @@ how its size gets measured.
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 44
+- **Total items run:** _____ / 48
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

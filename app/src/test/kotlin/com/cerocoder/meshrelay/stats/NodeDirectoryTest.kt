@@ -654,6 +654,11 @@ class NodeDirectoryTest {
             ),
         )
         assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
+        // The comparison above passes vacuously if both sides are null - which is
+        // exactly what would happen if applyNodeInfo stopped recording dbPosition.
+        // Pin the database-fallback branch itself, not just that the two paths agree.
+        assertNotNull(directory.localPosition())
+        assertEquals(39.8628316, directory.localPosition()!!.lat, 1e-7)
 
         directory.applyPosition(SENDER, Position(latitude_i = 403057734, longitude_i = -37325611, altitude = 610))
         assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
