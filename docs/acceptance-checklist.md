@@ -652,8 +652,8 @@ mark is a fail. A single tap places the crosshair with no perceptible delay, a d
 it and still does **not** scroll, and a double tap makes it and its globe disappear. A brief
 flicker of the crosshair during the double tap is expected and is documented in ruling 42.
 
-- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 11cab7a
-  Notes: PASS, measured rather than eyeballed. Auto scale on, 48 measurements: 1017 RSSI-blue pixels against 1274 SNR-green in the plot - both metrics present in comparable quantity, where a polyline left one all but absent. Median blob width 5 px for both (a 1 dp radius at density 450) and a median of 3 discrete blobs per row, so individual measurements are resolvable and not merged. PointRadius needs no tuning at this density. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe entirely.
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), builds 11cab7a then a4d3df1
+  Notes: PASS, measured twice. First run (11cab7a, round marks): Auto scale on, 1017 RSSI-blue pixels against 1274 SNR-green - both metrics present in comparable quantity, where a polyline left one all but absent. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe. Second run (a4d3df1, after the owner asked for hard 2x2 squares): every mark in the plot is exactly 2x2 physical pixels with ZERO partially covered pixels - 15 marks per metric, 60 full pixels each, connected-component analysis reporting only the (2,2) shape. The integral-coordinate approach gives hard edges without an antialias flag, so no Paint is allocated per draw.
 
 ---
 
