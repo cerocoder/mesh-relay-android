@@ -89,6 +89,7 @@ fun MeshRelayNavHost(
     onRequestPermissions: () -> Unit,
     onSelectDevice: (DeviceListEntry) -> Unit,
     onDisconnect: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backStack = rememberSaveable(saver = backStackSaver) { BackStack(Screen.Devices) }
@@ -170,6 +171,7 @@ fun MeshRelayNavHost(
             nodeDbReloading = nodeDbReloading,
             container = container,
             backStack = backStack,
+            onExit = onExit,
             modifier = modifier,
         )
 
@@ -242,6 +244,7 @@ private fun MainScaffold(
     nodeDbReloading: Boolean,
     container: AppContainer,
     backStack: BackStack,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -286,6 +289,7 @@ private fun MainScaffold(
                 onReset = { container.engine.reset() },
                 onReloadNodeDb = { container.connectionManager.reloadNodeDatabase() },
                 onOpenSettings = { backStack.push(Screen.Settings) },
+                onExit = onExit,
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -298,6 +302,7 @@ private fun MainScaffold(
                 onTogglePause = { container.engine.setPaused(!snapshot.paused) },
                 onReset = { container.engine.reset() },
                 onOpenSettings = { backStack.push(Screen.Settings) },
+                onExit = onExit,
                 modifier = Modifier.padding(innerPadding),
             )
 
@@ -309,6 +314,7 @@ private fun MainScaffold(
                 onTogglePause = { container.engine.setPaused(!snapshot.paused) },
                 onReset = { container.engine.reset() },
                 onOpenSettings = { backStack.push(Screen.Settings) },
+                onExit = onExit,
                 modifier = Modifier.padding(innerPadding),
             )
         }

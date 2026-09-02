@@ -59,6 +59,7 @@ fun RelayListScreen(
     onReset: () -> Unit,
     onReloadNodeDb: () -> Unit,
     onOpenSettings: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // The reload flag is allowed to outlive a dropped connection by design (so a
@@ -78,6 +79,7 @@ fun RelayListScreen(
                 onTogglePause = onTogglePause,
                 onReset = onReset,
                 onOpenSettings = onOpenSettings,
+                onExit = onExit,
                 reload = ReloadAction(inProgress = isReloading, onReload = onReloadNodeDb),
             )
         },
@@ -190,6 +192,7 @@ private fun RelayListScreenPopulatedPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -212,6 +215,7 @@ private fun RelayListScreenEmptyPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -234,6 +238,7 @@ private fun RelayListScreenPausedPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -256,6 +261,7 @@ private fun RelayListScreenDarkPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -279,6 +285,7 @@ private fun RelayListScreenReloadingPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -306,6 +313,7 @@ private fun RelayListScreenReloadFlagStaleWhileDisconnectedPreview() {
                 onReset = {},
                 onReloadNodeDb = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }

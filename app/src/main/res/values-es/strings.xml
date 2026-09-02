@@ -98,6 +98,9 @@
     <string name="action_gauges">Indicadores</string>
     <string name="action_gauge_mode">Modo de indicador</string>
     <string name="action_settings">Ajustes</string>
+    <string name="action_exit">Salir</string>
+    <string name="action_exit_confirm_title">¿Salir de la aplicación?</string>
+    <string name="action_exit_confirm_body">Se desconecta del nodo, deja de recopilar y cierra la aplicación. Las estadísticas de esta sesión no se guardan.</string>
     <string name="action_back">Atrás</string>
     <string name="action_disconnect">Desconectar</string>
     <string name="action_skip_node">Descartar</string>

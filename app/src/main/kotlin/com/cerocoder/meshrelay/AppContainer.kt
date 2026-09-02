@@ -301,6 +301,21 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     }
 
     /**
+     * Release everything this process holds, in an order that matters.
+     *
+     * The GATT disconnect is awaited before the service is stopped and before the
+     * caller kills the process: tearing the process down with the link still open
+     * leaves the radio holding a half-open connection, and the next connection
+     * attempt then meets a node that thinks it is already connected.
+     */
+    suspend fun shutdown() {
+        _connectRequested.value = false
+        _requestedAddress.value = null
+        connectionManager.disconnect()
+        stopForegroundService()
+    }
+
+    /**
      * A context resolving strings in the language chosen in Settings.
      *
      * The activity gets its language in `attachBaseContext`; this one is for the

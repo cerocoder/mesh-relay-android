@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.lifecycleScope
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.location.LocationAvailability
 import com.cerocoder.meshrelay.stats.SystemTimeSource
@@ -37,6 +38,7 @@ import com.cerocoder.meshrelay.ui.common.LocalAppResumed
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 import kotlinx.coroutines.launch
+import kotlin.system.exitProcess
 
 /**
  * The only activity. Everything that outlives it - the connection, the
@@ -152,6 +154,33 @@ class MainActivity : ComponentActivity() {
                             container = container,
                             readinessState = readinessState,
                             backgroundCollection = settings.backgroundCollection,
+                            onExit = {
+                                // Ordered, and the order is the point: await the GATT
+                                // disconnect, stop the service that is holding this
+                                // process up, drop the task so the app does not sit in
+                                // recents looking alive, and only then end the process.
+                                // exitProcess before the disconnect completes would
+                                // leave the radio with a half-open link.
+                                //
+                                // lifecycleScope, not the composition-scoped
+                                // rememberCoroutineScope() the disconnect-only path
+                                // below uses: it is the scope this method (onCreate)
+                                // has, and there is no suspension point between
+                                // container.shutdown() returning and exitProcess(0) -
+                                // finishAndRemoveTask() is a fire-and-forget call to the
+                                // system, not something this coroutine waits on - so the
+                                // lifecycle event that finishing eventually raises has no
+                                // chance to cancel anything before the process is gone
+                                // anyway. Belt and braces: the disconnect itself runs
+                                // inside RadioConnectionManager's own NonCancellable
+                                // block, so it would complete even if this coroutine were
+                                // cancelled mid-await.
+                                lifecycleScope.launch {
+                                    container.shutdown()
+                                    finishAndRemoveTask()
+                                    exitProcess(0)
+                                }
+                            },
                         )
                     }
                 }
@@ -169,6 +198,7 @@ private fun MeshRelayContent(
     container: AppContainer,
     readinessState: MutableState<BleReadiness>,
     backgroundCollection: Boolean,
+    onExit: () -> Unit,
 ) {
     // The application context, not LocalContext.current: a broadcast receiver has
     // to be unregistered against the very context instance it was registered on,
@@ -295,5 +325,6 @@ private fun MeshRelayContent(
             container.requestDisconnect()
             scope.launch { container.connectionManager.disconnect() }
         },
+        onExit = onExit,
     )
 }

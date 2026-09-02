@@ -68,6 +68,7 @@ fun NeighbourListScreen(
     onTogglePause: () -> Unit,
     onReset: () -> Unit,
     onOpenSettings: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -88,6 +89,7 @@ fun NeighbourListScreen(
                 onTogglePause = onTogglePause,
                 onReset = onReset,
                 onOpenSettings = onOpenSettings,
+                onExit = onExit,
             )
         },
     ) { innerPadding ->
@@ -187,6 +189,7 @@ private fun NeighbourListScreenPopulatedPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -206,6 +209,7 @@ private fun NeighbourListScreenEmptyPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -225,6 +229,7 @@ private fun NeighbourListScreenPausedPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -244,6 +249,7 @@ private fun NeighbourListScreenDarkPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }

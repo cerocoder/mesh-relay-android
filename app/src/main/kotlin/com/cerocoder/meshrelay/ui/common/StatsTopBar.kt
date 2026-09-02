@@ -3,6 +3,7 @@ package com.cerocoder.meshrelay.ui.common
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ExitToApp
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
@@ -80,6 +81,11 @@ data class SortAction(
  * The reset confirmation lives here too, so that dismissing or confirming it is
  * this component's business and not repeated on every screen that offers a reset.
  * [onReset] is called only after the user confirms.
+ *
+ * Exit gets its own confirmation dialog in the same shape, for the same reason:
+ * it destroys the same unsaved session statistics reset does, so it earns the
+ * same "are you sure". [onExit] is called only after that confirmation, never
+ * from the menu item itself.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,12 +98,14 @@ fun StatsTopBar(
     onTogglePause: () -> Unit,
     onReset: () -> Unit,
     onOpenSettings: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
     reload: ReloadAction? = null,
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
     var resetDialogVisible by remember { mutableStateOf(false) }
+    var exitDialogVisible by remember { mutableStateOf(false) }
 
     TopAppBar(
         modifier = modifier,
@@ -229,6 +237,15 @@ fun StatsTopBar(
                             onOpenSettings()
                         },
                     )
+
+                    DropdownMenuItem(
+                        text = { Text(stringResource(R.string.action_exit)) },
+                        leadingIcon = { Icon(Icons.AutoMirrored.Filled.ExitToApp, contentDescription = null) },
+                        onClick = {
+                            overflowExpanded = false
+                            exitDialogVisible = true
+                        },
+                    )
                 }
             }
         },
@@ -251,6 +268,29 @@ fun StatsTopBar(
             },
             dismissButton = {
                 TextButton(onClick = { resetDialogVisible = false }) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
+    if (exitDialogVisible) {
+        AlertDialog(
+            onDismissRequest = { exitDialogVisible = false },
+            title = { Text(stringResource(R.string.action_exit_confirm_title)) },
+            text = { Text(stringResource(R.string.action_exit_confirm_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        exitDialogVisible = false
+                        onExit()
+                    },
+                ) {
+                    Text(stringResource(R.string.action_exit))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { exitDialogVisible = false }) {
                     Text(stringResource(R.string.common_cancel))
                 }
             },

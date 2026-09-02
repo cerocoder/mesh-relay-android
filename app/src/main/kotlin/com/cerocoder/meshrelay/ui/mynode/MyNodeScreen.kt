@@ -59,6 +59,7 @@ fun MyNodeScreen(
     onTogglePause: () -> Unit,
     onReset: () -> Unit,
     onOpenSettings: () -> Unit,
+    onExit: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -74,6 +75,7 @@ fun MyNodeScreen(
                 onTogglePause = onTogglePause,
                 onReset = onReset,
                 onOpenSettings = onOpenSettings,
+                onExit = onExit,
             )
         },
     ) { innerPadding ->
@@ -159,6 +161,7 @@ private fun MyNodeScreenPopulatedPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -188,6 +191,7 @@ private fun MyNodeScreenNoInfoPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -207,6 +211,7 @@ private fun MyNodeScreenNoLocalNodePreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
@@ -225,6 +230,7 @@ private fun MyNodeScreenDarkPreview() {
                 onTogglePause = {},
                 onReset = {},
                 onOpenSettings = {},
+                onExit = {},
             )
         }
     }
