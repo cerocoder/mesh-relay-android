@@ -718,24 +718,24 @@ on rows whose packet count is visibly moving. The defect looked like **many rows
 as they scrolled into view — that is the discriminator, not whether any yellow appears at all. The
 marker must still work: sit still on a busy relay and confirm it does flash.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS. Scrolling and flinging both lists no longer lights rows as they come into view; the marker still flashes on a row whose packets are landing. Instrumented check beforehand agreed: 10 of 25 at-rest frames showed a genuine flash, and scrolling produced none.
 
 ### I2. A packet that just arrived reads 0, not "Never"
 **Do:** Watch the age on a busy relay's card for a minute.
 **Pass looks like:** it reads `0sec ago` when a packet lands, never `Never`. A relay genuinely never
 heard from must still read `Never` — that case has not been broken.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS. A packet that has just landed reads 0, not "Never".
 
 ### I3. The database fields say so
 **Do:** Open a node card with database values, in English and in Spanish.
 **Pass looks like:** **Last DB SNR** and **Last DB heard** (Spanish: `Último SNR de la DB`,
 `Última recepción de la DB` — "DB" is left untranslated, matching the existing `source_db`).
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS. Last DB SNR / Last DB heard, both locales.
 
 ### I4. Our own node is out of the statistics — REAL NODE ONLY
 **Do:** Connect to a real node. Check **Neighbours**, the Direct count, and then open a Graph on any
@@ -745,8 +745,8 @@ and **the crosshair globe still resolves**. That last check is the important one
 position still reaches the node directory. If the globe went dead, the guard was placed one step too
 early and every node-stamped measurement lost its pin, with nothing on screen to say why.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS on a real node. Our own node is out of Neighbours and out of the Direct count, and the Graph globe still resolves with Use phone location off - so our own position still reaches the node directory, which is the check that would have caught the guard being placed one step too early.
 
 ### I5. A different node starts from nothing
 **Do:** Connect to node A (or a demo), let statistics build, then connect to a **different** one.
@@ -755,8 +755,8 @@ Then reconnect to that same one again.
 to the same one loses nothing. Note there is **no confirmation yet** — that is agreed and pending in
 `deferred-work.md`, so a mistap on the device list currently costs the session.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS. Switching to a different node clears everything; reconnecting to the same one loses nothing.
 
 ### I6. Exit releases the process
 **Do:** Overflow menu → **Exit** → confirm. Try it once from a healthy connection and once while
@@ -768,8 +768,8 @@ symptom of a half-open link and is the one failure this command must not cause.
 **Watch for:** up to ~5 seconds between confirming and the app vanishing, with no spinner. If it feels
 like a hang you will tap twice; the second tap is harmless but worth knowing.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build d3277fb — by the owner
+  Notes: PASS. Confirmation, then the notification clears and the app leaves recents; reconnecting afterwards behaves normally, so the GATT link is torn down cleanly and the scan-during-teardown defect found in review is genuinely closed.
 
 ---
 

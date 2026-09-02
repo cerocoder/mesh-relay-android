@@ -335,3 +335,35 @@ defect in what that plan shipped; both are work it deliberately did not widen in
 
   First step is cheap and is the owner's: look at the Relays list on the phone for a byte equal to the
   last byte of the local node number, and say whether it is actually there and how large its share is.
+
+### Smaller items from the same six fixes, harvested before the SDD workspace was deleted
+
+None blocking; each was seen by a reviewer and judged non-blocking at the time.
+
+- **`SignalGaugeComplexFlashingPreview` can no longer show a flash.** It passes a static
+  `lastPacketAtMillis`, and the fixed marker only fires on a *change*, so the preview is now identical
+  to the non-flashing ones above it and its name misleads. A change-driven flash cannot be shown in a
+  static preview at all, so the honest remedy is to delete it with a note rather than rename it.
+- **No test pins the exact clock-skew boundary.** `AgeText.relative` switches from `Seconds(0)` to
+  `Never` at `-MAX_CLOCK_SKEW`; an off-by-one in that comparison would not be caught.
+- **A Direct packet from our own node arriving *before* the handshake still opens a Neighbours row.**
+  The guard reads `localNodeNum`, which is null until `my_info`. `RadioConnectionManagerTest` pins
+  `my_info` first for the managed connect path, so it should not occur — but if our own node ever
+  reappears in Neighbours after a reconnect, this is the cause, not the guard.
+- **A dropped `trySend` on the node-switch wipe is not self-healing.** `statisticsAddress` is assigned
+  unconditionally, so if `ResetForNewNode` were ever dropped on a full channel, a re-tap would take the
+  no-wipe branch and node A's statistics would be shown as B's until a manual Reset. Remote (256-slot
+  channel), but unlike `reset()` a re-tap does not repair it.
+- **Frames still in flight from the old link can land after the wipe** and be folded as the new node's.
+  Bounded by the handoff window; usually zero at mesh traffic rates.
+- **`resetStatistics` + `clearAll` clear positions and telemetry twice**, and the new "an ordinary reset
+  still keeps the node database" test asserts a strict subset of a pre-existing test. Both harmless;
+  the first is the price of reusing `resetStatistics` so the two reset paths cannot drift.
+- **The "polite goodbye" packet is almost certainly never sent** — it is launched on a job that
+  `closeTransportLocked` cancels on the next line. Pre-existing; the ACL disconnect under
+  `NonCancellable` is what actually matters, but the comment claims more than happens.
+- **Exit is absent from the Devices and Settings screens.** `StatsTopBar` carries it, so if the link
+  drops and the app returns to the device list there is no Exit until the user reconnects.
+- **`shutdown()` does not unwind the application scope or the location source** — three collectors and
+  the notification updater keep running; `exitProcess` is what ends them. Acceptable only because the
+  owner chose the kill.
