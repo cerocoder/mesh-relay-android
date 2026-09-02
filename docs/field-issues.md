@@ -453,3 +453,55 @@ System default -> switches back. The install was left on `SYSTEM`, as it was fou
    live sort but suppress reordering while the list is scrolled away from the top. The original's
    behaviour is not automatically the right answer here - it was designed for a redrawn terminal
    table with no touch targets in it.
+
+---
+
+## F-7 - the plot is a sliver: one pixel per measurement leaves 92% of the graph area empty
+
+**Found:** 2026-09-02, Galaxy SM-S721B, Android 16 (API 36), 1080x2340 at density 450, debug build
+of `feat/signal-graph` at `436cb16`, Zona Centro demo scenario.
+
+**What was seen.** With 69 measurements collected, the drawn trace occupied **87 of the 1100
+pixels** of the plot area - about 8% - as a thin band at the top, with the rest of the screen empty.
+Read off a pixel scan of `screencap`, not by eye: rows carrying non-background pixels ran y=1060 to
+y=1146 inside a plot spanning y=1060 to y=2160.
+
+**Why it happens, and why it is not a bug.** Requirement 13 of the design says one measurement is
+one pixel row, and `SignalGraphScreen` fixes `PX_PER_SAMPLE = 1f`. The code is doing exactly what it
+was told. But a *physical* pixel at density 450 is 0.36 dp, so filling this plot needs **1100
+measurements**. In the demo, running at roughly one packet a second, that is 18 minutes. On a real
+relay heard every ten seconds it is **just over three hours**. For the first hours of any survey -
+which is most of the time anyone will open this screen - the chart is a sliver above a large empty
+area, and it reads as broken rather than as sparse.
+
+**A second consequence, worth stating separately.** While the content is shorter than the viewport
+`maxScrollPx` is zero, so nothing scrolls, the custom scrollbar has nothing to move, and the
+crosshair clamps every touch below the trace to the last row. Acceptance items **H7** (the gesture
+split) and **H14** (a saturated series) are therefore *not testable at all* until a subject has
+collected more measurements than the plot is tall. That is not a defect in those items; it means the
+first hours of a session cannot exercise the scrolling half of this screen.
+
+**Severity:** degraded - every number on the screen is correct, the crosshair reads the right
+measurement, and nothing crashes. What is wrong is that the default scale makes a working feature
+look empty.
+
+**Status:** open - filed, not implemented. Deliberately not fixed on the branch that found it.
+
+**Notes for whoever fixes it.** The machinery is already there and tested: `ChartGeometry` takes
+`pxPerSample` in every signature and `ChartGeometryTest` exercises it at 0.1, 1 and 4, including the
+fractional round trip that `ROW_EPSILON` exists for (ruling 35). The zoom control is recorded in
+`deferred-work.md` as deferred at the owner's request, and this is the field evidence for taking it
+off that list. Three options, in the order I would weigh them:
+
+1. **Fit-to-viewport as the default**, with the fixed 1 px scale as an option: choose
+   `pxPerSample` so the retained series fills the plot, clamped to some sane maximum so two
+   measurements do not become a 500-pixel staircase. Costs nothing structurally - it is a value to
+   pass - but it makes the vertical axis non-uniform between subjects, so two charts are no longer
+   directly comparable by eye.
+2. **The zoom control the design already anticipated** (2x, 4x, and fractions below 1). Honest and
+   explicit, but it puts the work on the reader every time they open a young chart.
+3. **A dp-based rather than pixel-based row height.** One measurement per dp would make the trace
+   2.8x taller here and identical across densities, which the current pixel rule is not - the same
+   series is nearly three times shorter on this phone than on a 160 dpi device. Worth noting that
+   the present behaviour is already density-dependent in a way requirement 13's wording does not
+   acknowledge.
