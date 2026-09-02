@@ -690,8 +690,8 @@ at the fitted scale as well as at the floor.
 measurements arrive on the young chart. It should be absent the whole time, not flickering — if it
 flickers, `MIN_SCROLLABLE_PX` is not doing its job against the fitted scale's float round trip.
 
-- [ ] Ran on: ______________________
-  Notes:
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 51249bf
+  Notes: PASS on the fitting half. A chart barely a minute old filled 91% of the plot (span 1003 px of 1100), against the 8% F-7 measured at a fixed scale with ten times as many measurements. The shortfall from 100% is inherent and correct: the last row sits at (size-1)/size of the viewport, so a young chart stops just short of the bottom and approaches it as it fills. The scrollbar column is entirely background while fitting, so the MIN_SCROLLABLE_PX guard is doing its job and no zero-travel bar is drawn. NOT yet run: the changeover past 550 measurements, where the floor takes over and scrolling resumes - that needs a subject roughly 90 minutes old.
 
 ---
 
