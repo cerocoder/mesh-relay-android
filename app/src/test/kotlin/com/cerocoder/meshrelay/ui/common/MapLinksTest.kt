@@ -1,9 +1,34 @@
 package com.cerocoder.meshrelay.ui.common
 
+import com.cerocoder.meshrelay.settings.MapProvider
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class MapLinksTest {
+
+    @Test
+    fun `forProvider dispatches GOOGLE to the google maps link`() {
+        // A mutant that swapped the two branches, or that ignored the provider and
+        // always returned one of the two, fails this against the OSM test below.
+        val link = MapLinks.forProvider(MapProvider.GOOGLE, lat = 40.4168, lon = -3.7038)
+        assertEquals(MapLinks.googleMaps(lat = 40.4168, lon = -3.7038), link)
+    }
+
+    @Test
+    fun `forProvider dispatches OPEN_STREET_MAP to the open street map link`() {
+        val link = MapLinks.forProvider(MapProvider.OPEN_STREET_MAP, lat = 40.4168, lon = -3.7038)
+        assertEquals(MapLinks.openStreetMap(lat = 40.4168, lon = -3.7038), link)
+    }
+
+    @Test
+    fun `forProvider formats coordinates with a decimal point, never a comma`() {
+        // Pins Locale.ROOT end to end through forProvider, not just through the two
+        // functions it delegates to: a mutant that routed through a formatter using
+        // the active display locale would render "40,4168" here under Spanish and
+        // break the query string (see MapLinks's own KDoc).
+        val link = MapLinks.forProvider(MapProvider.GOOGLE, lat = 40.4168, lon = -3.7038)
+        assertEquals("https://maps.google.com/?q=40.4168,-3.7038", link)
+    }
 
     @Test
     fun `google maps link places latitude before longitude with no locale-formatted comma`() {

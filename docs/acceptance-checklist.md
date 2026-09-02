@@ -656,13 +656,29 @@ A brief flicker of the crosshair during the double tap is expected and is docume
 
 ---
 
+### H19. Map provider setting reaches the crosshair globe
+**Do:** Open Settings and find the new Map provider group, under Gauge mode. Leave it on its
+default, open a Graph on a subject with a stamped position, place the crosshair and tap its
+globe. Then go back to Settings, switch the value to OpenStreetMap, return to the same Graph,
+place the crosshair again and tap the globe a second time.
+**Pass looks like:** the group shows two options, Google Maps and OpenStreetMap, with Google
+Maps selected on a fresh install. The first tap opens Google Maps; after switching the setting
+the second tap opens OpenStreetMap instead — the globe's target actually follows the setting
+rather than the fixed Google link it always opened before (ruling 43). `PositionLine`'s own
+three buttons elsewhere in the app are unaffected either way.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 50
+- **Total items run:** _____ / 51
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

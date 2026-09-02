@@ -12,6 +12,7 @@ private const val PREFS_NAME = "mesh_relay"
 private const val KEY_LANGUAGE = "language"
 private const val KEY_GAUGE_MODE = "gauge_mode"
 private const val KEY_DEFAULT_SORT_MODE = "default_sort_mode"
+private const val KEY_MAP_PROVIDER = "map_provider"
 private const val KEY_MESHVIEW_URL = "meshview_url"
 private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
 private const val KEY_BACKGROUND_COLLECTION = "background_collection"
@@ -134,6 +135,7 @@ class SettingsRepository(private val store: SettingsStore) {
                 KEY_LANGUAGE to settingsSnapshot.language.name,
                 KEY_GAUGE_MODE to settingsSnapshot.gaugeMode.name,
                 KEY_DEFAULT_SORT_MODE to settingsSnapshot.defaultSortMode.name,
+                KEY_MAP_PROVIDER to settingsSnapshot.mapProvider.name,
                 KEY_MESHVIEW_URL to settingsSnapshot.meshviewUrl,
             ),
             bools = mapOf(
@@ -153,6 +155,7 @@ class SettingsRepository(private val store: SettingsStore) {
             language = readEnum(KEY_LANGUAGE, defaults.language),
             gaugeMode = readEnum(KEY_GAUGE_MODE, defaults.gaugeMode),
             defaultSortMode = readEnum(KEY_DEFAULT_SORT_MODE, defaults.defaultSortMode),
+            mapProvider = readEnum(KEY_MAP_PROVIDER, defaults.mapProvider),
             meshviewUrl = store.getString(KEY_MESHVIEW_URL, defaults.meshviewUrl),
             keepScreenOn = store.getBoolean(KEY_KEEP_SCREEN_ON, defaults.keepScreenOn),
             backgroundCollection = store.getBoolean(KEY_BACKGROUND_COLLECTION, defaults.backgroundCollection),

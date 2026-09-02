@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.common
 
+import com.cerocoder.meshrelay.settings.MapProvider
 import java.util.Locale
 
 /**
@@ -27,6 +28,18 @@ object MapLinks {
 
     fun openStreetMap(lat: Double, lon: Double): String =
         String.format(Locale.ROOT, OPEN_STREET_MAP_TEMPLATE, lat, lon)
+
+    /**
+     * [googleMaps] or [openStreetMap], chosen by [provider] - the setting
+     * [com.cerocoder.meshrelay.settings.AppSettings.mapProvider] governs. The `when`
+     * is deliberately exhaustive with no `else`: adding a third [MapProvider] must
+     * fail the build here rather than silently falling back to Google.
+     */
+    fun forProvider(provider: MapProvider, lat: Double, lon: Double): String =
+        when (provider) {
+            MapProvider.GOOGLE -> googleMaps(lat, lon)
+            MapProvider.OPEN_STREET_MAP -> openStreetMap(lat, lon)
+        }
 
     /**
      * [baseUrl] is a setting typed by hand in Settings, with no validation on the

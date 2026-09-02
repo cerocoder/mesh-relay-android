@@ -450,3 +450,19 @@ Ruling 42: a double tap on the plot clears the crosshair; a press places it imme
   on one canvas is more surface than one, and the arrangement is verified by reading rather
   than by a test - this project has no Compose test harness. Acceptance item H18 is what
   settles it.
+
+### 43
+
+Ruling 43: a new global setting, `AppSettings.mapProvider` (`MapProvider.GOOGLE` /
+  `MapProvider.OPEN_STREET_MAP`), decides which service the Graph's crosshair globe opens -
+  the owner's request that it point at either Google or OpenStreetMap according to a setting,
+  not just Google. Default `GOOGLE`, because that is the globe's behaviour today; silently
+  moving every existing install to a different map service on the next update would be a
+  bigger surprise than the feature is worth. `ui/common/PositionLine.kt`'s three separate
+  buttons - Google Maps, OpenStreetMap and Meshview - are unaffected and stay that way: where
+  there is room to offer every service at once, offering all of them beats sending the reader
+  to Settings first. The new setting governs only the one place with no such room - the
+  crosshair's single glyph, which is one tap target and must point somewhere. Cost if wrong: a
+  wrong default sends every tap of the crosshair to a service the owner did not choose, on
+  every relay and neighbour, until Settings is found and the value changed - visible on first
+  use, and a one-field fix once found.

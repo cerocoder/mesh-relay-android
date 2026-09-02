@@ -6,6 +6,12 @@ data class AppSettings(
     val language: LanguageOption = LanguageOption.SYSTEM,
     val gaugeMode: GaugeMode = GaugeMode.SIMPLE,
     val defaultSortMode: SortMode = SortMode.PACKETS,
+    /**
+     * Where the Graph's crosshair globe points, see [MapProvider]. Default
+     * `GOOGLE` because that is the globe's behaviour today; this setting must not
+     * silently move existing users to a different service.
+     */
+    val mapProvider: MapProvider = MapProvider.GOOGLE,
     /** The Spanish community instance, used throughout this mesh. */
     val meshviewUrl: String = "https://meshview.meshtastic.es",
     val keepScreenOn: Boolean = false,

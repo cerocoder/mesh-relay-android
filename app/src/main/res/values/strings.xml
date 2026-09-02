@@ -75,6 +75,8 @@
     <string name="gauge_mode">Gauge mode</string>
     <string name="gauge_simple">Simple</string>
     <string name="gauge_complex">Complex</string>
+    <string name="map_provider_google">Google Maps</string>
+    <string name="map_provider_osm">OpenStreetMap</string>
     <string name="gauge_snr">SNR</string>
     <string name="gauge_rssi">RSSI</string>
 
@@ -212,6 +214,7 @@
     <string name="settings_language_english">English</string>
     <string name="settings_language_spanish">Español</string>
     <string name="settings_gauge_mode">Gauge mode</string>
+    <string name="settings_map_provider">Map provider</string>
     <string name="settings_default_sort">Default sort</string>
     <string name="settings_meshview_url">Meshview URL</string>
     <string name="settings_meshview_url_hint">e.g. https://meshview.meshtastic.es</string>

@@ -37,6 +37,7 @@ class SettingsRepositoryTest {
         assertEquals(LanguageOption.SYSTEM, settings.language)
         assertEquals(GaugeMode.SIMPLE, settings.gaugeMode)
         assertEquals(SortMode.PACKETS, settings.defaultSortMode)
+        assertEquals(MapProvider.GOOGLE, settings.mapProvider)
         assertEquals("https://meshview.meshtastic.es", settings.meshviewUrl)
         assertEquals(false, settings.keepScreenOn)
         assertEquals(true, settings.backgroundCollection)
@@ -56,6 +57,19 @@ class SettingsRepositoryTest {
 
         repo(store).update { it.copy(usePhoneLocation = true) }
         assertEquals(true, repo(store).settings.value.usePhoneLocation)
+    }
+
+    @Test
+    fun `map provider persists both ways`() {
+        // Both directions, for the same reason the phone-location test above gives:
+        // the default is GOOGLE, so a store that dropped the write would still read
+        // back GOOGLE and pass a one-directional test.
+        val store = FakeStore()
+        repo(store).update { it.copy(mapProvider = MapProvider.OPEN_STREET_MAP) }
+        assertEquals(MapProvider.OPEN_STREET_MAP, repo(store).settings.value.mapProvider)
+
+        repo(store).update { it.copy(mapProvider = MapProvider.GOOGLE) }
+        assertEquals(MapProvider.GOOGLE, repo(store).settings.value.mapProvider)
     }
 
     @Test
