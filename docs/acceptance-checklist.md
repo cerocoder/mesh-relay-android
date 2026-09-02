@@ -651,8 +651,8 @@ is the constant to lower. A single tap places the crosshair with no perceptible 
 still moves it and still does **not** scroll, and a double tap makes it and its globe disappear.
 A brief flicker of the crosshair during the double tap is expected and is documented in ruling 42.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 11cab7a
+  Notes: PASS, measured rather than eyeballed. Auto scale on, 48 measurements: 1017 RSSI-blue pixels against 1274 SNR-green in the plot - both metrics present in comparable quantity, where a polyline left one all but absent. Median blob width 5 px for both (a 1 dp radius at density 450) and a median of 3 discrete blobs per row, so individual measurements are resolvable and not merged. PointRadius needs no tuning at this density. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe entirely.
 
 ---
 
@@ -667,8 +667,8 @@ the second tap opens OpenStreetMap instead — the globe's target actually follo
 rather than the fixed Google link it always opened before (ruling 43). `PositionLine`'s own
 three buttons elsewhere in the app are unaffected either way.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 11cab7a
+  Notes: PASS. "Map provider" group present after Gauge mode with Google Maps and OpenStreetMap. Default is Google (no stored key). Choosing OpenStreetMap persisted OPEN_STREET_MAP and the crosshair globe then launched https://www.openstreetmap.org/... ; choosing Google Maps persisted GOOGLE. Coordinate formatting is pinned by MapLinksTest rather than read here.
 
 ---
 
