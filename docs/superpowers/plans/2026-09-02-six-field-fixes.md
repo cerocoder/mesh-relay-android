@@ -391,33 +391,91 @@ and adds no indirection:
 
 `setLocalNodeNum` keeps its body and its role; the existing reads at `:171` and `:181` are unaffected.
 
-- [ ] **Step 4: Guard in `handleFrame`, in the right place**
+- [ ] **Step 4: Guard the *Direct* branch only — not every packet from us**
 
-The order matters and is the whole subtlety of this task. In `handleFrame`, after the `paused` check
-and **before** the `totalPackets` increment:
+The placement is the whole subtlety, and getting it wrong destroys data. A packet whose `from` is our
+own node is **not** automatically ours-and-uninteresting: if a relay rebroadcasts our transmission and
+we hear it, `PacketClassifier` returns `Ingest.Relayed` (`PacketClassifier.kt:42-43` sends a packet
+Direct only when the relay byte is absent or is the sender's own), and its `rx_snr`/`rx_rssi` describe
+**the relay's link to us**. That is a real relay measurement and one of the more useful ones. Only the
+**Direct** case — us appearing as our own neighbour — is what the owner asked to remove.
+
+So the exclusion must come *after* classification, which means the counter increment has to move after
+it too. Restructure the tail of `handleFrame`, preserving every documented behaviour around it:
 
 ```kotlin
-        // Our own traffic teaches the node database - our POSITION_APP packets are
-        // how localPosition() knows where we are - but it is not a measurement of
-        // anything. We did not receive it over the air, so it carries no SNR and no
-        // RSSI, and folding it in would put a signal-less row in a list about signal
-        // and inflate the divisor every other neighbour's percentage uses.
+        // Counted, and nothing else - see the comment above on why node 0 is not a
+        // node. Unchanged behaviour, just hoisted into a helper now that the count
+        // is no longer the first thing that happens.
+        if (packet.from == 0) { countPacket(timestamped.rxMillis); return }
+
+        decodePayload(packet.from, packet, timestamped.rxMillis)
+
+        if (packet.relay_node !in 0..MAX_RELAY_BYTE) { countPacket(timestamped.rxMillis); return }
+
+        val ingest = PacketClassifier.classify(packet, skipped)
+
+        // Our own transmission, heard directly rather than through a relay: it is
+        // us, not a neighbour. We never received it over the air, so it carries no
+        // SNR and no RSSI, and folding it in would put a signal-less row in a list
+        // about signal and inflate the divisor every other neighbour's percentage
+        // is computed against. At the owner's decision it is counted nowhere at all,
+        // so this returns before countPacket.
         //
-        // Decoded first and dropped second, deliberately: dropping before the decode
-        // would blank our own position, and with it every Graph globe stamped from
-        // the node rather than the phone.
-        val from = packet.from
-        if (from != 0 && from == directory.localNodeNum) {
-            decodePayload(from, packet, timestamped.rxMillis)
-            return
+        // Deliberately NOT every packet from us. One that a relay rebroadcast and we
+        // heard back classifies as Relayed, and its signal measures that relay's link
+        // to us - dropping those would throw away real relay data.
+        //
+        // Also deliberately after decodePayload: our own POSITION_APP packets are how
+        // localPosition() learns where we are, which stamps every Graph measurement
+        // when Use phone location is off.
+        if (ingest is Ingest.Direct && ingest.fromNode == directory.localNodeNum) return
+
+        countPacket(timestamped.rxMillis)
+
+        when (ingest) {
+            is Ingest.Relayed -> foldRelayed(ingest, timestamped.rxMillis)
+            is Ingest.Direct -> foldDirect(ingest, timestamped.rxMillis)
+            Ingest.Dropped -> Unit
         }
+    }
+
+    /** The two things every packet that counts as traffic moves, in one place so the
+     *  four early returns above cannot disagree about them. */
+    private fun countPacket(atMillis: Long) {
+        counterState = counterState.copy(totalPackets = counterState.totalPackets + 1)
+        lastPacketAtMillis = atMillis
+    }
 ```
 
-The existing `counterState`, `lastPacketAtMillis`, `from == 0` and `decodePayload` lines below stay
-exactly as they are.
+Delete the original `counterState`/`lastPacketAtMillis` pair from the top of the method — `countPacket`
+replaces it. Keep every existing comment in that method; they explain rules this change does not touch.
 
-- [ ] **Step 5: Run the tests, green**
-- [ ] **Step 6: Commit** — `fix(stats): our own node is not a neighbour and not a packet count`
+- [ ] **Step 5: Add the test that protects relay measurements**
+
+This is the case the restructure exists to preserve, and nothing else in the suite covers it:
+
+```kotlin
+@Test
+fun `our own transmission heard back through a relay is still a relay measurement`() {
+    // `from` being our node does not make a packet uninteresting. A relay that
+    // rebroadcast our transmission and let us hear it has told us about its link
+    // to us, which is exactly what this app measures. Only the Direct case - us as
+    // our own neighbour - is excluded.
+    val subject = engine(backgroundScope)
+    val seen = collectSnapshots(subject)
+    subject.attach(flowOf(myInfoFrame(SENDER), relayed(from = SENDER)))
+    runCurrent()
+
+    assertEquals(1, seen.last().relays.size)
+    assertEquals(1, seen.last().counters.totalRelayedPackets)
+    assertEquals(1, seen.last().counters.totalPackets)
+    assertTrue(seen.last().neighbours.isEmpty())
+}
+```
+
+- [ ] **Step 6: Run the tests, green**
+- [ ] **Step 7: Commit** — `fix(stats): our own node is not a neighbour and not a packet count`
 
 ---
 
