@@ -4,8 +4,12 @@ import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.produceState
+import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -36,9 +40,13 @@ private const val EMPTY_TRACK_ALPHA = 0.15f
  * canvas's measured width and does no other arithmetic.
  *
  * The last-value marker flashes for [SignalScales.FLASH_MILLIS] whenever
- * [lastPacketAtMillis] changes, driven by [produceState] rather than a
- * timer - there is no polling anywhere in this app, and a timer that outlived
- * this row would be a defect.
+ * [lastPacketAtMillis] changes, driven by a [remember]ed "seen" value compared
+ * against the current one inside a [LaunchedEffect] rather than a timer -
+ * there is no polling anywhere in this app, and a timer that outlived this
+ * row would be a defect. `produceState` cannot do this job: it runs its
+ * producer on first composition as well as on a key change, and a
+ * `LazyColumn` row scrolled back into view is a first composition - so it lit
+ * every row's marker on every scroll, for packets that could be minutes old.
  */
 @Composable
 fun SignalGauge(
@@ -53,13 +61,23 @@ fun SignalGauge(
 ) {
     val marks = GaugeGeometry.marks(stats, scaleMin, scaleMax, mode)
 
-    val flashing by produceState(false, lastPacketAtMillis) {
-        // A packet has just landed. Light the marker, then put it out - no
-        // polling, no timer that outlives the row.
-        if (lastPacketAtMillis == 0L) return@produceState
-        value = true
+    // The flash means "a packet just landed", so it must fire on a *change* of
+    // lastPacketAtMillis and never on composition. produceState could not do
+    // that: it runs its producer on first composition too, and a LazyColumn row
+    // scrolled back into view is a first composition - which lit every row's
+    // marker on every scroll, for packets minutes old.
+    //
+    // `seen` is seeded with the value this row was composed with, so the effect
+    // below returns immediately the first time and only a genuine later change
+    // reaches the delay. A recycled row re-seeds and is silent again.
+    var flashing by remember { mutableStateOf(false) }
+    var seen by remember { mutableLongStateOf(lastPacketAtMillis) }
+    LaunchedEffect(lastPacketAtMillis) {
+        if (lastPacketAtMillis == seen || lastPacketAtMillis == 0L) return@LaunchedEffect
+        seen = lastPacketAtMillis
+        flashing = true
         delay(SignalScales.FLASH_MILLIS)
-        value = false
+        flashing = false
     }
     val lastMarkerColor = if (flashing) FlashMarker else markerColor
 
