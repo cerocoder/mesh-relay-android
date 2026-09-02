@@ -14,6 +14,7 @@ private const val KEY_GAUGE_MODE = "gauge_mode"
 private const val KEY_DEFAULT_SORT_MODE = "default_sort_mode"
 private const val KEY_MAP_PROVIDER = "map_provider"
 private const val KEY_MESHVIEW_URL = "meshview_url"
+private const val KEY_TIME_FORMAT = "time_format"
 private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
 private const val KEY_BACKGROUND_COLLECTION = "background_collection"
 private const val KEY_USE_PHONE_LOCATION = "use_phone_location"
@@ -137,6 +138,7 @@ class SettingsRepository(private val store: SettingsStore) {
                 KEY_DEFAULT_SORT_MODE to settingsSnapshot.defaultSortMode.name,
                 KEY_MAP_PROVIDER to settingsSnapshot.mapProvider.name,
                 KEY_MESHVIEW_URL to settingsSnapshot.meshviewUrl,
+                KEY_TIME_FORMAT to settingsSnapshot.timeFormat.name,
             ),
             bools = mapOf(
                 KEY_KEEP_SCREEN_ON to settingsSnapshot.keepScreenOn,
@@ -157,6 +159,7 @@ class SettingsRepository(private val store: SettingsStore) {
             defaultSortMode = readEnum(KEY_DEFAULT_SORT_MODE, defaults.defaultSortMode),
             mapProvider = readEnum(KEY_MAP_PROVIDER, defaults.mapProvider),
             meshviewUrl = store.getString(KEY_MESHVIEW_URL, defaults.meshviewUrl),
+            timeFormat = readEnum(KEY_TIME_FORMAT, defaults.timeFormat),
             keepScreenOn = store.getBoolean(KEY_KEEP_SCREEN_ON, defaults.keepScreenOn),
             backgroundCollection = store.getBoolean(KEY_BACKGROUND_COLLECTION, defaults.backgroundCollection),
             usePhoneLocation = store.getBoolean(KEY_USE_PHONE_LOCATION, defaults.usePhoneLocation),

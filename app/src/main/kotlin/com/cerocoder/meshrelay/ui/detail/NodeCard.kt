@@ -31,6 +31,7 @@ import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
 import com.cerocoder.meshrelay.ui.common.FieldIcon
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
+import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.common.PositionLine
 import com.cerocoder.meshrelay.ui.common.StatsFormat
@@ -160,7 +161,7 @@ fun NodeCard(
                     icon = R.drawable.ic_field_last_heard,
                     value = stringResource(
                         R.string.format_last_heard_db,
-                        StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale),
+                        StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale, LocalTimeFormat.current),
                     ),
                 )
             }

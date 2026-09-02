@@ -61,6 +61,7 @@ import com.cerocoder.meshrelay.stats.SignalScales
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.MapLinks
 import com.cerocoder.meshrelay.ui.common.StatsFormat
 import com.cerocoder.meshrelay.ui.detail.SignalBlock
@@ -537,7 +538,7 @@ private fun BoxScope.Crosshair(
         // ellipsis. `TimeRow` below makes the same choice for the same reason,
         // and Spanish is the longer of this app's two languages.
         Text(
-            text = StatsFormat.graphTimestamp(series.atMillis(index), locale),
+            text = StatsFormat.graphTimestamp(series.atMillis(index), locale, LocalTimeFormat.current),
             style = MaterialTheme.typography.labelSmall,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
@@ -714,7 +715,7 @@ private fun LabelledSwitch(
 @Composable
 private fun TimeRow(atMillis: Long, locale: Locale, modifier: Modifier = Modifier) {
     Text(
-        text = stringResource(R.string.graph_time, StatsFormat.graphTimestamp(atMillis, locale)),
+        text = stringResource(R.string.graph_time, StatsFormat.graphTimestamp(atMillis, locale, LocalTimeFormat.current)),
         style = MaterialTheme.typography.labelMedium,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,

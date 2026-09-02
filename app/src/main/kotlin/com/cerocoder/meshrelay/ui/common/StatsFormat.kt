@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.common
 
+import com.cerocoder.meshrelay.settings.TimeFormat
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import java.time.Instant
 import java.time.LocalDateTime
@@ -149,24 +150,47 @@ object StatsFormat {
     fun sampleSnr(value: Float, locale: Locale): String = String.format(locale, SAMPLE_SNR_PATTERN, value)
 
     /**
+     * The clock half of an absolute timestamp.
+     *
+     * An explicit pattern rather than [DateTimeFormatter.ofLocalizedTime], and
+     * that is deliberate: forcing a 12- or 24-hour clock through a localized
+     * formatter means a `-u-hc-` Unicode extension on the locale, and whether
+     * `java.time` honours it depends on the CLDR provider. This project's unit
+     * tests run on the JVM and the app runs on Android, so that route could pass
+     * every test and still be wrong on the phone - the one failure this project
+     * has no way to catch. A pattern behaves identically on both.
+     *
+     * The cost is locale-specific time separators, which this app does not need:
+     * it ships English and Spanish and both use `:`.
+     *
+     * `h`/`HH` rather than `kk`/`KK`: `KK` renders noon as `00 PM` and `kk`
+     * renders midnight as `24`. Both are the classic form of this bug.
+     */
+    private fun clockPattern(timeFormat: TimeFormat): String = when (timeFormat) {
+        TimeFormat.TWELVE_HOUR -> "h:mm:ss a"
+        TimeFormat.TWENTY_FOUR_HOUR -> "HH:mm:ss"
+    }
+
+    /**
      * A measurement's own timestamp: local time, then local date, as the design's
      * layout sketch shows it - `13:01:13 21.08.2026`.
      *
-     * Both halves are locale-resolved rather than pattern-formatted, the same
-     * argument [nodeDatabaseLastHeard] makes: a Spanish reader expects
-     * day-before-month, and the platform is what knows that.
-     * [FormatStyle.MEDIUM] is the shortest built-in time style that still
-     * includes seconds - measurements on a busy relay arrive seconds apart, and a
-     * chart whose two Time fields read the same to the minute would say nothing.
-     * [FormatStyle.SHORT] is the only date style that stays numeric, which is what
-     * the drawing shows and what fits under a chart on a phone.
+     * The clock half is built from [clockPattern] - see its own KDoc for why a
+     * pattern rather than a localized formatter - and governed by [timeFormat],
+     * not by [locale]. The date half stays locale-resolved, the same argument
+     * [nodeDatabaseLastHeard] makes: a Spanish reader expects day-before-month,
+     * and the platform is what knows that. [FormatStyle.SHORT] is the only date
+     * style that stays numeric, which is what the drawing shows and what fits
+     * under a chart on a phone. The clock pattern always includes seconds -
+     * measurements on a busy relay arrive seconds apart, and a chart whose two
+     * Time fields read the same to the minute would say nothing.
      *
      * [zone] defaults to the device's own configured zone and is a parameter only
      * so a test can pin one.
      */
-    fun graphTimestamp(atMillis: Long, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {
+    fun graphTimestamp(atMillis: Long, locale: Locale, timeFormat: TimeFormat, zone: ZoneId = ZoneId.systemDefault()): String {
         val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochMilli(atMillis), zone)
-        val time = DateTimeFormatter.ofLocalizedTime(FormatStyle.MEDIUM).withLocale(locale)
+        val time = DateTimeFormatter.ofPattern(clockPattern(timeFormat), locale)
         val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
         return "${time.format(localDateTime)} ${date.format(localDateTime)}"
     }
@@ -252,14 +276,19 @@ object StatsFormat {
      * %H:%M:%S` mesh_stats.py:1891 builds via `datetime.fromtimestamp(ts)` -
      * but locale-aware rather than the original's fixed ISO-like pattern: a
      * Spanish reader expects day-before-month, which
-     * [DateTimeFormatter.ofLocalizedDateTime] resolves from [locale] instead
-     * of a hardcoded pattern string. [FormatStyle.MEDIUM] is the style used -
-     * verified against real `java.time` output (OpenJDK 17) rather than
-     * assumed: it is the shortest built-in style that still includes seconds
-     * (matching the original's `%S`), and unlike [FormatStyle.LONG]/`FULL` it
-     * formats a plain [LocalDateTime] without throwing
-     * `DateTimeException: Unable to extract ZoneId from temporal` - those two
-     * styles print a zone name, which requires a zone-aware temporal
+     * [DateTimeFormatter.ofLocalizedDate] resolves from [locale] instead of a
+     * hardcoded pattern string. [FormatStyle.SHORT] is the date style used - the
+     * only built-in style that stays numeric, matching what the rest of this
+     * app's absolute timestamps show (see [graphTimestamp]).
+     *
+     * The clock half is built from [clockPattern] and governed by [timeFormat],
+     * not by [locale] - see [clockPattern]'s own KDoc for why a pattern rather
+     * than a localized formatter. It always includes seconds, matching the
+     * original's `%S`. This used to be one call to
+     * [DateTimeFormatter.ofLocalizedDateTime]; it is split into its two halves
+     * now for the same reason [graphTimestamp] is, so both clocks in the app are
+     * built by one rule. Unlike [FormatStyle.LONG]/`FULL`, neither half prints a
+     * zone name, which would require a zone-aware temporal
      * ([java.time.ZonedDateTime]) this function deliberately does not carry
      * past formatting (see below).
      *
@@ -276,9 +305,11 @@ object StatsFormat {
      * depending on whatever zone happens to run the test JVM; every real
      * caller leaves it at its default.
      */
-    fun nodeDatabaseLastHeard(epochSeconds: Int, locale: Locale, zone: ZoneId = ZoneId.systemDefault()): String {
+    fun nodeDatabaseLastHeard(epochSeconds: Int, locale: Locale, timeFormat: TimeFormat, zone: ZoneId = ZoneId.systemDefault()): String {
         val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
-        return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale).format(localDateTime)
+        val time = DateTimeFormatter.ofPattern(clockPattern(timeFormat), locale)
+        val date = DateTimeFormatter.ofLocalizedDate(FormatStyle.SHORT).withLocale(locale)
+        return "${time.format(localDateTime)} ${date.format(localDateTime)}"
     }
 
     /**

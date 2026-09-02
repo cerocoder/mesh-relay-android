@@ -79,6 +79,8 @@
     <string name="map_provider_osm">OpenStreetMap</string>
     <string name="gauge_snr">SNR</string>
     <string name="gauge_rssi">RSSI</string>
+    <string name="time_format_12">12 hour format</string>
+    <string name="time_format_24">24 hour format</string>
 
     <!-- Navigation -->
     <string name="nav_relays">Relays</string>
@@ -218,6 +220,7 @@
     <string name="settings_language_spanish">Español</string>
     <string name="settings_gauge_mode">Gauge mode</string>
     <string name="settings_map_provider">Map provider</string>
+    <string name="settings_time_format">Time</string>
     <string name="settings_default_sort">Default sort</string>
     <string name="settings_meshview_url">Meshview URL</string>
     <string name="settings_meshview_url_hint">e.g. https://meshview.meshtastic.es</string>

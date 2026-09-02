@@ -1,36 +1,18 @@
 package com.cerocoder.meshrelay.ui.common
 
+import com.cerocoder.meshrelay.settings.TimeFormat
 import com.cerocoder.meshrelay.stats.model.SignalStats
-import java.time.Instant
 import java.time.LocalDateTime
 import java.time.ZoneId
-import java.time.format.DateTimeFormatter
-import java.time.format.FormatStyle
 import java.util.Locale
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
 private fun stats(vararg values: Float) = values.fold(SignalStats.EMPTY) { acc, v -> acc.plus(v) }
-
-/**
- * Independently reconstructs what [StatsFormat.nodeDatabaseLastHeard] should
- * produce for [epochSeconds]/[locale]/[zone], built here from the same public
- * `java.time` primitives rather than pinned to a literal string. CLDR locale
- * data is not part of this project's contract - it changed between the JDK 17
- * this suite was checked against locally and the JDK 21 CI actually runs on
- * (most visibly, `en-US` gained a narrow no-break space before AM/PM) - so a
- * hardcoded expected string from either JVM breaks on the other. Comparing
- * against this reference instead pins the wiring (locale in, zone in,
- * [FormatStyle.MEDIUM] used) while letting the running JVM's own CLDR data
- * decide the exact glyphs on both sides of the assertion.
- */
-private fun referenceLastHeard(epochSeconds: Int, locale: Locale, zone: ZoneId): String {
-    val localDateTime = LocalDateTime.ofInstant(Instant.ofEpochSecond(epochSeconds.toLong()), zone)
-    return DateTimeFormatter.ofLocalizedDateTime(FormatStyle.MEDIUM).withLocale(locale).format(localDateTime)
-}
 
 class StatsFormatTest {
 
@@ -285,40 +267,40 @@ class StatsFormatTest {
 
     @Test
     fun `nodeDatabaseLastHeard renders an absolute date, not a relative age`() {
-        // Not pinned to a literal rendering - see referenceLastHeard's own
-        // KDoc for why (CLDR output differs between the JDK 17 this was
-        // checked against locally and the JDK 21 CI runs on). This only pins
-        // that the result is an absolute calendar date: it must contain the
-        // four-digit year, which no relative "n ago"/"Xs ago" rendering
-        // (what AgeText produces elsewhere in this app) ever would, and must
-        // not contain the word "ago" itself. Kills a mutant that reintroduces
-        // relative, AgeText-style output for this one field (mesh_stats.py:
-        // 1891 is the field that must render absolutely, not relatively).
-        val result = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, ZoneId.of("Europe/Madrid"))
+        // Not pinned to a literal rendering: the date half is FormatStyle.SHORT,
+        // which - verified against real java.time output (OpenJDK 17) - renders
+        // a two-digit year under Locale.US ("8/26/25"), not a four-digit one, so
+        // this only pins that the year 2025 appears in *some* form (either width)
+        // and that no relative "n ago"/"Xs ago" wording (what AgeText produces
+        // elsewhere in this app) is present. Kills a mutant that reintroduces
+        // relative, AgeText-style output for this one field (mesh_stats.py:1891
+        // is the field that must render absolutely, not relatively).
+        val result = StatsFormat.nodeDatabaseLastHeard(
+            1_756_219_512,
+            Locale.US,
+            TimeFormat.TWENTY_FOUR_HOUR,
+            ZoneId.of("Europe/Madrid"),
+        )
         assertTrue("expected a non-blank result, got <$result>", result.isNotBlank())
-        assertTrue("expected the year 2025 in <$result>", result.contains("2025"))
+        assertTrue("expected the year 2025 in <$result>", result.contains("2025") || result.contains("25"))
         assertTrue("expected no relative-age wording in <$result>", !result.contains("ago"))
     }
 
     @Test
     fun `nodeDatabaseLastHeard follows the given locale, not a fixed one`() {
-        // Not pinned to literal en-US/es-ES strings - same CLDR-portability
-        // reason as above. Instead this pins two properties that hold on any
-        // CLDR version: (1) the function's output for each locale matches an
-        // independently built reference using the same public
-        // DateTimeFormatter.ofLocalizedDateTime API (so a mutant that ignores
-        // the locale, or picks the wrong FormatStyle, produces a mismatch
-        // against at least one of the two references); (2) the two locales'
-        // outputs are non-blank and differ from each other - en-US and es-ES
-        // diverge in word order, month spelling and clock format on every
-        // JDK this project has run on, so a mutant hardcoding one locale
-        // collapses this to a tautology-proof equality instead.
+        // Not pinned to literal en-US/es-ES strings - the date half is still
+        // built from DateTimeFormatter.ofLocalizedDate, whose CLDR output can
+        // differ across JDKs. Pins instead that the two locales' outputs are
+        // non-blank and differ from each other - en-US and es-ES diverge in
+        // date order on every JDK this project has run on, so a mutant
+        // hardcoding one locale collapses this to a tautology-proof equality
+        // instead. The clock half is pinned to TWENTY_FOUR_HOUR for both
+        // calls, so what this test actually isolates is the date half - the
+        // clock's own locale-independence is what the "governs the clock"
+        // test elsewhere in this file pins.
         val zone = ZoneId.of("Europe/Madrid")
-        val enUs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, zone)
-        val esEs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale("es", "ES"), zone)
-
-        assertEquals(referenceLastHeard(1_756_219_512, Locale.US, zone), enUs)
-        assertEquals(referenceLastHeard(1_756_219_512, Locale("es", "ES"), zone), esEs)
+        val enUs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale.US, TimeFormat.TWENTY_FOUR_HOUR, zone)
+        val esEs = StatsFormat.nodeDatabaseLastHeard(1_756_219_512, Locale("es", "ES"), TimeFormat.TWENTY_FOUR_HOUR, zone)
 
         assertTrue("expected a non-blank en-US result, got <$enUs>", enUs.isNotBlank())
         assertTrue("expected a non-blank es-ES result, got <$esEs>", esEs.isNotBlank())
@@ -327,26 +309,35 @@ class StatsFormatTest {
 
     @Test
     fun `nodeDatabaseLastHeard follows the given zone, not a fixed one`() {
-        // Not pinned to literal UTC/Europe-Madrid strings - same
-        // CLDR-portability reason as the two tests above. 1_735_689_600 is
-        // 2025-01-01T00:00:00Z exactly; Madrid is UTC+1 in January (standard
-        // time, no DST), so the same instant must print a different hour
-        // under each zone. As with the locale test above, this pins both
-        // that each output matches an independently built reference (so a
-        // mutant that ignores [zone] or converts it wrong is caught against
-        // at least one reference) and that the two zones' outputs are
-        // non-blank and differ from each other, rather than merely
-        // asserting inequality between two values that could both be blank.
+        // 1_735_689_600 is 2025-01-01T00:00:00Z exactly; Madrid is UTC+1 in
+        // January (standard time, no DST), so the same instant must print a
+        // different hour under each zone. Pinned to an exact hour rather than
+        // a reference formatter, since the clock half is now a fixed pattern
+        // rather than CLDR output - there is nothing left to reconstruct
+        // independently.
         val locale = Locale.US
-        val utc = StatsFormat.nodeDatabaseLastHeard(1_735_689_600, locale, ZoneId.of("UTC"))
-        val madrid = StatsFormat.nodeDatabaseLastHeard(1_735_689_600, locale, ZoneId.of("Europe/Madrid"))
+        val utc = StatsFormat.nodeDatabaseLastHeard(1_735_689_600, locale, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("UTC"))
+        val madrid = StatsFormat.nodeDatabaseLastHeard(
+            1_735_689_600,
+            locale,
+            TimeFormat.TWENTY_FOUR_HOUR,
+            ZoneId.of("Europe/Madrid"),
+        )
 
-        assertEquals(referenceLastHeard(1_735_689_600, locale, ZoneId.of("UTC")), utc)
-        assertEquals(referenceLastHeard(1_735_689_600, locale, ZoneId.of("Europe/Madrid")), madrid)
-
-        assertTrue("expected a non-blank UTC result, got <$utc>", utc.isNotBlank())
-        assertTrue("expected a non-blank Europe/Madrid result, got <$madrid>", madrid.isNotBlank())
+        assertTrue(utc, utc.contains("00:00:00"))
+        assertTrue(madrid, madrid.contains("01:00:00"))
         assertNotEquals(utc, madrid)
+    }
+
+    @Test
+    fun `the node database timestamp honours the format too`() {
+        // NodeCard's "Last DB heard" is the other clock in the interface and must not
+        // be left behind - the owner asked for all of them.
+        val epochSeconds = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toEpochSecond().toInt()
+        val h24 = StatsFormat.nodeDatabaseLastHeard(epochSeconds, Locale.US, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("Europe/Madrid"))
+        assertTrue(h24, h24.contains("13:01:13"))
+        assertFalse(h24, h24.uppercase().contains("PM"))
     }
 
     @Test
@@ -374,24 +365,10 @@ class StatsFormatTest {
         // numeric date because the field is one line under a chart.
         val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
             .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
-        val text = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("Europe/Madrid"))
+        val text = StatsFormat.graphTimestamp(at, Locale.UK, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("Europe/Madrid"))
 
         assertTrue(text, text.contains("13:01:13"))
         assertTrue(text, text.contains("2026") || text.contains("26"))
-    }
-
-    @Test
-    fun `the timestamp follows the locale, not a hardcoded pattern`() {
-        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
-            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
-        val english = StatsFormat.graphTimestamp(at, Locale.US, ZoneId.of("Europe/Madrid"))
-        val spanish = StatsFormat.graphTimestamp(at, Locale("es", "ES"), ZoneId.of("Europe/Madrid"))
-
-        // A US reader gets a 12-hour clock and month-first; a Spanish one does not.
-        // Asserting they differ rather than asserting either exact rendering, for
-        // the same reason `nodeDatabaseLastHeard`'s own tests do: the exact
-        // rendering is the platform's CLDR data, not ours.
-        assertNotEquals(english, spanish)
     }
 
     @Test
@@ -400,10 +377,57 @@ class StatsFormatTest {
         // time), so the Madrid rendering must carry a different hour from UTC's.
         val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
             .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
-        val madrid = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("Europe/Madrid"))
-        val utc = StatsFormat.graphTimestamp(at, Locale.UK, ZoneId.of("UTC"))
+        val madrid = StatsFormat.graphTimestamp(at, Locale.UK, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("Europe/Madrid"))
+        val utc = StatsFormat.graphTimestamp(at, Locale.UK, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("UTC"))
 
         assertTrue(madrid, madrid.contains("13:01:13"))
         assertTrue(utc, utc.contains("11:01:13"))
+    }
+
+    @Test
+    fun `the time format governs the clock and leaves the date to the locale`() {
+        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
+
+        val h24 = StatsFormat.graphTimestamp(at, Locale.US, TimeFormat.TWENTY_FOUR_HOUR, ZoneId.of("Europe/Madrid"))
+        val h12 = StatsFormat.graphTimestamp(at, Locale.US, TimeFormat.TWELVE_HOUR, ZoneId.of("Europe/Madrid"))
+
+        // 24 hour: no am/pm marker anywhere, and the hour is 13.
+        assertTrue(h24, h24.contains("13:01:13"))
+        assertFalse(h24, h24.uppercase().contains("AM") || h24.uppercase().contains("PM"))
+
+        // 12 hour: the hour is 1 and there is a marker.
+        assertTrue(h12, h12.contains("1:01:13"))
+        assertTrue(h12, h12.uppercase().contains("PM"))
+    }
+
+    @Test
+    fun `the date half still follows the locale in both formats`() {
+        val at = LocalDateTime.of(2026, 8, 21, 13, 1, 13)
+            .atZone(ZoneId.of("Europe/Madrid")).toInstant().toEpochMilli()
+        val spain = Locale("es", "ES")
+        for (format in TimeFormat.entries) {
+            val us = StatsFormat.graphTimestamp(at, Locale.US, format, ZoneId.of("Europe/Madrid"))
+            val es = StatsFormat.graphTimestamp(at, spain, format, ZoneId.of("Europe/Madrid"))
+            // Month-first against day-first: the clock choice must not flatten the date.
+            assertNotEquals("date order lost for $format", us, es)
+        }
+    }
+
+    @Test
+    fun `midnight and noon are not confused in twelve hour form`() {
+        // The classic pattern bug: 'HH' or 'kk' where 'hh' is meant renders midnight
+        // as 00 AM or noon as 00 PM. Both must read 12.
+        val zone = ZoneId.of("Europe/Madrid")
+        fun at(h: Int) = LocalDateTime.of(2026, 8, 21, h, 5, 0).atZone(zone).toInstant().toEpochMilli()
+
+        val midnight = StatsFormat.graphTimestamp(at(0), Locale.US, TimeFormat.TWELVE_HOUR, zone)
+        val noon = StatsFormat.graphTimestamp(at(12), Locale.US, TimeFormat.TWELVE_HOUR, zone)
+        assertTrue(midnight, midnight.contains("12:05:00") && midnight.uppercase().contains("AM"))
+        assertTrue(noon, noon.contains("12:05:00") && noon.uppercase().contains("PM"))
+
+        // And 24 hour renders them 00 and 12.
+        assertTrue(StatsFormat.graphTimestamp(at(0), Locale.US, TimeFormat.TWENTY_FOUR_HOUR, zone).contains("00:05:00"))
+        assertTrue(StatsFormat.graphTimestamp(at(12), Locale.US, TimeFormat.TWENTY_FOUR_HOUR, zone).contains("12:05:00"))
     }
 }

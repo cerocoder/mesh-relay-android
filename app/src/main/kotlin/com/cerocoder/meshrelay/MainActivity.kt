@@ -35,6 +35,8 @@ import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.MeshRelayNavHost
 import com.cerocoder.meshrelay.ui.common.LocalAppResumed
+import com.cerocoder.meshrelay.ui.common.LocalMapProvider
+import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 import kotlinx.coroutines.launch
@@ -148,7 +150,11 @@ class MainActivity : ComponentActivity() {
             }
 
             MeshRelayTheme {
-                CompositionLocalProvider(LocalAppResumed provides resumed) {
+                CompositionLocalProvider(
+                    LocalAppResumed provides resumed,
+                    LocalTimeFormat provides settings.timeFormat,
+                    LocalMapProvider provides settings.mapProvider,
+                ) {
                     ProvideRelativeClock(SystemTimeSource) {
                         MeshRelayContent(
                             container = container,

@@ -42,6 +42,7 @@ import com.cerocoder.meshrelay.settings.AppSettings
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.settings.MapProvider
+import com.cerocoder.meshrelay.settings.TimeFormat
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.preview.SampleData
@@ -149,6 +150,17 @@ fun SettingsScreen(
                     label = stringResource(mapProviderLabelRes(provider)),
                     selected = settings.mapProvider == provider,
                     onClick = { onUpdate { current -> current.copy(mapProvider = provider) } },
+                )
+            }
+
+            item(key = "time-format-header") {
+                SectionHeader(stringResource(R.string.settings_time_format))
+            }
+            items(items = TimeFormat.entries, key = { "time-format-${it.name}" }) { format ->
+                RadioOptionRow(
+                    label = stringResource(timeFormatLabelRes(format)),
+                    selected = settings.timeFormat == format,
+                    onClick = { onUpdate { current -> current.copy(timeFormat = format) } },
                 )
             }
 
@@ -330,6 +342,11 @@ private fun gaugeModeLabelRes(mode: GaugeMode): Int = when (mode) {
 private fun mapProviderLabelRes(provider: MapProvider): Int = when (provider) {
     MapProvider.GOOGLE -> R.string.map_provider_google
     MapProvider.OPEN_STREET_MAP -> R.string.map_provider_osm
+}
+
+private fun timeFormatLabelRes(format: TimeFormat): Int = when (format) {
+    TimeFormat.TWELVE_HOUR -> R.string.time_format_12
+    TimeFormat.TWENTY_FOUR_HOUR -> R.string.time_format_24
 }
 
 /** One `RadioButton` plus its label, both toggled by tapping anywhere in the

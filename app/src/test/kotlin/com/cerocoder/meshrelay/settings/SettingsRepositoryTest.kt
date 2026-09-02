@@ -39,6 +39,9 @@ class SettingsRepositoryTest {
         assertEquals(SortMode.PACKETS, settings.defaultSortMode)
         assertEquals(MapProvider.GOOGLE, settings.mapProvider)
         assertEquals("https://meshview.meshtastic.es", settings.meshviewUrl)
+        // 24 hour by default: this mesh is based in Spain, where the 24-hour
+        // clock is standard.
+        assertEquals(TimeFormat.TWENTY_FOUR_HOUR, settings.timeFormat)
         assertEquals(false, settings.keepScreenOn)
         assertEquals(true, settings.backgroundCollection)
         // On by default: the phone is what the surveyor is carrying, and the node's
@@ -70,6 +73,19 @@ class SettingsRepositoryTest {
 
         repo(store).update { it.copy(mapProvider = MapProvider.GOOGLE) }
         assertEquals(MapProvider.GOOGLE, repo(store).settings.value.mapProvider)
+    }
+
+    @Test
+    fun `time format persists both ways`() {
+        // Both directions, for the same reason the map-provider test above gives:
+        // the default is TWENTY_FOUR_HOUR, so a store that dropped the write
+        // would still read back TWENTY_FOUR_HOUR and pass a one-directional test.
+        val store = FakeStore()
+        repo(store).update { it.copy(timeFormat = TimeFormat.TWELVE_HOUR) }
+        assertEquals(TimeFormat.TWELVE_HOUR, repo(store).settings.value.timeFormat)
+
+        repo(store).update { it.copy(timeFormat = TimeFormat.TWENTY_FOUR_HOUR) }
+        assertEquals(TimeFormat.TWENTY_FOUR_HOUR, repo(store).settings.value.timeFormat)
     }
 
     @Test
