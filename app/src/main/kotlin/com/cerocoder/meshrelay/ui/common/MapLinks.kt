@@ -58,11 +58,22 @@ object MapLinks {
      *   already-schemed URL, `http://` included, is left exactly as typed - this
      *   function corrects an absent scheme, it does not second-guess one that is
      *   merely unencrypted.
+     *
+     * [nodeNum] is a uint32 on the wire, stored here in a Kotlin [Int] because
+     * that is what the rest of this codebase carries a node number as. That means
+     * roughly half of all real node numbers - anything with the high bit set, i.e.
+     * `>= 0x80000000` - are negative when read as an `Int`, even though the device
+     * itself has no concept of sign. Meshview's URL scheme wants the unsigned
+     * decimal form, so the value is masked up into a [Long] (`and 0xFFFF_FFFFL`)
+     * before formatting - this is not redundant with the `Int` type, it is the
+     * fix: without it, half of all nodes get a link like `/node/-1636437596`
+     * that Meshview rejects, instead of the `/node/2658529700` it expects.
      */
     fun meshview(baseUrl: String, nodeNum: Int): String {
         val trimmed = baseUrl.trimEnd('/')
         val withScheme = if (SCHEME_PATTERN.containsMatchIn(trimmed)) trimmed else "https://$trimmed"
-        return String.format(Locale.ROOT, MESHVIEW_NODE_TEMPLATE, withScheme, nodeNum)
+        val unsignedNodeNum = nodeNum.toLong() and 0xFFFF_FFFFL
+        return String.format(Locale.ROOT, MESHVIEW_NODE_TEMPLATE, withScheme, unsignedNodeNum)
     }
 
     // A scheme plus "://" at the very start, e.g. "https://", "http://" - deliberately

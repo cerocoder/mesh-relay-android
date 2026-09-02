@@ -92,4 +92,42 @@ class MapLinksTest {
         val link = MapLinks.meshview("meshview.meshtastic.es/", nodeNum = 123)
         assertEquals("https://meshview.meshtastic.es/node/123", link)
     }
+
+    // Every case above passes nodeNum = 123 - a small positive number that cannot
+    // exhibit the sign bug below. That is exactly why the bug shipped unnoticed.
+
+    @Test
+    fun `a node number above two to the thirty-first is unsigned in the link`() {
+        // A node number is a uint32 on the wire and an Int here, so roughly half of
+        // all real node numbers are negative in Kotlin. The owner's own T-Echo is one:
+        // !9e75f1a4 formatted with %d from an Int reads /node/-1636437596, which
+        // Meshview rejects. Every pre-existing test in this file passes nodeNum = 123,
+        // which is why this shipped.
+        val link = MapLinks.meshview("https://meshview.meshtastic.es", nodeNum = 0x9E75F1A4.toInt())
+        assertEquals("https://meshview.meshtastic.es/node/2658529700", link)
+    }
+
+    @Test
+    fun `the boundaries of the unsigned range are exact`() {
+        // 0x80000000 is the first node number that goes negative in an Int, and
+        // 0xFFFFFFFF is the last valid one - the two ends of the half that was broken.
+        assertEquals(
+            "https://meshview.meshtastic.es/node/2147483648",
+            MapLinks.meshview("https://meshview.meshtastic.es", nodeNum = 0x80000000.toInt()),
+        )
+        assertEquals(
+            "https://meshview.meshtastic.es/node/4294967295",
+            MapLinks.meshview("https://meshview.meshtastic.es", nodeNum = 0xFFFFFFFF.toInt()),
+        )
+    }
+
+    @Test
+    fun `a node number below two to the thirty-first is unchanged`() {
+        // The owner's other node, !5ead49bf, is under the boundary and always worked.
+        // The fix must not disturb it.
+        assertEquals(
+            "https://meshview.meshtastic.es/node/1588414911",
+            MapLinks.meshview("https://meshview.meshtastic.es", nodeNum = 0x5EAD49BF),
+        )
+    }
 }
