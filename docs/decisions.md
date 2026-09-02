@@ -466,3 +466,40 @@ Ruling 43: a new global setting, `AppSettings.mapProvider` (`MapProvider.GOOGLE`
   wrong default sends every tap of the crosshair to a service the owner did not choose, on
   every relay and neighbour, until Settings is found and the value changed - visible on first
   use, and a one-field fix once found.
+
+### 44
+
+Ruling 44: the plot's vertical scale is fitted to the viewport, not fixed - `PX_PER_SAMPLE`
+  becomes `MIN_PX_PER_SAMPLE`, a floor under `ChartGeometry.fitPxPerSample`, at the owner's
+  instruction after the second hardware run. This is option 1 of field issue F-7's three, chosen
+  by the owner. A fixed row height makes a young series a thin band at the top of an empty plot:
+  at `1f`, 69 measurements filled 87 of a 1100 px plot on a 450 dpi phone - eight per cent - and
+  ruling 41's doubling to `2f` halved the problem without removing it, since 550 measurements is
+  still an hour and a half on a relay heard every ten seconds. The rule now is **fit while it
+  fits, then scroll**: `max(minPxPerSample, viewportPx / size)`, so the retained series exactly
+  fills the plot until fitting would crush the points together, and the floor holds after that.
+  The floor is `2f` because a dot has a radius - two pixels of vertical room at the `1.dp`
+  `PointRadius`, below which consecutive dots merge into the solid band ruling 40's discrete
+  points exist to remove. The changeover is `viewportPx / 2` measurements, 550 on the owner's
+  plot: below it the whole series is on screen, `maxScrollPx` is 0 and the scrollbar correctly
+  has no travel - not a regression but the fix, since nothing is hidden; above it the chart
+  scrolls exactly as it did before, a saturated 5000-sample buffer still being 10000 px of
+  content. The fit is derived from the **frozen** frame's `shown.size`, never the live series:
+  ruling 36 says Freeze holds the whole drawing, and a scale is part of a drawing, so fitting to
+  the live series would leave a frozen chart quietly rescaling as packets kept arriving behind
+  it. One further thing changes character rather than value: `ROW_EPSILON` (ruling 35) was
+  dormant against a power-of-two scale, where `yOf`'s round trip was exact; a fitted scale is an
+  arbitrary `Float` such as 15.94 and the epsilon is now the only thing keeping the crosshair's
+  numbers on the row its rule is drawn at - both KDocs say so, so it is not simplified away as
+  dead defence. One further float consequence had to be closed rather than accepted: while
+  fitting, the content height is the round trip `size * (viewportPx / size)`, which misses
+  `viewportPx` by around a ten-thousandth of a pixel in whichever direction the rounding
+  happens to go, so `ChartScrollbar`'s `contentPx <= viewportPx` guard would have made the
+  whole bar appear and vanish at random as the series grew. Its threshold is now one whole
+  pixel of travel (`MIN_SCROLLABLE_PX`) - a fraction of a pixel is not a distance anything can
+  be scrolled to, and the real changeover gives a whole row of travel, two pixels at the floor,
+  so nothing genuinely scrollable is hidden by it. Cost if wrong: the vertical axis is no longer uniform between subjects, so two
+  charts are not directly comparable by eye - the trade F-7's option 1 names explicitly - and
+  while the chart is fitting the scale changes with every measurement, so the plot compresses
+  gently as it fills, with the top edge fixed at row 0. Acceptance item H20 is what settles
+  whether that compression reads as distracting on the phone.

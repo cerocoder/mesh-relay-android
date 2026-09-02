@@ -672,13 +672,36 @@ three buttons elsewhere in the app are unaffected either way.
 
 ---
 
+### H20. A young chart fills the plot instead of banding at the top
+**Do:** Open a Graph on a subject with only a few dozen measurements — a fresh session, or a relay
+heard rarely — and look at the whole plot area. Watch it for a few minutes while new packets
+arrive. Then find or wait for a subject with more than 550 measurements (the changeover on this
+phone's 1100 px plot) and try the scrollbar on it.
+**Pass looks like:** the trace uses the **full height** of the plot rather than sitting as a thin
+band at the top of a mostly empty area — that is F-7, and fitting is the fix (ruling 44). The dots
+are spread apart and individually resolvable rather than merged. As measurements arrive the plot
+compresses gently, the top edge staying put with row 0 at the top; that is inherent to fitting and
+the question here is only whether it is distracting enough to matter. On the young chart the
+scrollbar has no travel and the plot does not scroll — correct, because nothing is hidden. Past
+550 measurements the chart scrolls again and the scrollbar gains a thumb that moves, exactly as it
+did before this change. The crosshair reads the same measurement its rule is drawn at throughout,
+at the fitted scale as well as at the floor.
+**Silent-failure watch:** the 12 dp scrollbar down the right edge **blinking on and off** as
+measurements arrive on the young chart. It should be absent the whole time, not flickering — if it
+flickers, `MIN_SCROLLABLE_PX` is not doing its job against the fitted scale's float round trip.
+
+- [ ] Ran on: ______________________
+  Notes:
+
+---
+
 
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 51
+- **Total items run:** _____ / 52
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

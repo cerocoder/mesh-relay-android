@@ -485,7 +485,7 @@ first hours of a session cannot exercise the scrolling half of this screen.
 measurement, and nothing crashes. What is wrong is that the default scale makes a working feature
 look empty.
 
-**Status:** open - filed, not implemented. Deliberately not fixed on the branch that found it.
+**Status:** fixed - `ChartGeometry.fitPxPerSample`, plus the fix note below.
 
 **Notes for whoever fixes it.** The machinery is already there and tested: `ChartGeometry` takes
 `pxPerSample` in every signature and `ChartGeometryTest` exercises it at 0.1, 1 and 4, including the
@@ -505,3 +505,47 @@ off that list. Three options, in the order I would weigh them:
    series is nearly three times shorter on this phone than on a 160 dpi device. Worth noting that
    the present behaviour is already density-dependent in a way requirement 13's wording does not
    acknowledge.
+
+**What was done.** The owner chose option 1. `PX_PER_SAMPLE` is gone; the scale is derived once per
+composition by `ChartGeometry.fitPxPerSample(size, viewportPx, minPxPerSample)`, which is
+`viewportPx / size` clamped up to a floor - **fit while it fits, then scroll**. The floor is
+`MIN_PX_PER_SAMPLE = 2f`, the value ruling 41 established by measurement: two pixels of vertical
+room per measurement at a `1.dp` point radius, below which dots overlap so heavily that the trace
+becomes the solid band ruling 40 exists to avoid.
+
+**The changeover is at `viewportPx / 2` measurements - 550 on this phone's 1100 px plot.** Below it
+the whole retained series is on screen, `maxScrollPx` is 0, and the scrollbar correctly has no
+travel: nothing is hidden, so there is nothing to reveal. Above it the floor takes over and the
+chart scrolls exactly as it did before this change - a saturated 5000-sample buffer is still
+10000 px of content. The 69 measurements this issue was measured at now fill the plot exactly,
+against the 87 pixels of 1100 recorded above.
+
+**The consequence option 1 names is accepted, not avoided:** the vertical axis is no longer uniform
+between subjects, so two charts of different lengths are not directly comparable by eye. Recorded
+as ruling 44. A second, smaller consequence is new: while the chart is fitting, the scale changes
+slightly with every measurement, so the plot compresses gently as it fills. Row 0 is the newest
+measurement at y=0, so the top edge stays put and the compression happens below it. Acceptance item
+**H20** is what judges whether that reads as distracting on the phone.
+
+**One thing had to be fixed alongside it.** While fitting, the chart's content height is the round
+trip `size * (viewportPx / size)`, which in IEEE-754 misses `viewportPx` by about a ten-thousandth
+of a pixel in whichever direction the rounding goes, differently for each series length. Against
+`ChartScrollbar`'s old `contentPx <= viewportPx` guard that would have made the whole 12 dp bar
+appear and vanish at random as measurements arrived. The guard now asks for one whole pixel of
+travel (`MIN_SCROLLABLE_PX`): a fraction of a pixel is not a distance anything can be scrolled to,
+and past the changeover the travel is a whole row, so nothing genuinely scrollable is hidden.
+
+**One knock-on worth knowing about.** A fitted scale is an arbitrary `Float` such as 15.94, where
+`yOf`'s subtract-then-add round trip is not exact - at the old power-of-two `2f` it was. That makes
+`ChartGeometry`'s `ROW_EPSILON` (ruling 35) load-bearing for the first time: it is now the only
+thing keeping the crosshair's numbers on the row its rule is drawn at. Both KDocs say so, so that a
+later reader does not simplify it away as dead defence.
+
+**The second consequence recorded above is unchanged in kind, only in threshold.** Acceptance items
+**H7** (the gesture split) and **H14** (a saturated series) still need a series longer than the
+changeover before there is anything to scroll - 550 measurements rather than 1100. They are
+untestable on a young chart by design now rather than by accident: a chart with nothing hidden has
+no scrolling to exercise.
+
+**Not verified on the phone at the time of this commit.** Nothing was compiled or run locally - CI
+is the gate on this branch - and the hardware run is H20.

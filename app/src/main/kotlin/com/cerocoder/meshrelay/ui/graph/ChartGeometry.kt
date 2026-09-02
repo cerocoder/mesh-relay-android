@@ -26,13 +26,15 @@ data class ScaleRange(val min: Float, val max: Float)
  * itself is stored oldest first, its natural append order; [indexOfRow] is the
  * one place that inversion happens.
  *
- * **One measurement is one pixel row**, and only the rows inside the scrolled
- * window are drawn - 5000 rows in a single `Canvas` inside a `verticalScroll`
- * would be a layer far past the maximum texture size and fails on real hardware.
- * [pxPerSample] is a parameter throughout and is fixed at `1f` by its single
- * caller; requirement 13 asks for exactly that, so a zoom control (2x, 4x, or a
- * fraction such as 0.1) becomes a value to pass rather than a restructuring. It
- * may be fractional, which is why it is a `Float`.
+ * **One measurement is one row**, and only the rows inside the scrolled window
+ * are drawn - 5000 rows in a single `Canvas` inside a `verticalScroll` would be
+ * a layer far past the maximum texture size and fails on real hardware. How tall
+ * a row is - `pxPerSample` - is a parameter of every function that needs it and
+ * is never a constant in here. Its single caller no longer passes a constant
+ * either: it passes [fitPxPerSample], which fits the retained series to the plot
+ * until the fit would crush the points together, and holds a floor after that
+ * (ruling 44, field issue F-7). It may be fractional, and after that change it
+ * usually is, which is why it is a `Float`.
  */
 object ChartGeometry {
 
@@ -53,8 +55,10 @@ object ChartGeometry {
      * pixels.** The nearest undrawn row above the viewport sits between two and
      * three rows above the top edge, and the nearest one below sits between one
      * and two rows below the bottom - so the bottom is the tighter of the two,
-     * with one row of margin in the worst case. At the screen's `2f` pixels per
-     * sample and its `1.dp` radius that margin is 2 px against a radius of about
+     * with one row of margin in the worst case. At the screen's floor of `2f`
+     * pixels per sample - which since ruling 44 is the *smallest* value it ever
+     * passes, so it is also the worst case - and its `1.dp` radius that margin is
+     * 2 px against a radius of about
      * 2.8 px on a 450 dpi phone, so a point centred just past the bottom edge can
      * still clip under a pixel of itself in and out. If that radius is tuned
      * upwards on the phone, this constant is what has to grow with it.
@@ -63,6 +67,57 @@ object ChartGeometry {
 
     /** The series index this row draws. Storage is oldest-first; rows are newest-first. */
     fun indexOfRow(row: Int, size: Int): Int = size - 1 - row
+
+    /**
+     * How tall one row should be so that [size] rows exactly fill a plot
+     * [viewportPx] tall - but never shorter than [minPxPerSample].
+     *
+     * **The scale is derived, not fixed** (ruling 44, closing field issue F-7).
+     * A fixed row height means a young series is a thin band at the top of a
+     * mostly empty plot: at `1f` on a 450 dpi phone, 69 measurements filled 87 of
+     * the plot's 1100 pixels - eight per cent - and reading as broken rather than
+     * as sparse. Doubling the constant to `2f` halved the problem and did not
+     * remove it. Fitting removes it: while the series is short the plot is full,
+     * and it stays full as the series grows.
+     *
+     * **Fit while it fits, then scroll.** The two regimes are worth stating
+     * separately, because each is what the other is not:
+     *
+     * - While the retained series is shorter than the plot is tall, the fit wins
+     *   and the whole series is on screen. [maxScrollPx] is 0, so there is
+     *   nothing to scroll and the scrollbar correctly has no travel. That is not
+     *   a regression against the fixed scale that scrolled from the first
+     *   measurement; it is the fix. Nothing is hidden, so nothing needs revealing.
+     * - Past that point [minPxPerSample] takes over and the chart behaves exactly
+     *   as a fixed scale does: content grows past the viewport, scrolling
+     *   resumes, and a saturated 5000-sample buffer is 5000 * [minPxPerSample]
+     *   pixels of content. The changeover is at `viewportPx / minPxPerSample`
+     *   measurements - on the owner's 1100 px plot at a `2f` floor, 550 of them.
+     *
+     * **The floor is what stops the fit from being absurd.** Without it two
+     * measurements would be a plot-tall staircase, and - the reason it is `2f`
+     * rather than something smaller - a long series would be squeezed below the
+     * point radius the chart draws with, merging consecutive dots into the solid
+     * band that ruling 40's discrete points exist to avoid. `2f` gives each dot
+     * two pixels of vertical room at a `1.dp` radius, which is the value ruling
+     * 41 established by measurement on hardware.
+     *
+     * **This is what makes `ROW_EPSILON` load-bearing.** A fitted scale is an
+     * arbitrary `Float` - 15.94 for 69 measurements in an 1100 px plot - and
+     * [yOf]'s subtract-then-add round trip does *not* cancel exactly at such a
+     * value, where at a power of two like the old fixed `2f` it did. The epsilon
+     * (ruling 35) was dormant then and is the only thing keeping the crosshair's
+     * numbers on the row its rule is drawn at now. It must not be simplified away.
+     *
+     * A [viewportPx] of `0` is the first composition, before `onSizeChanged` has
+     * measured the plot; the answer there must be the floor and not `0`, which
+     * would make every row zero-tall and stop [visibleRows] drawing anything at
+     * all. The clamp gives that on its own - a fit of nothing is `0`, and `0` is
+     * below the floor - so it needs no branch of its own. The one branch is for a
+     * [size] of `0`, where there is no fit to divide at all.
+     */
+    fun fitPxPerSample(size: Int, viewportPx: Float, minPxPerSample: Float): Float =
+        if (size <= 0) minPxPerSample else (viewportPx / size).coerceAtLeast(minPxPerSample)
 
     /** The height the whole series would occupy if every row were drawn at once. */
     fun contentHeightPx(size: Int, pxPerSample: Float): Float = size * pxPerSample
@@ -147,6 +202,15 @@ object ChartGeometry {
      * (`SignalSeriesBuffer.MAX_SAMPLES`) it reaches ~5e-4 of a row. A thousandth
      * of a row covers that with a factor of two in hand, and is itself far below
      * one pixel at any scale this chart draws.
+     *
+     * **It is doing work now, and it was not before.** Ruling 35 added it against
+     * a `pxPerSample` the screen fixed at a power of two, where the round trip
+     * happened to be exact and no test but the one naming a fractional scale
+     * could tell it apart from nothing. Since ruling 44 the scale is
+     * [fitPxPerSample]'s answer - an arbitrary `Float` such as 15.94 - and the
+     * round trip is genuinely inexact. Do not remove this as dead defence: it is
+     * the only thing keeping the crosshair's numbers on the row its rule is
+     * drawn at.
      */
     private const val ROW_EPSILON = 1e-3f
 
