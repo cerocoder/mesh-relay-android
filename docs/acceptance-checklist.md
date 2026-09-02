@@ -461,8 +461,8 @@ no reviewer has seen a pixel of it, and this project has no Compose test harness
 **Graph**. Go back, open a **neighbour** detail screen, and do the same.
 **Pass looks like:** the button appears on both; both open a chart titled for that subject.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS (relay side). `More` at [968,148][1036,216]; menu item "Graph" / "Gráfica". Neighbour side NOT yet run.
 
 ### H2. The chart matches the drawing
 **Do:** With a relay that has heard a few hundred packets, read the screen against `Pic1.pdf`.
@@ -470,8 +470,8 @@ no reviewer has seen a pixel of it, and this project has no Compose test harness
 SNR bars, a `Time` field above the plot, the scrollable plot, a `Time` field below it. Two lines,
 green for SNR and blue for RSSI — the same colours as the bars.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS. Title, both switches right-aligned, both bars, Time above and below. The plot itself: see F-7.
 
 ### H3. Newest at the top, and arriving data does not yank the view
 **Do:** Watch a live relay. Scroll down into the history and wait for new packets to arrive.
@@ -486,8 +486,8 @@ under your eye does not move as new ones arrive.
 **Pass looks like:** nothing on screen moves while frozen — not the plot, not the bars, not the
 scales. Switching off redraws complete, including everything collected while it was held.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS. Held at count 79 for 12 s while the engine collected; unfreeze jumped to 87, redrawn complete. Confirms the bars are held too (ruling 36).
 
 ### H5. Auto scale moves both the bars and the plot
 **Do:** Switch **Auto scale** on. It is off by default.
@@ -504,8 +504,8 @@ own colours, and a globe at its right. Google Maps opens at that measurement's p
 measurement with no stored position the globe is greyed out. With TalkBack on, the globe says
 whether the position came from the node or from the phone.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS. Crosshair gave timestamp, RSSI and SNR; the globe is a real 48 dp target (135 px at density 450) whose description names the origin.
 
 ### H7. The gesture split — the most likely thing to feel wrong
 **Do:** On the plot, drag slowly, then flick fast. Then drag the scrollbar on the right edge.
@@ -513,8 +513,8 @@ whether the position came from the node or from the phone.
 scrollbar is what scrolls. Also confirm the 12 dp scrollbar is actually grabbable — it is below
 the 48 dp interactive minimum, and the whole bar rather than just the thumb is draggable.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: NOT TESTABLE YET. See F-7: the trace is shorter than the viewport, so maxScrollPx is 0 and there is nothing to scroll.
 
 ### H8. The `Time` fields name the rows actually on screen
 **Do:** Scroll to a position that is neither end. Compare both `Time` fields against the topmost
@@ -532,8 +532,8 @@ clipping; the `Hora:` fields fit on one line; the crosshair's three labels ellip
 cut mid-glyph and do not collide with the globe. **Read this off `uiautomator dump`, not off a
 screenshot** — every layout defect in this project was found in `bounds`.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS, read off uiautomator dump. `Escala automatica` ends at x=866 with the switch beyond it, no wrap or clip; crosshair labels end at x=317, globe starts at x=911, no collision; decimal commas and d/M/yy dates correct.
 
 ### H10. Use phone location, and refusing it
 **Do:** Confirm **Use phone location** is on by default in Settings with its summary underneath.
@@ -557,8 +557,8 @@ off every globe is correctly disabled there regardless of anything else under te
 item against a real node or the phone's own position, not a demo scenario, or a field issue gets
 logged against behaviour that is actually correct.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PARTIAL PASS. Switch present with its summary, on by default. Granting location from system Settings and then resuming DID start updates - dumpsys location shows both providers at `@+10s0ms, minUpdateDistance=10.0`, the spec 7.1 constants reaching the platform. Globe description became "posicion del telefono", so the whole stamping chain works end to end. NOT yet run: screen-off stamping, and the demo-node caveat above (judged against the phone, not a real node).
 
 ### H11. Rotation, reset and subject switching
 **Do:** Rotate the phone with the Graph open, frozen and scrolled down — **on a deliberately quiet
@@ -599,8 +599,8 @@ at the bottom, and the chart does not scroll into empty space. Nothing checks pa
 which is where the ring buffer wraps, where `size` stops growing while `totalAppended` keeps
 moving, and where the scroll clamp becomes load-bearing.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: NOT TESTABLE YET. See F-7; needs a subject past roughly 1100 measurements.
 
 ### H15. The crosshair holds its measurement as packets arrive
 **Do:** Touch the plot to place the crosshair on a measurement, then watch a live relay for
@@ -636,8 +636,8 @@ and left off when the grant is absent. This item is the only one on the checklis
 catch that check being removed, and it is a hard crash if it ever is. Run it on the newest
 Android available (14 or later); on older releases the failure mode does not exist.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+  Notes: PASS, with evidence. Location denied, connected: service types=0x00000010 (CONNECTED_DEVICE only, no LOCATION bit), no SecurityException, app alive. After granting, types=0x00000018 within one 30 s refresh.
 
 ---
 
