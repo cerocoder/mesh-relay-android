@@ -444,7 +444,9 @@ class MeshStatsEngineTest {
         // describes somebody else's mesh view and every name in it may be wrong.
         val subject = engine(backgroundScope)
         val seen = collectSnapshots(subject)
-        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct(from = 0x4242)))
+        subject.attach(
+            flowOf(myInfoFrame(SENDER), nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct(from = 0x4242)),
+        )
         runCurrent()
         assertEquals(1, seen.last().relays.size)
         assertEquals(1, seen.last().directory.count)

@@ -166,6 +166,12 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      * Identity is the BLE address at the owner's decision. The gap that leaves is
      * recorded in `docs/deferred-work.md`: two different nodes reached at the same
      * address would not trigger this.
+     *
+     * Not `@Volatile`, unlike [foregroundServiceRunning] above: [requestConnect] -
+     * this field's only reader and only writer - is reached only from a Compose
+     * lambda, always on the main thread. A caller reaching [requestConnect] from
+     * the application [scope] instead (an auto-reconnect at boot, say) would make
+     * this read unsynchronised.
      */
     private var statisticsAddress: String? = null
 
