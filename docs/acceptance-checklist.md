@@ -646,11 +646,12 @@ Android available (14 or later); on older releases the failure mode does not exi
 once on the plot, drag the crosshair, and double tap it.
 **Pass looks like:** the trace is discrete marks, not joined lines, and where the RSSI and SNR
 clouds cross **both colours stay visible** — that is the whole reason for the change (ruling 40).
-Each mark is a hard-edged 2x2 pixel square — ruling 45, at the owner's instruction after reading
-the chart on hardware — with no soft or antialiased fringe around it; a blurred or rounded-looking
-mark is a fail. A single tap places the crosshair with no perceptible delay, a drag still moves
-it and still does **not** scroll, and a double tap makes it and its globe disappear. A brief
-flicker of the crosshair during the double tap is expected and is documented in ruling 42.
+Each mark is a hard-edged 4x4 pixel square — ruling 46, at the owner's instruction after seeing
+the 2x2 square from ruling 45 measured pixel-by-pixel on the phone — with no soft or antialiased
+fringe around it; a blurred or rounded-looking mark is a fail. A single tap places the crosshair
+with no perceptible delay, a drag still moves it and still does **not** scroll, and a double tap
+makes it and its globe disappear. A brief flicker of the crosshair during the double tap is
+expected and is documented in ruling 42.
 
 - [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), builds 11cab7a then a4d3df1
   Notes: PASS, measured twice. First run (11cab7a, round marks): Auto scale on, 1017 RSSI-blue pixels against 1274 SNR-green - both metrics present in comparable quantity, where a polyline left one all but absent. Single tap placed the crosshair with no perceptible delay; double tap removed it and its globe. Second run (a4d3df1, after the owner asked for hard 2x2 squares): every mark in the plot is exactly 2x2 physical pixels with ZERO partially covered pixels - 15 marks per metric, 60 full pixels each, connected-component analysis reporting only the (2,2) shape. The integral-coordinate approach gives hard edges without an antialias flag, so no Paint is allocated per draw.

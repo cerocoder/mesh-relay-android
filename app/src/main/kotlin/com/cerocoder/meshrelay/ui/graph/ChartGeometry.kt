@@ -41,26 +41,30 @@ object ChartGeometry {
     /**
      * One row of overscan at each edge.
      *
-     * A measurement is drawn as a 2x2 physical-pixel square, not as a
-     * mathematical point (decision 45), so a row whose centre sits just
-     * *outside* the viewport can still paint part of itself inside it. A window
-     * clipped exactly to the viewport would never draw those rows, and points
-     * would pop in and out at the top and bottom edges instead of sliding across
-     * them.
+     * A measurement is drawn as a 4x4 physical-pixel square, not as a
+     * mathematical point (ruling 46; 2x2 under the decision 45 that preceded
+     * it), so a row whose centre sits just *outside* the viewport can still
+     * paint part of itself inside it. A window clipped exactly to the viewport
+     * would never draw those rows, and points would pop in and out at the top
+     * and bottom edges instead of sliding across them.
      *
      * (This row used to buy the polyline segments that join across the viewport
      * edge. The trace is points now - decision 40 - so that reason is gone; the
      * need for the row is not.)
      *
-     * **One row is comfortably enough.** The square's half-extent is 1 px in
-     * each direction, so a row's centre has to land within 1 px of the
-     * viewport's edge before any of its square crosses that edge. Even at the
-     * screen's floor of `2f` pixels per sample - the smallest gap this chart
-     * ever puts between two rows, and so the worst case - that 1 px half-extent
-     * is only half the gap between rows, meaning no row more than one away from
-     * the boundary can ever reach into the viewport. One row of overscan covers
-     * the worst case with a full pixel to spare, and has more room still at
-     * every fitted scale above the floor.
+     * **One row is exactly enough now, not comfortably enough.** The square's
+     * half-extent is 2 px in each direction - since ruling 46, equal to, not
+     * less than, the screen's floor of `2f` pixels per sample
+     * (`MIN_PX_PER_SAMPLE`), the smallest gap this chart ever puts between two
+     * rows and so the worst case. At that floor, a row centred exactly one
+     * row-gap beyond the viewport's edge reaches precisely to that edge and no
+     * further; a row two row-gaps beyond never reaches it. So one row of
+     * overscan still covers every row that could paint a visible pixel, but the
+     * margin ruling 41 gave this constant - "a full pixel to spare" - is gone:
+     * the half-extent now equals the floor exactly, with nothing left over.
+     * **If `POINT_SIZE_PX` is raised again past 4, this constant must go to
+     * 2** - a half-extent that exceeds the floor is exactly the case one row of
+     * overscan no longer covers.
      */
     const val OVERSCAN_ROWS = 1
 
@@ -95,12 +99,15 @@ object ChartGeometry {
      *
      * **The floor is what stops the fit from being absurd.** Without it two
      * measurements would be a plot-tall staircase, and - the reason it is `2f`
-     * rather than something smaller - a long series would be squeezed below the
-     * size of the mark the chart draws with, merging consecutive dots into the
-     * solid band that ruling 40's discrete points exist to avoid. `2f` gives
-     * each dot's 2x2 physical-pixel square (decision 45) two pixels of vertical
-     * room - the same margin ruling 41 established by measurement on hardware,
-     * back when the mark was still a `1.dp` circle.
+     * rather than something smaller - a long series would be squeezed further
+     * below the size of the mark the chart draws with. It no longer keeps
+     * consecutive dots apart even at `2f`: since ruling 46 the mark is a 4x4
+     * physical-pixel square, whose 2 px half-extent equals this floor exactly,
+     * so rows at the floor touch and, once fitting gives way to it past the
+     * changeover, overlap by up to 2 px - a long session's trace reads as a band
+     * rather than as the discrete dots ruling 40 introduced. That is accepted
+     * (ruling 46), not fixed by raising this floor, which would trade against
+     * how much history fits on screen before the chart scrolls.
      *
      * **This is what makes `ROW_EPSILON` load-bearing.** A fitted scale is an
      * arbitrary `Float` - 15.94 for 69 measurements in an 1100 px plot - and

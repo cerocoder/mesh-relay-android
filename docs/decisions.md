@@ -508,8 +508,12 @@ Ruling 44: the plot's vertical scale is fitted to the viewport, not fixed - `PX_
 
 Ruling 45: the plot's mark is a hard-edged 2x2 physical-pixel square, not the `1.dp` antialiased
   circle ruling 41 established - at the owner's instruction after reading the chart on hardware:
-  "the point is not a square. The point MUST be a square with 2x2 pix. Don't antialias them." A
-  footprint measured on the owner's 450 dpi device showed the circle rendering as a roughly 5x4
+  "the point is not a square. The point MUST be a square with 2x2 pix. Don't antialias them."
+  (Superseded by ruling 46: after seeing this 2x2 square measured pixel-by-pixel on the phone, the
+  owner asked for it bigger, and the mark became 4x4. The reasoning below - integral coordinates
+  for hard edges, pixels not dp, the centring convention - is unaffected; only the `2f` /
+  `POINT_SIZE_PX = 2f` figures it names are superseded.)
+  A footprint measured on the owner's 450 dpi device showed the circle rendering as a roughly 5x4
   blob with a soft, partially-covered pixel on every edge. `SignalChart.drawMetric` now calls
   `drawRect` with `Size(pointSizePx, pointSizePx)`; `SignalGraphScreen`'s `PointRadius = 1.dp` is
   gone, replaced by `POINT_SIZE_PX = 2f`, a plain `Float` never converted through `LocalDensity`.
@@ -533,3 +537,34 @@ Ruling 45: the plot's mark is a hard-edged 2x2 physical-pixel square, not the `1
   Cost if wrong: a 2 px mark is small on a high-density screen and may read fainter than the old
   circle's roughly 3 px fill - that is the first thing to raise if the chart reads as too faint on
   the phone, and the fix is a larger `POINT_SIZE_PX`, kept in whole pixels.
+
+### 46
+
+Ruling 46: the plot's mark grows from the 2x2 physical-pixel square ruling 45 set to a 4x4 one -
+  at the owner's instruction after seeing that 2x2 square measured pixel-by-pixel on the phone:
+  "they are too small, lets use 4 as multiplicator." `POINT_SIZE_PX` in `SignalGraphScreen.kt`
+  moves from `2f` to `4f`; nothing else about `SignalChart.drawMetric` changes.
+  **Integral coordinates, not the mark size, are what keep the edges hard, and that mechanism is
+  unaffected.** `drawMetric` still `floor()`s the geometry's x and y before subtracting
+  `pointSizePx / 2` to place `topLeft`, so at 4x4 the half-size offset is exactly `2f` - still an
+  integer - and both `topLeft` and `topLeft + size` land on exact integer pixel boundaries, the
+  same as at 2x2. Every mark stays a hard-edged square with nothing for the rasteriser to
+  antialias; verified on the device at 2x2 (ruling 45's evidence) with zero partially covered
+  pixels, and the same reasoning holds unchanged at 4x4.
+  **`ChartGeometry.OVERSCAN_ROWS` stays at `1`, but its margin is gone.** The mark's half-extent
+  is now 2 px, exactly equal to `MIN_PX_PER_SAMPLE`'s `2f` floor rather than comfortably inside it
+  as ruling 45 left it - a row centred exactly one row-gap beyond the viewport's edge now reaches
+  precisely to that edge and no further. One row of overscan is still the exact right answer, but
+  it is now the boundary case rather than a comfortable one, and its KDoc says so plainly: if
+  `POINT_SIZE_PX` is raised again past `4`, `OVERSCAN_ROWS` must go to `2`. That relationship, not
+  slack, is what a later reader needs from that constant now.
+  Cost if wrong: a bigger mark relative to the row spacing the `2f` floor guarantees means marks
+  stop reading as separate dots sooner. Concretely - while the chart is still fitting, consecutive
+  marks stay clear of each other only while `pxPerSample` exceeds 4 px, which stops holding once
+  the retained series passes about 275 measurements on the owner's 1100 px plot; past the
+  550-measurement changeover the floor pins rows 2 px apart and marks overlap by 2 px outright, so
+  a long session's trace reads as a continuous band rather than as discrete dots. That is a direct,
+  accepted consequence of the size the owner chose while looking at a young chart with widely
+  spaced marks, not a regression to chase down - the remedy, if it is ever wanted, is a smaller
+  mark or a larger `MIN_PX_PER_SAMPLE`, and the latter trades away how much history fits on screen
+  before the chart starts scrolling.

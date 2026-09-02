@@ -84,17 +84,20 @@ private val SwitchLabelSpacing = 8.dp
  * The side length of one measurement's mark, in physical pixels - decision 45,
  * at the owner's instruction after reading the chart on hardware: *"the point is
  * not a square. The point MUST be a square with 2x2 pix. Don't antialias them."*
+ * Ruling 46 raised it from 2x2 to 4x4, at the owner's later instruction after
+ * seeing the 2x2 mark on the phone: *"they are too small, lets use 4 as
+ * multiplicator."*
  *
  * **Pixels, not `dp`, and deliberately so.** Canvas units in [SignalChart] are
  * already physical pixels, so converting a `dp` value through [LocalDensity]
  * would size the mark differently on every phone this app runs on - exactly the
- * opposite of what a "2x2 pix" instruction means. This constant is
- * density-independent on purpose: the mark is the same 2x2 physical pixels on a
+ * opposite of what a fixed-pixel-count instruction means. This constant is
+ * density-independent on purpose: the mark is the same 4x4 physical pixels on a
  * 450 dpi phone and a 160 dpi one alike. What *does* vary with the screen and
  * with how much is on it is the spacing between marks - `pxPerSample`, fitted
  * per [MIN_PX_PER_SAMPLE] - never the mark itself.
  */
-private const val POINT_SIZE_PX = 2f
+private const val POINT_SIZE_PX = 4f
 
 /**
  * The shortest a measurement's row may be - the floor under the fitted scale, not
@@ -110,12 +113,20 @@ private const val POINT_SIZE_PX = 2f
  * fixing the scale at all. The chart now fits the retained series to the plot and
  * falls back to this floor once fitting would crush the points together.
  *
- * **`2f` and not less**, because a dot has a footprint: at the 2x2 px
- * [POINT_SIZE_PX] square (decision 45), two pixels of vertical room per
- * measurement is what keeps consecutive dots apart, and squeezing further merges
- * them into the solid band ruling 40's discrete points exist to avoid. It is
- * also the changeover point - the series length past which the chart scrolls
- * again - which on the owner's 1100 px plot is 550 measurements.
+ * **`2f` and not less**, because a young, still-fitting chart would otherwise be
+ * crushed to a staircase - and it is also the changeover point, the series
+ * length past which the chart scrolls again, which on the owner's 1100 px plot
+ * is 550 measurements.
+ *
+ * **It no longer keeps consecutive dots apart.** At the 4x4 px [POINT_SIZE_PX]
+ * square (ruling 46), a dot's half-extent is 2 px - exactly this floor, with no
+ * room left over. Rows at the floor touch rather than sit apart, and once
+ * fitting gives way to the floor, past the changeover, they overlap by up to 2
+ * px: a long session's trace reads as a continuous band rather than as discrete
+ * dots. That is an accepted consequence of the owner's chosen mark size, not a
+ * defect - ruling 46 records it. It is not "fixed" here; the fix would be a
+ * smaller mark or a larger floor, and a larger floor trades against how much
+ * history fits on screen before the chart starts scrolling.
  *
  * A `Float` because requirement 13 says the coefficient may be fractional, and
  * because the fitted value above it almost always is.
