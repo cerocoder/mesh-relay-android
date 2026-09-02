@@ -17,6 +17,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okio.ByteString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
 import org.junit.Assert.assertTrue
@@ -253,6 +254,69 @@ class MeshStatsEngineTest {
         assertTrue(seen.last().relays.isEmpty())
         assertEquals(SENDER, seen.last().neighbours.single().nodeNum)
         assertEquals(1, seen.last().counters.totalDirectPackets)
+    }
+
+    @Test
+    fun `our own node is not a neighbour and does not move any counter`() = runTest(StandardTestDispatcher()) {
+        // Decision 1: the owner chose for our own traffic to be invisible to the
+        // statistics, not merely absent from the Direct tally. A row with no SNR and
+        // no RSSI in a list about signal quality is noise, and counting it inflates
+        // the divisor every other neighbour's percentage uses.
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(myInfoFrame(SENDER), direct(from = SENDER), direct(from = SENDER)))
+        runCurrent()
+
+        assertTrue(seen.last().neighbours.isEmpty())
+        assertEquals(0, seen.last().counters.totalDirectPackets)
+        assertEquals(0, seen.last().counters.totalPackets)
+    }
+
+    @Test
+    fun `another node's direct traffic is unaffected`() = runTest(StandardTestDispatcher()) {
+        val other = 0x1111_2222
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(myInfoFrame(SENDER), direct(from = SENDER), direct(from = other)))
+        runCurrent()
+
+        assertEquals(listOf(other), seen.last().neighbours.map { it.nodeNum })
+        assertEquals(1, seen.last().counters.totalDirectPackets)
+        assertEquals(1, seen.last().counters.totalPackets)
+    }
+
+    @Test
+    fun `our own position still reaches the directory`() = runTest(StandardTestDispatcher()) {
+        // Decision 2, and the reason the guard sits after decodePayload: our own
+        // POSITION_APP packets are how localPosition() learns where we are, which is
+        // what stamps every Graph measurement when Use phone location is off.
+        // Dropping the packet before decoding would silently blank every globe.
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231)))
+        runCurrent()
+
+        assertNotNull(seen.last().directory.localPosition())
+        assertEquals(39.8628316, seen.last().directory.localPosition()!!.lat, 1e-7)
+        // and still counted nowhere
+        assertEquals(0, seen.last().counters.totalPackets)
+    }
+
+    @Test
+    fun `our own transmission heard back through a relay is still a relay measurement`() = runTest(StandardTestDispatcher()) {
+        // `from` being our node does not make a packet uninteresting. A relay that
+        // rebroadcast our transmission and let us hear it has told us about its link
+        // to us, which is exactly what this app measures. Only the Direct case - us as
+        // our own neighbour - is excluded.
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(myInfoFrame(SENDER), relayed(from = SENDER)))
+        runCurrent()
+
+        assertEquals(1, seen.last().relays.size)
+        assertEquals(1, seen.last().counters.totalRelayedPackets)
+        assertEquals(1, seen.last().counters.totalPackets)
+        assertTrue(seen.last().neighbours.isEmpty())
     }
 
     @Test

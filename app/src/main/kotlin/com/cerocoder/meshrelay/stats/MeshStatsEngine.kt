@@ -254,9 +254,6 @@ class MeshStatsEngine(
         // pause held across a reconnect would leave every relay unnamed.
         if (paused) return
 
-        counterState = counterState.copy(totalPackets = counterState.totalPackets + 1)
-        lastPacketAtMillis = timestamped.rxMillis
-
         // `from` is not optional on the wire, so Wire hands over 0 for a field the
         // sender never set and the original's `if from_node is not None`
         // (mesh_stats.py:1046) has nothing left to test. Node 0 is not a node number:
@@ -266,7 +263,11 @@ class MeshStatsEngine(
         // a naming candidate for every relay that identifies itself as ff. The packet
         // is still counted in totalPackets: the radio did receive it, and that total
         // is a tally of traffic heard, not of traffic understood.
-        if (packet.from == 0) return
+        //
+        // Counted, and nothing else - see the comment above on why node 0 is not a
+        // node. Unchanged behaviour, just hoisted into a helper now that the count
+        // is no longer the first thing that happens.
+        if (packet.from == 0) { countPacket(timestamped.rxMillis); return }
 
         decodePayload(packet.from, packet, timestamped.rxMillis)
 
@@ -282,14 +283,41 @@ class MeshStatsEngine(
         // counted in totalPackets, exactly like the sender-less case above. The
         // payload was decoded first because what it says concerns the sender, not the
         // relay, and one broken field does not discredit the other.
-        if (packet.relay_node !in 0..MAX_RELAY_BYTE) return
+        if (packet.relay_node !in 0..MAX_RELAY_BYTE) { countPacket(timestamped.rxMillis); return }
 
-        when (val ingest = PacketClassifier.classify(packet, skipped)) {
+        val ingest = PacketClassifier.classify(packet, skipped)
+
+        // Our own transmission, heard directly rather than through a relay: it is
+        // us, not a neighbour. We never received it over the air, so it carries no
+        // SNR and no RSSI, and folding it in would put a signal-less row in a list
+        // about signal and inflate the divisor every other neighbour's percentage
+        // is computed against. At the owner's decision it is counted nowhere at all,
+        // so this returns before countPacket.
+        //
+        // Deliberately NOT every packet from us. One that a relay rebroadcast and we
+        // heard back classifies as Relayed, and its signal measures that relay's link
+        // to us - dropping those would throw away real relay data.
+        //
+        // Also deliberately after decodePayload: our own POSITION_APP packets are how
+        // localPosition() learns where we are, which stamps every Graph measurement
+        // when Use phone location is off.
+        if (ingest is Ingest.Direct && ingest.fromNode == directory.localNodeNum) return
+
+        countPacket(timestamped.rxMillis)
+
+        when (ingest) {
             is Ingest.Relayed -> foldRelayed(ingest, timestamped.rxMillis)
             is Ingest.Direct -> foldDirect(ingest, timestamped.rxMillis)
             // Counted in totalPackets and nowhere else: mesh_stats.py:1063-1073.
             Ingest.Dropped -> Unit
         }
+    }
+
+    /** The two things every packet that counts as traffic moves, in one place so the
+     *  four early returns above cannot disagree about them. */
+    private fun countPacket(atMillis: Long) {
+        counterState = counterState.copy(totalPackets = counterState.totalPackets + 1)
+        lastPacketAtMillis = atMillis
     }
 
     /**

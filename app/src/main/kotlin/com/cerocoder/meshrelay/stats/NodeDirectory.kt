@@ -34,7 +34,18 @@ class NodeDirectory(private val time: TimeSource) {
     private val nodes = HashMap<Int, NodeRecord>()
     private val positions = HashMap<Int, PositionHistory>()
     private val telemetryRecords = HashMap<Int, TelemetryRecord>()
-    private var localNodeNum: Int? = null
+
+    /**
+     * Which node is ours, or null before the handshake.
+     *
+     * Readable because the engine consults it per packet to recognise our own
+     * traffic; writable only through [setLocalNodeNum], so the handshake stays the
+     * one way it is set. A field read, never a snapshot - this is on the path of
+     * every packet.
+     */
+    var localNodeNum: Int? = null
+        private set
+
     private var loadedAtMillis: Long? = null
 
     /**
