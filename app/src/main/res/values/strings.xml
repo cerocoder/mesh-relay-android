@@ -180,8 +180,8 @@
     <string name="node_altitude">Altitude</string>
     <string name="node_position_source">Position source</string>
     <string name="node_position">Position</string>
-    <string name="node_last_snr_db">Last SNR</string>
-    <string name="node_last_heard_db">Last heard</string>
+    <string name="node_last_snr_db">Last DB SNR</string>
+    <string name="node_last_heard_db">Last DB heard</string>
     <string name="node_firmware">Firmware</string>
     <string name="node_uptime">Uptime</string>
     <string name="node_restarts">Restarts</string>

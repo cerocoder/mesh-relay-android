@@ -180,8 +180,8 @@
     <string name="node_altitude">Altitud</string>
     <string name="node_position_source">Origen de la posición</string>
     <string name="node_position">Posición</string>
-    <string name="node_last_snr_db">Último SNR</string>
-    <string name="node_last_heard_db">Visto por última vez</string>
+    <string name="node_last_snr_db">Último SNR de la DB</string>
+    <string name="node_last_heard_db">Última recepción de la DB</string>
     <string name="node_firmware">Firmware</string>
     <string name="node_uptime">Tiempo activo</string>
     <string name="node_restarts">Reinicios</string>
