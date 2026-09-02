@@ -224,6 +224,12 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      * asks for it *after* the container has already been built - so without this
      * the source would sit idle until the next process start even though the user
      * had just granted it.
+     *
+     * Also called from `MainActivity.onResume`, for the grant this app never sees a
+     * callback for: one made in system Settings. Idempotent by construction - it
+     * re-applies the current setting, and `start()`/`stop()` are `@Synchronized`
+     * and early-return when there is nothing to do - so calling it on every resume
+     * costs nothing.
      */
     fun refreshLocationUpdates() {
         if (settings.settings.value.usePhoneLocation) phoneLocation.start() else phoneLocation.stop()

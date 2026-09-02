@@ -185,6 +185,18 @@ fun SignalGraphScreen(
     // and re-captures the live one while leaving the switch on. That is the
     // honest behaviour: the switch's meaning is "stop moving", and it keeps
     // meaning that from the rotation onwards.
+    //
+    // That re-capture has one narrow consequence, and a second path reaches it:
+    // if what gets captured is a *fully* empty frame - no statistics and no
+    // measurements - the switches below go disabled while Freeze is still on, and
+    // the reader cannot release it without leaving the screen. It happens on a
+    // rotation taken after a reset, and equally if a reset lands in the very
+    // composition that flips Freeze on, capturing the already-emptied frame. One
+    // cause, not two: the frame is captured once and enablement is read from it,
+    // so a frame with nothing in it disables the switch that would replace it.
+    // Both are pre-existing and both got rarer when the predicate below stopped
+    // being `shown.size > 0`; neither is worth holding state across a
+    // configuration change to close.
     val frame = remember(freeze) { if (freeze) live else null } ?: live
     val shown = frame.series
 

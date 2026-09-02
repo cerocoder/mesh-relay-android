@@ -53,6 +53,16 @@ class MeshForegroundService : Service() {
             // Before Android 14 the two-argument form takes every type the manifest
             // declares, and no permission is enforced at start: an app without the
             // location grant simply receives no fixes. Nothing to compute here.
+            //
+            // Two further platform rules apply to this branch and to nothing else
+            // in this file. On API 26-28 `android:foregroundServiceType` is ignored
+            // outright - the attribute arrived in API 29 - so the manifest's second
+            // type buys nothing there. And on API 30-33 a service started while the
+            // app is in the background gets no while-in-use permissions at all,
+            // location included, whatever type it declares and however the user
+            // answered the dialog; only a start made from the foreground carries
+            // them. `AppContainer.startForegroundService` is documented to be
+            // called from the foreground, which is what keeps that rule satisfied.
             startForeground(NOTIFICATION_ID, notification)
         }
 
@@ -85,6 +95,15 @@ class MeshForegroundService : Service() {
      * The grant is read through [LocationAvailability] rather than checked here, so
      * this cannot drift from the rest of the app: its `any`-not-`all` rule is the
      * right one, a user who granted only "Approximate" holding a usable grant.
+     *
+     * **This method recomputes the type, and that is all it does.** `onStartCommand`
+     * runs again on every notification refresh, so a grant made after the service
+     * started is picked up here within thirty seconds - but the *source* does not
+     * follow on its own: `AndroidPhoneLocationSource.start()` returns early while
+     * the permission is missing and is only re-driven by `refreshLocationUpdates`.
+     * `MainActivity.onResume` is what calls that, and the type gaining `location`
+     * without it would mean a service permitted to receive fixes that nothing has
+     * asked for.
      */
     private fun foregroundServiceType(): Int {
         var types = ServiceInfo.FOREGROUND_SERVICE_TYPE_CONNECTED_DEVICE

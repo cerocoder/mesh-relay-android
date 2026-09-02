@@ -92,6 +92,17 @@ class MainActivity : ComponentActivity() {
     override fun onResume() {
         super.onResume()
         readinessState.value = container.availability.check()
+        // For the same reason the line above is here, and for location rather than
+        // Bluetooth: a grant made in system Settings produces no callback inside
+        // this app. The permission launcher only fires on a dialog this app raised,
+        // and `AndroidPhoneLocationSource.start()` returns early while the
+        // permission is missing - so a user who declines at first connect, grants
+        // it later in Settings and comes back would have the foreground service's
+        // `location` type (ruling 39) and still no fixes requested. `onResume` is
+        // the only moment the app learns about it, and re-applying the current
+        // setting is idempotent: start()/stop() are @Synchronized and both
+        // early-return when there is nothing to do.
+        container.refreshLocationUpdates()
         resumedState.value = true
     }
 

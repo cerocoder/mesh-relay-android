@@ -546,6 +546,12 @@ location permission granted, lock the screen for several minutes while walking, 
 measurements taken during it: they must still carry a phone position, which is what the service's
 second foreground-service type (`location`, ruling 39) buys. A run of samples that all fall back
 to the node while the phone was moving is this item failing.
+**If it does fail on a device that otherwise looks correctly configured, check this first:** from
+Android 11 a foreground service *started while the app is in the background* receives no
+while-in-use permissions at all, location included, whatever type it declares. Here the start is
+made from the foreground (a tap on a device, or the background-collection switch — see
+`AppContainer.startForegroundService`), so it should pass; but that rule is invisible in the
+manifest and in the logs, and looking anywhere else first costs a field session.
 **Warning:** the demo transport's local node has no coordinates, so with *Use phone location*
 off every globe is correctly disabled there regardless of anything else under test. Judge this
 item against a real node or the phone's own position, not a demo scenario, or a field issue gets
