@@ -641,12 +641,28 @@ Android available (14 or later); on older releases the failure mode does not exi
 
 ---
 
+### H18. Points, the doubled scale, and dismissing the crosshair
+**Do:** Open a Graph with a good spread of measurements and switch **Auto scale** on. Then tap
+once on the plot, drag the crosshair, and double tap it.
+**Pass looks like:** the trace is discrete dots, not joined lines, and where the RSSI and SNR
+clouds cross **both colours stay visible** — that is the whole reason for the change (ruling 40).
+Dots are legible rather than merged into a blob at the doubled scale; if they merge, `PointRadius`
+is the constant to lower. A single tap places the crosshair with no perceptible delay, a drag
+still moves it and still does **not** scroll, and a double tap makes it and its globe disappear.
+A brief flicker of the crosshair during the double tap is expected and is documented in ruling 42.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 49
+- **Total items run:** _____ / 50
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

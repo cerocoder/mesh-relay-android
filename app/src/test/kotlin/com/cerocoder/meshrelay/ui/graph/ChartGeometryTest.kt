@@ -19,9 +19,10 @@ class ChartGeometryTest {
 
     @Test
     fun `the visible window is the scrolled rows plus one of overscan each side`() {
-        // The overscan is not cosmetic: a polyline segment joins two rows, so
-        // without a row beyond each edge the top and bottom segments would be
-        // missing and the line would appear to stop short of the viewport.
+        // The overscan is not cosmetic: a measurement is drawn as a disc, so a
+        // row centred just beyond an edge still paints part of itself inside the
+        // viewport. Without a row beyond each edge those points would pop in and
+        // out at the top and bottom rather than sliding across them.
         val window = ChartGeometry.visibleRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)
         assertEquals(99, window.firstRow)
         assertEquals(151, window.lastRow)
@@ -202,9 +203,9 @@ class ChartGeometryTest {
     fun `the label rows name displayed measurements, not overscanned ones`() {
         // Requirement 8 asks for the timestamps of the topmost and bottom points
         // *displayed*. An overscan row is by definition not displayed - it exists
-        // only so the polyline segments that leave the top of the viewport and
-        // enter the bottom have somewhere to start and end - so a label taken
-        // from the drawn window would name a measurement the reader cannot see.
+        // only so a point centred just outside the viewport paints the sliver of
+        // its disc that falls inside it - so a label taken from the drawn window
+        // would name a measurement the reader cannot see.
         // Checked mid-scroll, where the two windows genuinely differ; at either
         // extreme the clamps hide the difference.
         val labels = ChartGeometry.labelRows(scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f)

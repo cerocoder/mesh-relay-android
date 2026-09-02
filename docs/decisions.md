@@ -368,6 +368,9 @@ Ruling 36: Freeze holds the whole drawing, not just the series.
 ### 37
 
 Ruling 37: the two `Time` fields use an un-overscanned, `ceil`-bounded window.
+  (Superseded in part by ruling 40: the trace is points now, so the overscan row is kept for a
+  different reason - a disc centred just outside the viewport still paints part of itself
+  inside it. The label window's own argument below is unaffected.)
   The polyline needs one row of overscan at each edge so its segments join across the boundary;
   the labels must not inherit it, or they name measurements that are not on screen. And the bounds
   must be `ceil`, not `floor`: a row is displayed exactly when `scrollPx <= row * p < scrollPx +
@@ -403,3 +406,47 @@ Ruling 39: the app declares `location` as a second foreground-service type and g
   node - so a constant type would turn a user's refusal into a crash at the moment of connecting.
   Cost if wrong: a third store-visible permission on the listing, and a crash class that exists only
   if that runtime check is ever removed - which is why acceptance item H17 exists to catch it.
+
+### 40
+
+Ruling 40: the plot draws one point per measurement, never a line between two -
+  **overriding requirement 11 of the Graph design**, at the owner's instruction after
+  reading the chart on hardware. Requirement 11 asks for "two lines, one for RSSI and one for
+  SNR, each in its metric's colour". With Auto scale on, each metric is stretched across its
+  own observed minimum and maximum, so both traces span the full width of the plot and one
+  polyline paints straight over the other - the covered metric is not merely hard to read, it
+  is invisible. Discrete points interleave where the two cross; a stroked path cannot. The
+  colour half of requirement 11 stands unchanged, and is still what lets this chart do without
+  a legend. Cost if wrong: a sparse series reads as scattered dots rather than as a trend, and
+  the eye has to do the joining that a line used to do.
+
+### 41
+
+Ruling 41: two pixel rows per measurement, not one, and the point radius is its own
+  constant rather than the old line's stroke width.
+  `PX_PER_SAMPLE` was `1f` - requirement 13's "one measurement is one pixel row" - until the
+  first hardware run showed 69 measurements filling 87 of a plot's 1100 pixels on a 450 dpi
+  phone, eight per cent, reading as broken rather than sparse (field issue F-7). Doubling it
+  halves the measurements needed to fill the plot and gives each dot two pixels of vertical
+  room rather than one. `2f` is a power of two, so `rowAt`'s round trip stays exact and
+  `ROW_EPSILON` (ruling 35) does no work at this value. The radius is `1.dp` and deliberately
+  **not** the 1.5 dp stroke the polyline used: that is roughly 4 px at these densities and
+  would merge consecutive samples into a blob, reproducing the very overlap ruling 40 exists
+  to remove. Cost if wrong: it is one constant, and F-7 stays open either way - filling the
+  plot still takes 550 measurements, over an hour on a relay heard every ten seconds.
+
+### 42
+
+Ruling 42: a double tap on the plot clears the crosshair; a press places it immediately.
+  The design's section 8.7 says how the crosshair appears and moves and never says how it goes
+  away, so it could only be moved, never dismissed. The handler is now two `pointerInput`
+  blocks rather than one: the inner runs `detectTapGestures` with `onPress` placing and
+  `onDoubleTap` clearing, the outer keeps the drag and still consumes it so the `scrollable`
+  around the plot cannot act on the same pointer. `onPress` rather than `onTap` is the
+  load-bearing part - with an `onDoubleTap` supplied, `onTap` is withheld until the
+  double-tap timeout expires, which would delay every placement of the crosshair by roughly a
+  third of a second. The accepted consequence is that a double tap places the crosshair twice
+  before clearing it, so it flickers once on the way out. Cost if wrong: two gesture handlers
+  on one canvas is more surface than one, and the arrangement is verified by reading rather
+  than by a test - this project has no Compose test harness. Acceptance item H18 is what
+  settles it.

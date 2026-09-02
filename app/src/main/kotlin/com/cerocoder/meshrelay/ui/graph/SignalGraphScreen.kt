@@ -71,7 +71,21 @@ import java.util.Locale
 import kotlin.math.roundToInt
 
 private val CrosshairStroke = 1.dp
-private val LineStroke = 1.5.dp
+/**
+ * The radius of one measurement's dot.
+ *
+ * Deliberately not the 1.5 dp stroke the polyline used before decision 40: at
+ * this project's target densities that is roughly 4 px, and at [PX_PER_SAMPLE]
+ * of 2 px per row it would merge consecutive samples of one metric into a solid
+ * blob - which would reproduce the very overlap decision 40 exists to remove.
+ *
+ * The constraint, for whoever tunes it on a phone: small enough that where the
+ * RSSI and SNR clouds cross, both stay visible, and large enough that
+ * consecutive samples of one metric still read as a trace rather than as
+ * confetti. If it grows past [PX_PER_SAMPLE] pixels, [ChartGeometry.OVERSCAN_ROWS]
+ * has to grow with it - that KDoc says why.
+ */
+private val PointRadius = 1.dp
 private val ScrollbarWidth = 12.dp
 private val ScrollbarCorner = 6.dp
 private val GlobeSize = 40.dp
@@ -81,13 +95,27 @@ private val LabelSpacing = 12.dp
 private val SwitchLabelSpacing = 8.dp
 
 /**
- * One measurement is one pixel row, and this is the "scale coefficient" spec
- * requirement 13 asks to exist without being exposed: [ChartGeometry] takes it
- * everywhere, this is its only caller, and a zoom control becomes a value to pass
- * rather than a restructuring. It is a `Float` because the requirement says the
- * coefficient may be fractional (0.1, say) so that scaling down is available too.
+ * Two pixel rows per measurement - the "scale coefficient" requirement 13 asks to
+ * exist without being exposed. [ChartGeometry] takes it everywhere, this is its
+ * only caller, and a zoom control becomes a value to pass rather than a
+ * restructuring. It is a `Float` because the requirement says the coefficient may
+ * be fractional (0.1, say) so that scaling down is available too.
+ *
+ * **Was `1f` until the owner read the chart on a phone.** At one physical pixel
+ * per measurement on a 450 dpi device, 69 measurements filled 87 of the plot's
+ * 1100 pixels - eight per cent - and the trace read as broken rather than sparse
+ * (field issue F-7). Doubling it halves the measurements needed to fill the plot
+ * and gives each dot two pixels of vertical room instead of one, which is what
+ * makes a cloud of points legible at all.
+ *
+ * It does **not** close F-7: filling this plot still takes 550 measurements,
+ * which is over an hour on a relay heard every ten seconds. That issue stays
+ * open, and the fit-to-viewport option it records is the real answer.
+ *
+ * `2f` is a power of two, so [ChartGeometry.rowAt]'s round trip stays exact and
+ * its `ROW_EPSILON` is not doing any work at this value (ruling 35).
  */
-private const val PX_PER_SAMPLE = 1f
+private const val PX_PER_SAMPLE = 2f
 
 /**
  * Everything this screen draws at one instant, as one value.
@@ -241,7 +269,7 @@ fun SignalGraphScreen(
 
     val labelRows = ChartGeometry.labelRows(effectiveScroll, viewportPx, shown.size, PX_PER_SAMPLE)
     val locale = displayLocale()
-    val strokeWidthPx = with(LocalDensity.current) { LineStroke.toPx() }
+    val pointRadiusPx = with(LocalDensity.current) { PointRadius.toPx() }
 
     // A wheel notch or a hardware scroll only: a touch drag on the plot belongs
     // to the crosshair, which consumes it before this ever sees it.
@@ -372,9 +400,10 @@ fun SignalGraphScreen(
                         snrRange = snrRange,
                         rssiColor = RssiTrack,
                         snrColor = SnrTrack,
-                        strokeWidthPx = strokeWidthPx,
+                        pointRadiusPx = pointRadiusPx,
                         onViewportHeight = { viewportPx = it },
                         onCrosshairAt = { crosshairY = it },
+                        onCrosshairCleared = { crosshairY = null },
                         modifier = Modifier.fillMaxSize(),
                     )
                     crosshairY?.let { touchY ->

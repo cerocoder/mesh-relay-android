@@ -39,10 +39,25 @@ object ChartGeometry {
     /**
      * One row of overscan at each edge.
      *
-     * A polyline segment joins two consecutive rows, so a window clipped exactly
-     * to the viewport would be missing the segment that leaves the top edge and
-     * the one that enters the bottom - the line would appear to stop short of both
-     * edges and to jump when scrolled.
+     * A measurement is drawn as a disc of some radius, not as a mathematical
+     * point, so a row whose centre sits just *outside* the viewport still paints
+     * part of itself inside it. A window clipped exactly to the viewport would
+     * never draw those rows, and points would pop in and out at the top and
+     * bottom edges instead of sliding across them.
+     *
+     * (This row used to buy the polyline segments that join across the viewport
+     * edge. The trace is points now - decision 40 - so that reason is gone; the
+     * need for the row is not.)
+     *
+     * **One row is enough while the point radius stays under `pxPerSample`
+     * pixels.** The nearest undrawn row above the viewport sits between two and
+     * three rows above the top edge, and the nearest one below sits between one
+     * and two rows below the bottom - so the bottom is the tighter of the two,
+     * with one row of margin in the worst case. At the screen's `2f` pixels per
+     * sample and its `1.dp` radius that margin is 2 px against a radius of about
+     * 2.8 px on a 450 dpi phone, so a point centred just past the bottom edge can
+     * still clip under a pixel of itself in and out. If that radius is tuned
+     * upwards on the phone, this constant is what has to grow with it.
      */
     const val OVERSCAN_ROWS = 1
 
@@ -73,9 +88,9 @@ object ChartGeometry {
      *
      * **Deliberately not [visibleRows].** That function answers a different
      * question - which rows must be *drawn* - and its answer is wider, because a
-     * polyline segment joins two rows and the segments that leave the top of the
-     * viewport and enter the bottom start and end outside it. An overscan row is
-     * by definition not displayed.
+     * point centred just outside the viewport still paints part of its disc
+     * inside it and so has to be drawn. An overscan row is by definition not
+     * displayed.
      *
      * The bounds are `ceil`, not `floor`, and that is what makes this exact
      * rather than approximately right. Row `r` is on screen exactly when
