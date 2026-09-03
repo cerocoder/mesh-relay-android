@@ -209,22 +209,6 @@ class RadioConnectionManager(
     }
 
     /**
-     * Ask the node to send its database again. Ports the terminal tool's D key,
-     * mesh_stats.py:582-609.
-     *
-     * Since the node-storage split, nothing arriving over the air touches the
-     * radio's own database (`nodes`) any more - a NODEINFO_APP broadcast is folded
-     * into the separate air store instead. This reload is therefore now the
-     * *only* way `nodes`, `dbSnr`, `lastHeardEpochSeconds`, `hopsAway` and
-     * `loadedAtMillis` change mid-session: the node has learned about nodes we
-     * have not heard from directly (or updated what it already knew about ones we
-     * have), and this is the one way to pull that in without waiting for a
-     * reconnect. That makes this button more important than it was before the
-     * split, not less.
-     *
-     * Statistics are untouched, exactly as in the original.
-     */
-    /**
      * Tell the engine a node-database round is starting, and say so if it could not
      * be told.
      *
@@ -244,6 +228,22 @@ class RadioConnectionManager(
         }
     }
 
+    /**
+     * Ask the node to send its database again. Ports the terminal tool's D key,
+     * mesh_stats.py:582-609.
+     *
+     * Since the node-storage split, nothing arriving over the air touches the
+     * radio's own database (`nodes`) any more - a NODEINFO_APP broadcast is folded
+     * into the separate air store instead. This reload is therefore now the
+     * *only* way `nodes`, `dbSnr`, `lastHeardEpochSeconds`, `hopsAway` and
+     * `loadedAtMillis` change mid-session: the node has learned about nodes we
+     * have not heard from directly (or updated what it already knew about ones we
+     * have), and this is the one way to pull that in without waiting for a
+     * reconnect. That makes this button more important than it was before the
+     * split, not less.
+     *
+     * Statistics are untouched, exactly as in the original.
+     */
     fun reloadNodeDatabase() {
         if (_connectionState.value != ConnectionState.Connected) {
             Log.d(TAG, "reload ignored: not connected")

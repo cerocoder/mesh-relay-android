@@ -101,8 +101,8 @@ class MeshStatsEngine(
     // is exactly that "radio delivering tens of frames a second" shape - a realistic
     // way to have hundreds of commands already queued the instant the user taps
     // Reload. A dropped BeginNodeDbRound would silently reopen the reload-round leak
-    // Ruling P4 closed, so that one call site checks trySend's result and logs a
-    // failure rather than assuming, like every other command here, that it cannot
+    // Ruling P4 closed, so that one function returns whether the command was queued
+    // rather than assuming, like every other command here, that it cannot
     // happen.
     private val commands = Channel<Command>(capacity = COMMAND_CAPACITY)
 
@@ -668,7 +668,6 @@ class MeshStatsEngine(
         if (stats.hasData) stats.avg else Float.NEGATIVE_INFINITY
 
     private companion object {
-        const val TAG = "MeshStatsEngine"
         const val COMMAND_CAPACITY = 256
 
         /** relay_node carries the low byte of a NodeNum and nothing wider. */
