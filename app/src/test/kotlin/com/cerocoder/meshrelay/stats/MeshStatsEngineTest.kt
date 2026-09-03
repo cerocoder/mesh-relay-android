@@ -90,11 +90,22 @@ private fun nodeInfoFrame(num: Int, longName: String) = TimestampedFrame(
 )
 
 /**
+ * Terminates a want_config round. [NodeDirectory.markLoaded] commits whatever
+ * `node_info` frames the round staged; stats/ cannot tell one nonce from another
+ * (that needs transport/, which it may not import), so the value carried here is
+ * never inspected and any value works.
+ */
+private fun configCompleteFrame() = TimestampedFrame(
+    rxMillis = 1_000L,
+    frame = FromRadio(config_complete_id = 1),
+)
+
+/**
  * A NODEINFO_APP packet: a node announcing itself in ordinary traffic rather than
  * through the node database. Used to prove that a packet with no sender teaches
- * the directory nothing - `applyUser(0, ...)` would create a record for node 0,
- * and `lastByteOfNodeNum(0)` is 0xff, so node 0 would become a naming candidate
- * for every relay that identifies itself as ff.
+ * the directory nothing - `applyUser(0, ...)` would write an air record for node
+ * 0, and `lastByteOfNodeNum(0)` is 0xff, so node 0 would become a naming
+ * candidate for every relay that identifies itself as ff.
  */
 private fun userFrame(from: Int, shortName: String) = TimestampedFrame(
     rxMillis = 1_000L,
@@ -411,7 +422,7 @@ class MeshStatsEngineTest {
         subject.setPaused(true)
         runCurrent()
 
-        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1")))
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), configCompleteFrame()))
         runCurrent()
 
         assertEquals(1, subject.snapshot.value.directory.count)
@@ -423,7 +434,7 @@ class MeshStatsEngineTest {
         val skipped = MutableStateFlow(setOf(0x11223344))
         val subject = engine(backgroundScope, skipped)
         collectSnapshots(subject)
-        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct()))
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), configCompleteFrame(), relayed(), direct()))
         runCurrent()
 
         subject.reset()
@@ -447,7 +458,13 @@ class MeshStatsEngineTest {
         val subject = engine(backgroundScope)
         val seen = collectSnapshots(subject)
         subject.attach(
-            flowOf(myInfoFrame(SENDER), nodeInfoFrame(SENDER, "PQPL1"), relayed(), direct(from = 0x4242)),
+            flowOf(
+                myInfoFrame(SENDER),
+                nodeInfoFrame(SENDER, "PQPL1"),
+                configCompleteFrame(),
+                relayed(),
+                direct(from = 0x4242),
+            ),
         )
         runCurrent()
         assertEquals(1, seen.last().relays.size)
@@ -468,7 +485,7 @@ class MeshStatsEngineTest {
         // The two must not converge: this is the distinction the new path exists for.
         val subject = engine(backgroundScope)
         val seen = collectSnapshots(subject)
-        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed()))
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), configCompleteFrame(), relayed()))
         runCurrent()
 
         subject.reset()
@@ -517,7 +534,7 @@ class MeshStatsEngineTest {
         val skipped = MutableStateFlow(emptySet<Int>())
         val subject = engine(backgroundScope, skipped)
         collectSnapshots(subject)
-        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), relayed(relay = 0xa4)))
+        subject.attach(flowOf(nodeInfoFrame(SENDER, "PQPL1"), configCompleteFrame(), relayed(relay = 0xa4)))
         runCurrent()
         assertEquals("1ce5", subject.snapshot.value.directory.uniqueRelayName(0xa4))
         assertEquals("1ce5", subject.snapshot.value.relays.single().nodeName)
@@ -578,7 +595,11 @@ class MeshStatsEngineTest {
 
         val after = subject.snapshot.value
         assertTrue("node 0 is not a neighbour", after.neighbours.isEmpty())
-        assertEquals("node 0 is not in the node database", 0, after.directory.count)
+        // Not directory.count: applyUser can no longer write the database record
+        // under any circumstances, so that would pass regardless of the from == 0
+        // guard. What the guard actually protects is the air store - a record
+        // there for node 0 would be a naming candidate for relay byte ff.
+        assertTrue("node 0 is not in the air store either", after.directory.airNodes.isEmpty())
         assertEquals(setOf(SENDER), after.relays.single().fromNodeStats.keys)
         assertEquals(1, after.relays.single().packetCount)
         assertEquals(0, after.counters.totalDirectPackets)

@@ -181,6 +181,36 @@ class NodeDirectory(private val time: TimeSource) {
     }
 
     /**
+     * Discards whatever a round left in the buffer without a commit. Called at
+     * `my_info`, which is where the firmware starts every `want_config_id` reply
+     * from the top - so a fresh `my_info` is the signal that whatever came before
+     * it belongs to a round that is no longer in progress.
+     *
+     * Without this, a round abandoned mid-flight - the connection dropped before
+     * its `config_complete_id` arrived - leaves [pendingNodes] holding a stale
+     * partial result. The next round to commit would fold its own frames onto
+     * that leftover rather than replacing it: a union where staged replace exists
+     * specifically to prevent one, so a node the radio has since evicted would
+     * reappear for a round.
+     *
+     * **Known gap, not fixed here:** this covers a reconnect, which always redoes
+     * the handshake (`CONFIG_NONCE` then `NODE_INFO_NONCE`, both preceded by
+     * `my_info`), but not a node-database *reload* requested mid-session
+     * (`NODE_INFO_RELOAD_NONCE`,
+     * `RadioConnectionManager.reloadNodeDatabase`). That round does not carry a
+     * `my_info` frame at all - see `FakeRadioTransport.send`'s
+     * `NODE_INFO_RELOAD_NONCE` branch and `MeshScenario.nodeStageFrames`, which
+     * answer it with `node_info` frames straight into `config_complete_id`. An
+     * aborted reload followed by another reload request is therefore not covered
+     * by this function. Left alone rather than guessed at: fixing it needs a
+     * signal this class does not have grounds to invent.
+     */
+    fun beginRound() {
+        pendingNodes.clear()
+        pendingReceivedAny = false
+    }
+
+    /**
      * A want_config round has completed. Commit the refresh it carried, if it
      * carried one.
      *
@@ -286,13 +316,16 @@ class NodeDirectory(private val time: TimeSource) {
      * several shapes and the thinner ones routinely omit the key, so believing an
      * empty one would make the field flip back and forth as full and thin entries
      * alternate - while a node genuinely withdrawing a key it has already
-     * published is not something this mesh does. [applyUser] takes the opposite
-     * view, for the opposite reason: a `User` message *is* the identity record, so
-     * what it says about a key is authoritative there.
+     * published is not something this mesh does. [AirNodeRecord.folding] applies
+     * the identical never-unlearn rule to the air store's own `hasPublicKey`, for
+     * the identical reason. There is no asymmetry between the two stores here -
+     * only the same decision, applied twice because there are two stores to apply
+     * it to.
      *
-     * Both halves of that asymmetry are pinned by tests; it is a decision, not an
-     * accident, and flattening this `||` into a straight assignment would fail
-     * them.
+     * Pinned by `a public key once seen survives a node info that carries no user
+     * at all` here, and by `a public key once observed is never unlearned` in
+     * `AirNodeRecordTest`; flattening this `||` into a straight assignment would
+     * fail the first of them.
      */
     private fun merge(existing: NodeRecord, incoming: NodeRecord): NodeRecord = NodeRecord(
         num = incoming.num,

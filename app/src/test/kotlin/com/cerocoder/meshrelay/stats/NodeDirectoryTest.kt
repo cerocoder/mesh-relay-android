@@ -108,8 +108,16 @@ class NodeDirectoryTest {
         last_heard = DB_LAST_HEARD_SECONDS,
     )
 
-    /** The five nodes whose low bytes the candidate-matching tests are built on. */
-    private fun loadRelayCandidates() {
+    /**
+     * The five nodes whose low bytes the candidate-matching tests are built on,
+     * plus whatever [extra] entries a caller needs alongside them.
+     *
+     * [extra] is staged into the same round rather than left for a caller to add
+     * afterwards: a round replaces [directory]'s store wholesale at
+     * [NodeDirectory.markLoaded], so a second `markLoaded` here would commit a
+     * round of its own and evict these five rather than adding to them.
+     */
+    private fun loadRelayCandidates(extra: List<NodeInfo> = emptyList()) {
         listOf(
             TOLEDO_ALTO to "ta2a",
             TOLEDO_ESTACION to "to2a",
@@ -119,9 +127,10 @@ class NodeDirectoryTest {
         ).forEach { (num, shortName) ->
             directory.applyNodeInfo(NodeInfo(num = num, user = User(short_name = shortName)))
         }
-        // One completed refresh round carrying all five, which is how the radio
-        // delivers them. Committing per entry would replace the store four times and
-        // leave only the last candidate standing.
+        extra.forEach { directory.applyNodeInfo(it) }
+        // One completed refresh round carrying all five (and any extra), which is
+        // how the radio delivers them. Committing per entry would replace the
+        // store four times and leave only the last candidate standing.
         directory.markLoaded(DB_AT_MILLIS)
     }
 
@@ -343,9 +352,11 @@ class NodeDirectoryTest {
     fun `the relay name is shown only when exactly one node matches`() {
         // Ports get_node_name, mesh_stats.py:734-750. With two candidates there is
         // no name to show, and showing either would present a guess as a fact.
-        loadRelayCandidates()
-        directory.applyNodeInfo(NodeInfo(num = BARE_NODE))
-        directory.markLoaded(DB_AT_MILLIS)
+        //
+        // BARE_NODE is staged into the same round as the five candidates - not a
+        // second markLoaded after them, which would commit a round of its own and
+        // replace the five with BARE_NODE alone rather than adding it to them.
+        loadRelayCandidates(extra = listOf(NodeInfo(num = BARE_NODE)))
         val snapshot = directory.snapshot(emptySet())
 
         assertEquals("gv33", snapshot.uniqueRelayName(0x33))
@@ -793,5 +804,22 @@ class NodeDirectoryTest {
         // frames describe the mesh as the previous radio saw it.
         directory.markLoaded(TELEMETRY_AT_MILLIS)
         assertTrue(directory.snapshot(emptySet()).nodes.isEmpty())
+    }
+
+    @Test
+    fun `beginRound discards a partial round left over from before`() {
+        // A round abandoned mid-flight - the connection dropped before its
+        // config_complete_id arrived - must not survive into the round that
+        // replaces it. Without beginRound, the entry staged here would still be
+        // in the buffer when the next round starts, and PINTO's commit below
+        // would be a union of the two rounds rather than a replacement of the
+        // first by the second.
+        directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER, user = User(short_name = "gt2a")))
+
+        directory.beginRound()
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(short_name = "pnt1")))
+        directory.markLoaded(DB_AT_MILLIS)
+
+        assertEquals(setOf(PINTO), directory.snapshot(emptySet()).nodes.keys)
     }
 }

@@ -253,7 +253,14 @@ class MeshStatsEngine(
     private fun handleFrame(timestamped: TimestampedFrame) {
         val frame = timestamped.frame
 
-        frame.my_info?.let { directory.setLocalNodeNum(it.my_node_num) }
+        // my_info is where the firmware starts every want_config_id reply from the
+        // top (see NodeDirectory.beginRound's KDoc for the one round it does not
+        // open), so it also doubles as the signal that any round left over from
+        // before belongs to a connection that is gone.
+        frame.my_info?.let {
+            directory.beginRound()
+            directory.setLocalNodeNum(it.my_node_num)
+        }
         frame.node_info?.let { directory.applyNodeInfo(it) }
         // Any completed want_config round, not only the node-database one: telling
         // them apart needs the nonces from transport/, which stats/ may not import,
