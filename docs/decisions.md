@@ -628,3 +628,21 @@ Ruling (mine, following the review that caught it): ADD androidx.lifecycle:lifec
   this can only make an already-working transitive dependency explicit, not change what compiles.
   If a future bump does drop the export, CI catches it as a normal version conflict rather than
   a confusing compile error, which is the entire point of the ruling.
+
+### 49
+
+Ruling: the position a node card shows is the newest report carrying coordinates -
+  `PositionHistory.newestWithCoordinates`, née `best` - altitude no longer required. This
+  deliberately **overrides** the both-fields quirk carried over from the Python original and
+  documented in two places as preserved on purpose, at the owner's instruction: a `Position`
+  message carries its coordinates and its altitude as independently optional fields, so a node
+  with a 2D fix, or a fixed node configured with a latitude and a longitude and nothing else,
+  broadcasts positions with no altitude at all. Requiring both meant no report from such a node
+  ever qualified, so its card fell back to the node database's entry and read `DB` for ever,
+  however many fresh positions arrived - a stale position presented as the node's position, which
+  is the failure this application least affords. Altitude is taken from the winning report only
+  and is never borrowed from an older report or the database: one report is one moment, and
+  coordinates from now beside an altitude from ten minutes ago would be a reading that never
+  existed.
+  Cost if wrong: a node card can now show coordinates with no altitude beside them, where before
+  it showed both - drawn from a database entry that could be days old.

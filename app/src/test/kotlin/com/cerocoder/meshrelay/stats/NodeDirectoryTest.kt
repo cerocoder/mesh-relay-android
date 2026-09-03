@@ -30,7 +30,6 @@ private const val GETAFE_LON = -3.7325
 private const val GETAFE_LAT_I = 403083000
 private const val GETAFE_LON_I = -37325000
 
-private const val TOLEDO_LAT = 39.8628
 private const val TOLEDO_LAT_I = 398628000
 private const val TOLEDO_LON_I = -40273000
 
@@ -173,20 +172,25 @@ class NodeDirectoryTest {
     }
 
     @Test
-    fun `a live position with no altitude falls back to the database`() {
-        // Consequence of PositionHistory.best returning null unless a report has
-        // both coordinates and altitude. Fixing the quirk here would make the source
-        // label disagree with the terminal tool.
+    fun `a live position with no altitude still wins over the database`() {
+        // The fix this test now proves: PositionHistory.newestWithCoordinates no
+        // longer requires an altitude, so a live report with coordinates alone beats
+        // a database entry that has both. Before the fix this fell through to DB and
+        // stayed there for ever, however many fresh positions arrived - the defect
+        // the owner found by reasoning about the code.
         directory.applyNodeInfo(toledoInDatabase())
         now = LIVE_AT_MILLIS
         directory.applyPosition(GETAFE_ROUTER, position(GETAFE_LAT_I, GETAFE_LON_I))
 
         val info = directory.snapshot(emptySet()).locationInfo(GETAFE_ROUTER, MADRID_LOCAL)
 
-        assertEquals(PositionSource.DB, info.source)
-        assertEquals(TOLEDO_LAT, info.lat!!, 1e-9)
-        assertEquals(529, info.altitude)
-        assertEquals(DB_AT_MILLIS, info.atMillis)
+        assertEquals(PositionSource.CURRENT, info.source)
+        assertEquals(GETAFE_LAT, info.lat!!, 1e-9)
+        assertEquals(GETAFE_LON, info.lon!!, 1e-9)
+        // No altitude on the winning report - and none borrowed from the database
+        // entry, which has one.
+        assertNull(info.altitude)
+        assertEquals(LIVE_AT_MILLIS, info.atMillis)
     }
 
     @Test

@@ -80,13 +80,16 @@ class NodeDirectorySnapshot(
      *    bits of precision is somewhere inside a 2.9 km circle and any arrow drawn
      *    would be invented.
      *
-     * [PositionHistory.best] returns the newest report carrying **both**
-     * coordinates and altitude, so a live report with coordinates alone falls
-     * through to the database and is labelled `DB`. That quirk is the original's
-     * and is preserved.
+     * [PositionHistory.newestWithCoordinates] returns the newest report carrying
+     * coordinates, altitude required or not, so a live report is preferred over
+     * the database the moment it has coordinates at all. The quirk this used to
+     * preserve from the Python original - requiring both fields, so a live report
+     * with coordinates alone fell through to the database and was labelled `DB` -
+     * has been removed deliberately, at the owner's instruction: a fixed node that
+     * never broadcasts an altitude was showing a stale database position for ever.
      */
     fun locationInfo(nodeNum: Int, from: LatLon?): LocationInfo {
-        val live = positionsByNode[nodeNum]?.best
+        val live = positionsByNode[nodeNum]?.newestWithCoordinates
         val stored = if (live == null) nodes[nodeNum]?.dbPosition else null
         val report = live ?: stored ?: return LocationInfo.EMPTY
 
@@ -97,6 +100,9 @@ class NodeDirectorySnapshot(
         val lat = report.latitude
         val lon = report.longitude
         if (lat == null || lon == null) {
+            // Only the database entry can reach here now: a live report already
+            // passed newestWithCoordinates' hasCoordinates test, so lat and lon are
+            // both non-null whenever live is what won above.
             return LocationInfo.EMPTY.copy(
                 altitude = report.altitude,
                 source = source,

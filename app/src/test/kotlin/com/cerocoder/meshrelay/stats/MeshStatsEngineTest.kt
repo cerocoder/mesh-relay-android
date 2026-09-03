@@ -56,8 +56,10 @@ private fun direct(from: Int = SENDER, at: Long = 1_000L) = TimestampedFrame(
     frame = FromRadio(packet = MeshPacket(from = from, relay_node = 0, rx_snr = -3f, rx_rssi = -80)),
 )
 
-/** A POSITION_APP packet from [from], carrying both coordinates and an altitude -
- *  PositionHistory.best returns only reports that have both. */
+/** A POSITION_APP packet from [from], carrying coordinates and an altitude - both
+ *  are set here for realism, but PositionHistory.newestWithCoordinates only
+ *  requires the coordinates; these tests do not exercise the altitude-optional
+ *  case. */
 private fun positionFrame(from: Int, latI: Int, lonI: Int, at: Long = 1_000L) = TimestampedFrame(
     rxMillis = at,
     frame = FromRadio(

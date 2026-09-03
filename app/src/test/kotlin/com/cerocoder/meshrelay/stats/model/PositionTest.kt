@@ -63,39 +63,38 @@ class PositionTest {
     }
 
     @Test
-    fun `last is the newest report`() {
+    fun `the newest report with coordinates wins, with or without an altitude`() {
+        // The defect this replaced: a node that broadcasts coordinates without an
+        // altitude - a 2D fix, or a fixed node configured with latitude and longitude
+        // only - had NO qualifying report, so its card fell back to the node database
+        // and read "DB" for ever, however many fresh positions arrived.
         val history = PositionHistory(nodeNum = 1)
-            .plus(report(at = 1_000L))
-            .plus(report(at = 2_000L))
-        assertEquals(2_000L, history.last!!.atMillis)
+            .plus(PositionReport(1_000L, 40.0, -3.0, altitude = 600, precisionBits = null))
+            .plus(PositionReport(2_000L, 41.0, -4.0, altitude = null, precisionBits = null))
+
+        val chosen = history.newestWithCoordinates
+        assertEquals(2_000L, chosen!!.atMillis)
+        assertEquals(41.0, chosen.latitude!!, 1e-9)
+        // Decision 2: one report is one moment. The altitude is this report's, which
+        // is none - it is NOT borrowed from the older report that had one.
+        assertNull(chosen.altitude)
     }
 
     @Test
-    fun `best prefers the newest report carrying both coordinates and altitude`() {
+    fun `a report with no coordinates is skipped even when it carries an altitude`() {
+        // Altitude alone is not a position. The older complete report still wins.
         val history = PositionHistory(nodeNum = 1)
-            .plus(report(at = 1_000L, alt = 600))
-            .plus(report(at = 2_000L, alt = null))
-        assertEquals(1_000L, history.best!!.atMillis)
+            .plus(PositionReport(1_000L, 40.0, -3.0, altitude = 600, precisionBits = null))
+            .plus(PositionReport(2_000L, null, null, altitude = 700, precisionBits = null))
+
+        assertEquals(1_000L, history.newestWithCoordinates!!.atMillis)
     }
 
     @Test
-    fun `best is the newest report when it is already complete`() {
+    fun `a history with no coordinates anywhere has no position`() {
         val history = PositionHistory(nodeNum = 1)
-            .plus(report(at = 1_000L, alt = 600))
-            .plus(report(at = 2_000L, alt = 700))
-        assertEquals(2_000L, history.best!!.atMillis)
-    }
-
-    @Test
-    fun `best is absent when no report has both coordinates and altitude`() {
-        // A quirk of the original, reproduced on purpose: a report with coordinates
-        // but no altitude does not count, and the caller falls back to the node
-        // database instead. Callers rely on this to label the position source, so
-        // "fixing" it here would make CUR and DB disagree with the terminal tool.
-        val history = PositionHistory(nodeNum = 1)
-            .plus(report(at = 1_000L, alt = null))
-            .plus(report(at = 2_000L, alt = null))
-        assertNull(history.best)
+            .plus(PositionReport(1_000L, null, null, altitude = 600, precisionBits = null))
+        assertNull(history.newestWithCoordinates)
     }
 
     @Test
@@ -104,7 +103,7 @@ class PositionTest {
         repeat(PositionHistory.MAX_REPORTS + 5) { i -> history = history.plus(report(at = i.toLong())) }
         assertEquals(PositionHistory.MAX_REPORTS, history.reports.size)
         assertEquals(5L, history.reports.first().atMillis)
-        assertTrue(history.last!!.atMillis == (PositionHistory.MAX_REPORTS + 4).toLong())
+        assertTrue(history.reports.last().atMillis == (PositionHistory.MAX_REPORTS + 4).toLong())
     }
 
     @Test

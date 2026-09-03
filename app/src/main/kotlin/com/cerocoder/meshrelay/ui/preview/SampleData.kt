@@ -180,10 +180,10 @@ object SampleData {
         shortName = "TALT",
         hwModel = "RAK4631",
         role = "CLIENT",
-        // Coordinates present, altitude absent - PositionHistory.best would
-        // reject this as a "live" report for lacking altitude, but it never
-        // gets the chance: this is the *database* position, read straight
-        // through, altitude and all (here, none).
+        // Coordinates present, altitude absent - a case newestWithCoordinates
+        // would happily accept were this a live report. It never gets the
+        // chance: this is the *database* position, read straight through,
+        // altitude and all (here, none).
         dbPosition = PositionReport(
             atMillis = NOW - 7_200_000L,
             latitude = 39.8650,
@@ -307,9 +307,9 @@ object SampleData {
 
     // ------------------------------------------------------------------
     // Live positions. Only NUM_TOLEDO_NIEBLA has one: a report heard this
-    // session, with both coordinates and altitude (so PositionHistory.best
-    // picks it up) and a precision coarse enough that its obfuscation radius
-    // swallows the distance from the local node.
+    // session, with coordinates (so newestWithCoordinates picks it up) and an
+    // altitude besides, plus a precision coarse enough that its obfuscation
+    // radius swallows the distance from the local node.
     //
     // Toledo is ~67.461 km from Madrid (the same haversine this project's own
     // GeoTest and NodeDirectoryTest pin). At 8 bits of precision the radius is

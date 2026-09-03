@@ -825,13 +825,56 @@ boundary and always worked, so checking it confirms the fix disturbed nothing.
 
 ---
 
+## Group K — The newest broadcast position, not a stale one (2026-09-03)
+
+### K1. A node with no altitude reads Src: CUR, not DB
+**Do:** Find a node broadcasting positions and open its panel.
+**Pass looks like:** the card reads **Src: CUR** with a recent age. Before this change, any node
+whose positions omit an altitude — a 2D fix, or a fixed node configured with only a latitude and a
+longitude — read **DB** for ever, however many fresh positions arrived.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### K2. The altitude row is absent, not stale
+**Do:** On that same node, check the altitude row.
+**Pass looks like:** if its positions carry no altitude, the row is simply absent — not a stale
+figure. If the node does send an altitude, it is shown, and it is that report's own.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### K3. Distance and bearing follow the live position
+**Do:** Watch distance and bearing to that node as it or you move.
+**Pass looks like:** both are computed from the live position and change accordingly, rather than
+staying pinned to a database entry.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### K4. The Graph globe resolves for a node it previously could not
+**Do:** With **Use phone location** off, open a Graph measurement on that node.
+**Pass looks like:** the globe uses the node's own position, which now follows the same rule, so
+it resolves for nodes it previously did not.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 60
+- **Total items run:** _____ / 65
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

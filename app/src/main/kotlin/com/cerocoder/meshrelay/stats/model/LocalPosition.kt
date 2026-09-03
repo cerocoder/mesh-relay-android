@@ -19,7 +19,7 @@ internal fun localPositionOf(
     nodes: Map<Int, NodeRecord>,
 ): LatLon? {
     val num = localNodeNum ?: return null
-    val report = positions[num]?.best ?: nodes[num]?.dbPosition ?: return null
+    val report = positions[num]?.newestWithCoordinates ?: nodes[num]?.dbPosition ?: return null
     val lat = report.latitude ?: return null
     val lon = report.longitude ?: return null
     return LatLon(lat, lon)
