@@ -34,8 +34,8 @@ class NodeDirectorySnapshot(
 
     /**
      * How many nodes have identified themselves over the air. Independent of
-     * [count]: a node can be in either store, both, or neither, and this counts
-     * only the air store - the header labels it separately from `count`'s `DB`.
+     * [count]: a node can be in either store, both, or neither, so this is not a
+     * fraction or a subset of [count] - it counts only [airNodes].
      */
     val airCount: Int get() = airNodes.size
 
@@ -59,6 +59,18 @@ class NodeDirectorySnapshot(
      *
      * Falls back to the database record only when the air store has nothing for
      * this node, and to [NodeIdentity.NONE] when neither store does.
+     *
+     * Both branches normalise proto3's absence-as-default encoding into `null`
+     * before handing it back: an empty name or an unset hardware model reads as
+     * "not known" whichever store it came from, not only the air one. The air
+     * branch gets this for free from [AirNodeRecord.folding], which already
+     * folds a broadcast's blanks away; the database branch does the same
+     * normalisation here, on [NodeRecord]'s raw, un-normalised fields
+     * ([NodeRecord.fromProto] copies Wire's defaults verbatim). [NodeIdentity]'s
+     * contract is that `null` means "the store did not say" - a contract only
+     * one of the two paths honoured would not really be a contract, and a
+     * caller could no longer treat the two sources as indistinguishable, which
+     * is the whole point of this type.
      */
     fun identity(nodeNum: Int): NodeIdentity {
         airNodes[nodeNum]?.let { air ->
@@ -75,10 +87,10 @@ class NodeDirectorySnapshot(
         val db = nodes[nodeNum] ?: return NodeIdentity.NONE
         return NodeIdentity(
             source = IdentitySource.DB,
-            longName = db.longName,
-            shortName = db.shortName,
-            hwModel = db.hwModel,
-            role = db.role,
+            longName = db.longName?.takeIf { it.isNotEmpty() },
+            shortName = db.shortName?.takeIf { it.isNotEmpty() },
+            hwModel = db.hwModel?.takeIf { it != "UNSET" },
+            role = db.role?.takeIf { it.isNotEmpty() },
             hasPublicKey = db.hasPublicKey,
             receivedAtMillis = db.receivedAtMillis,
         )

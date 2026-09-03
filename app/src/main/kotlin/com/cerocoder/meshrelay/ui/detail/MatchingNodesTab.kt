@@ -29,6 +29,7 @@ import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
 import com.cerocoder.meshrelay.ui.preview.SampleData
@@ -77,10 +78,14 @@ fun MatchingNodesTab(
     val candidates = directory.matchingNodeNums(relayByte)
     val skippedCountForThisByte = snapshot.skippedRelayNodes.count { Geo.lastByteOfNodeNum(it) == relayByte }
     val localPosition = directory.localPosition()
-    // Only nodes the directory actually still knows about end up here - every
-    // number in `candidates` came from `directory.nodes.keys` in the first
-    // place (matchingNodeNums's own contract), so this never drops anything.
-    val candidateRecords = candidates.mapNotNull { nodeNum -> directory.node(nodeNum)?.let { nodeNum to it } }
+    // A card per candidate, not per database record: `candidates` is now drawn
+    // from the union of both stores (matchingNodeNums's own contract, since the
+    // node-storage split), so a node the radio has never listed can still be
+    // one. Dropping the ones `directory.node` returns null for - what this used
+    // to do - would silently make the tab unable to show, and therefore unable
+    // to skip, exactly the candidate the ambiguity is about. candidateRecord
+    // below never returns null, so every candidate keeps its card.
+    val candidateRecords = candidates.map { nodeNum -> nodeNum to candidateRecord(directory, nodeNum) }
 
     Column(modifier = modifier.fillMaxSize()) {
         if (skippedCountForThisByte > 0) {
@@ -155,6 +160,47 @@ fun MatchingNodesTab(
             },
         )
     }
+}
+
+/**
+ * The record [NodeCard] renders for [nodeNum]: the five identity fields
+ * resolved through [NodeDirectorySnapshot.identity] - so a candidate the radio
+ * has never listed still shows what it has broadcast about itself - and the
+ * database-only fields (position, SNR, last-heard, hops) taken from
+ * [NodeDirectorySnapshot.node] when the database has an entry, or left at the
+ * same empty defaults [RemoteNodeScreen]'s own stale-node fallback uses when it
+ * has not.
+ *
+ * [NodeCard] does not yet take a [com.cerocoder.meshrelay.stats.model.NodeIdentity]
+ * argument of its own - that lands in a later task - so this composes the two
+ * stores into one [NodeRecord] here rather than in [NodeCard], which is why
+ * the database record's own identity fields (`longName`, `shortName`,
+ * `hwModel`, `role`, `hasPublicKey`) are never read below: the resolved
+ * identity already decided them, and reading the database record's copies too
+ * would silently reintroduce the DB-only candidate list this function
+ * replaces.
+ *
+ * `internal`, not `private`: this is the seam the Critical review finding
+ * fixed, and `MatchingNodesTabCandidateRecordTest` exercises it directly
+ * rather than only through the Compose tree, which this module has no
+ * instrumented-test setup to run.
+ */
+internal fun candidateRecord(directory: NodeDirectorySnapshot, nodeNum: Int): NodeRecord {
+    val identity = directory.identity(nodeNum)
+    val record = directory.node(nodeNum)
+    return NodeRecord(
+        num = nodeNum,
+        longName = identity.longName,
+        shortName = identity.shortName,
+        hwModel = identity.hwModel,
+        role = identity.role,
+        dbPosition = record?.dbPosition,
+        dbSnr = record?.dbSnr,
+        lastHeardEpochSeconds = record?.lastHeardEpochSeconds,
+        hopsAway = record?.hopsAway,
+        hasPublicKey = identity.hasPublicKey,
+        receivedAtMillis = record?.receivedAtMillis ?: 0L,
+    )
 }
 
 /** No node in the database currently matches this relay's byte - either none

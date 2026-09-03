@@ -849,9 +849,27 @@ class NodeDirectoryTest {
     fun `an air record wins whole, blanks included`() {
         // The owner's ruling, made against a per-field alternative: if an air record
         // exists, all five identity fields come from it. A node that broadcast only a
-        // short name shows only a short name, and the label says the data is from the air.
+        // short name shows only a short name, and the label says the data is from the
+        // air.
+        //
+        // The database record staged below is deliberately fuller than the air one -
+        // a real hardware model, a real public key, alongside the long name - so a
+        // field-level `?:` back to it would leave a trace: hwModel and hasPublicKey
+        // would read the database's values instead of the air broadcast's blanks, and
+        // every one of them is asserted below. Asserting only longName (as this test
+        // used to) would not catch that: the staged database record set no hwModel,
+        // role or public key, so a borrowed value would coincidentally equal the
+        // blank one this test expects, and the assertion would pass either way.
         directory.applyNodeInfo(
-            NodeInfo(num = PINTO, user = User(long_name = "Pinto Norte", short_name = "pnt1")),
+            NodeInfo(
+                num = PINTO,
+                user = User(
+                    long_name = "Pinto Norte",
+                    short_name = "pnt1",
+                    hw_model = HardwareModel.T_ECHO,
+                    public_key = PUBLIC_KEY,
+                ),
+            ),
         )
         directory.markLoaded(DB_AT_MILLIS)
         directory.applyUser(PINTO, User(short_name = "pnt2"), LIVE_AT_MILLIS)
@@ -859,7 +877,12 @@ class NodeDirectoryTest {
         val identity = directory.snapshot(emptySet()).identity(PINTO)
         assertEquals(IdentitySource.AIR, identity.source)
         assertEquals("pnt2", identity.shortName)
+        // Every other field the air broadcast left blank stays blank - none of them
+        // borrows the fuller value the database has.
         assertNull(identity.longName)
+        assertNull(identity.hwModel)
+        assertEquals("CLIENT", identity.role)
+        assertFalse(identity.hasPublicKey)
         assertEquals(LIVE_AT_MILLIS, identity.receivedAtMillis)
     }
 
@@ -872,6 +895,31 @@ class NodeDirectoryTest {
         assertEquals(IdentitySource.DB, identity.source)
         assertEquals("Pinto Norte", identity.longName)
         assertEquals(DB_AT_MILLIS, identity.receivedAtMillis)
+    }
+
+    @Test
+    fun `the database branch normalises blanks the same way the air branch does`() {
+        // NodeRecord.fromProto copies Wire's defaults verbatim - "" for an omitted
+        // proto3 string, HardwareModel.UNSET for an omitted enum - unlike the air
+        // branch, which AirNodeRecord.folding already normalises before identity()
+        // ever sees it. Without this branch doing the same, NodeIdentity's contract
+        // (null means the store did not say) would hold on one path and not the
+        // other, and a caller like NodeCard's `hwModel?.let { ... }` would render a
+        // row reading "hwModel  UNSET" for any DB-only node whose entry omitted it -
+        // exactly the SampleData.NUM_ILLESCAS_MUDO shape.
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(long_name = "Pinto Norte")))
+        directory.markLoaded(DB_AT_MILLIS)
+
+        val identity = directory.snapshot(emptySet()).identity(PINTO)
+        // short_name and hw_model were never set on the wire, so both read null,
+        // not "" and not "UNSET".
+        assertNull(identity.shortName)
+        assertNull(identity.hwModel)
+        // role is Wire's own default, not an omitted field - CLIENT is a real
+        // value, not a blank, so it is not normalised away.
+        assertEquals("CLIENT", identity.role)
+        // The field that was actually set survives normalisation untouched.
+        assertEquals("Pinto Norte", identity.longName)
     }
 
     @Test
