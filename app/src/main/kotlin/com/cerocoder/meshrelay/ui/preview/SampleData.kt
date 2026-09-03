@@ -2,6 +2,7 @@ package com.cerocoder.meshrelay.ui.preview
 
 import com.cerocoder.meshrelay.stats.SignalSeriesBuffer
 import com.cerocoder.meshrelay.stats.SortMode
+import com.cerocoder.meshrelay.stats.model.AirNodeRecord
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
@@ -116,6 +117,18 @@ object SampleData {
     /** Carries the telemetry restart-count case. Not a candidate for any relay byte here. */
     val NUM_YUNCOS_REINICIO = 0xB1001863.toInt()
 
+    /**
+     * Known only from the air - never in [directory]'s `nodes` map at all, only
+     * its `airNodes` one. Without this, [directory]'s own `airNodes` was empty
+     * (M4), so no preview could show a non-zero `Air(m)` count or resolve
+     * [NodeDirectorySnapshot.identity] down the AIR branch through the
+     * directory rather than a hand-built [NodeIdentity] passed straight to
+     * [NodeCard]. Its low byte, `0x64`, is not shared with any node above and
+     * not with any `RELAY_*_BYTE` constant either, so adding it changes no
+     * existing relay-matching fixture.
+     */
+    val NUM_ARANJUEZ_MOVIL = 0xB1001964.toInt()
+
     // ------------------------------------------------------------------
     // Relay bytes. Seven, all distinct, one per RelayStats fixture below.
     // ------------------------------------------------------------------
@@ -175,7 +188,14 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 900_000L) / 1000L).toInt(),
         hopsAway = 1,
         hasPublicKey = true,
-        receivedAtMillis = 0L,
+        // Non-zero on purpose, unlike every other record below: a real committed
+        // round never leaves this at 0L (NodeRecord's own KDoc says so), and no
+        // preview could otherwise render a DB Received row. NodeCard's own
+        // preview for this node pairs it with SampleData.airIdentity - an
+        // AIR-sourced identity - so its card shows an Air Received line in NODE
+        // INFORMATION *and* this DB Received line in FROM THE NODE DATABASE at
+        // once: a node known to both stores, not just one.
+        receivedAtMillis = NOW - 900_000L,
     )
 
     private val toledoAlta = NodeRecord(
@@ -217,7 +237,13 @@ object SampleData {
         lastHeardEpochSeconds = null,
         hopsAway = 3,
         hasPublicKey = false,
-        receivedAtMillis = 0L,
+        // Non-zero, the second of M4's two real stamps (see getafeRouter's own
+        // comment above): NodeCard's "known by number only" preview pairs this
+        // record with the real directory.identity(NUM_TOLEDO_BAJA) - source ==
+        // DB, every field null - so it needs a real receipt time to prove the
+        // P6 ruling: no NODE INFORMATION heading, but FROM THE NODE DATABASE
+        // still shows this DB Received stamp.
+        receivedAtMillis = NOW - 900_000L,
     )
 
     private val toledoNiebla = NodeRecord(
@@ -318,11 +344,14 @@ object SampleData {
     )
 
     // ------------------------------------------------------------------
-    // Identities heard over the air. NodeCard's five previews draw these
-    // directly - the fixture directory below keeps airNodes empty, so a
-    // preview that wants to show the AIR-sourced half of the split passes
-    // one of these to NodeCard's identity parameter rather than reading it
-    // off the directory.
+    // Identities heard over the air. NodeCard's five previews mostly draw
+    // these directly, passed straight to NodeCard's identity parameter rather
+    // than read off the directory - airIdentity and thinAirIdentity are never
+    // added to airNodes below, on purpose, so those previews stay independent
+    // of the directory's own AIR resolution. aranjuezMovilAir (below) is the one
+    // exception: it exists only in airNodes, for the previews that need
+    // directory.identity/directory.airCount to actually resolve an AIR record
+    // rather than a hand-built one (M4).
     // ------------------------------------------------------------------
 
     /** A node resolved from the air, complete. */
@@ -334,6 +363,20 @@ object SampleData {
         role = "ROUTER",
         hasPublicKey = true,
         receivedAtMillis = 1_756_890_761_000L,
+    )
+
+    /** [NUM_ARANJUEZ_MOVIL]'s own air record - the one entry in [directory]'s
+     *  `airNodes` map, so `directory.airCount` is `1`, not `0`, and
+     *  `directory.identity(NUM_ARANJUEZ_MOVIL)` resolves the AIR branch for
+     *  real rather than needing a hand-built [NodeIdentity] at every call site. */
+    private val aranjuezMovilAir = AirNodeRecord(
+        num = NUM_ARANJUEZ_MOVIL,
+        longName = "Aranjuez Móvil",
+        shortName = "ARJZ",
+        hwModel = "T_ECHO",
+        role = "CLIENT",
+        hasPublicKey = false,
+        receivedAtMillis = NOW - 30_000L,
     )
 
     /**
@@ -533,7 +576,11 @@ object SampleData {
             NUM_PINTO_SINDATOS to pintoSinDatos,
             NUM_YUNCOS_REINICIO to yuncosReinicio,
         ),
-        airNodes = emptyMap(),
+        // One entry, not empty (M4): aranjuezMovilAir is the only fixture in the
+        // whole file that lives solely here and not in nodes above, so
+        // directory.airCount reads 1 and a header preview can show a non-zero
+        // Air(m) instead of always Air(0).
+        airNodes = mapOf(NUM_ARANJUEZ_MOVIL to aranjuezMovilAir),
         loadedAtMillis = NOW - 900_000L,
         localNodeNum = NUM_LOCAL_DEVICE,
         positions = mapOf(

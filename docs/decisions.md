@@ -686,6 +686,16 @@ Ruling: `NodeDirectorySnapshot.identity()` resolves per record, not per field - 
   rule caps this exposure - the air record only ever grows richer as more of that node's own
   broadcasts arrive, never thinner - but it does not eliminate it for a node whose only broadcast so
   far was thin.
+  Known cost recorded after the fact (final review finding I4): `NodeDirectorySnapshot.shortName()`
+  resolves through `identity()`, so this ruling governs every list built on it - relay naming and
+  `uniqueRelayName` included - not only the node panel the spec's own §3 scoped it to. A node in both
+  stores whose newest broadcast omitted `short_name` returns `""` from `identity()`, and
+  `uniqueRelayName` with it: a relay that used to have a unique name (from the database, or from an
+  earlier, fuller broadcast) can silently go back to being an unnamed byte the moment that node's
+  latest NODEINFO_APP happened to leave the field out. No behaviour change follows from this record -
+  the ruling above already covers `identity()` in general, and `shortName()` is just one more caller
+  of it - but the exposure is worth naming where the ruling itself is, not only where it happens to
+  surface.
 
 ### 52
 
@@ -713,3 +723,25 @@ Ruling: `NodeDirectorySnapshot.matchingNodeNums` - and therefore the relay-namin
   relays than this project named before the split - silently, since nothing in the panel signals a
   candidate that `matchingNodeNums` failed to surface at all, however many times that node has
   announced itself over the air.
+
+### 54
+
+Ruling: an explicit, narrow exception to decision 51 - `NodeDirectorySnapshot.identity()` resolves
+  `hasPublicKey` by consulting **both** stores (`air.hasPublicKey || db?.hasPublicKey == true`), not
+  strictly per-record like the other four identity fields decision 51 governs. `NodeDirectory.merge()`'s
+  KDoc, `AirNodeRecord.folding`'s KDoc and spec §5.3 all state, absolutely, that a public key is never
+  unlearned - and per-record precedence broke that promise: a node whose database record already had
+  `hasPublicKey = true`, which then broadcasts a `User` with an empty `public_key`, got an air record
+  with `hasPublicKey = false` (`AirNodeRecord.folding` only ORs a broadcast's key against what the air
+  store already knew, never against the database), and per-record precedence handed that straight to
+  the panel - "Public key: No" for a node the application knows has one. Decision 51's own reasoning
+  (one label, one timestamp, for a whole block that reads as one identity) does not apply to this one
+  boolean the way it applies to a name or a role: a wrong "No" here is a factual claim about a security
+  property, not a cosmetic gap in what a thin broadcast happened to mention. Decision 51 itself is not
+  weakened - every other field it names stays strictly per-record.
+  Cost if wrong: one field - `hasPublicKey` - no longer reflects the newest broadcast alone the way
+  every other identity field does; a node whose database record credits it with a key keeps reading
+  "yes" even after a thin air broadcast that said nothing about one, for as long as the database record
+  is not itself replaced by a reload that drops the key. That is the accepted cost, weighed against the
+  alternative of a security-relevant field reading "No" for a node the application already knows has a
+  key.

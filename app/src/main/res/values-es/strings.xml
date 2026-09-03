@@ -30,7 +30,7 @@
     <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Fuente: %1$s</string>
     <string name="format_source_aged">Fuente: %1$s:%2$s</string>
-    <string name="format_db_header">DB(%1$d) · Air(%2$d) · %3$s</string>
+    <string name="format_db_header">DB(%1$d) · Aire(%2$d) · %3$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$ddías %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (hora local)</string>

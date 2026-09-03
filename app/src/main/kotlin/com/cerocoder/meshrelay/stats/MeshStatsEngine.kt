@@ -10,6 +10,7 @@ import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StampedPosition
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
+import java.util.logging.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -94,7 +95,16 @@ class MeshStatsEngine(
     // losing one would need 256 commands to be pending at that instant, and the only
     // producer fast enough to queue that many is a radio delivering tens of frames a
     // second while the loop - which drains the whole queue per iteration - is blocked
-    // on a single snapshot build. That does not happen.
+    // on a single snapshot build. That does not happen for a click.
+    //
+    // beginNodeDbRound() is the one caller below this does not cover: it is called
+    // right before a node-database burst of up to a thousand node_info frames, which
+    // is exactly that "radio delivering tens of frames a second" shape - a realistic
+    // way to have hundreds of commands already queued the instant the user taps
+    // Reload. A dropped BeginNodeDbRound would silently reopen the reload-round leak
+    // Ruling P4 closed, so that one call site checks trySend's result and logs a
+    // failure rather than assuming, like every other command here, that it cannot
+    // happen.
     private val commands = Channel<Command>(capacity = COMMAND_CAPACITY)
 
     // Everything below is touched only from the consumer coroutine started in init.
@@ -225,8 +235,23 @@ class MeshStatsEngine(
     /** A different local node: see [Command.ResetForNewNode]. */
     fun resetForNewNode() { commands.trySend(Command.ResetForNewNode) }
 
-    /** A node-database round is starting: see [Command.BeginNodeDbRound]. */
-    fun beginNodeDbRound() { commands.trySend(Command.BeginNodeDbRound) }
+    /**
+     * A node-database round is starting: see [Command.BeginNodeDbRound].
+     *
+     * Checks `trySend`'s result and logs a failure, unlike every other command
+     * function above - see the [commands] channel's own KDoc for why this one
+     * caller cannot lean on the same "that does not happen" argument. `stats/`
+     * may not import `android.*`, so this reaches for [java.util.logging.Logger]
+     * rather than `android.util.Log`, which is what every other file in this
+     * app logs through.
+     */
+    fun beginNodeDbRound() {
+        if (commands.trySend(Command.BeginNodeDbRound).isFailure) {
+            Logger.getLogger(TAG).warning(
+                "beginNodeDbRound command dropped - the command queue is full",
+            )
+        }
+    }
 
     /** Open a chart on [key], or pass null when it closes. */
     fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
@@ -280,9 +305,14 @@ class MeshStatsEngine(
         }
         frame.node_info?.let { directory.applyNodeInfo(it) }
         // Any completed want_config round, not only the node-database one: telling
-        // them apart needs the nonces from transport/, which stats/ may not import,
-        // and the two arrive in order anyway - the later, correct timestamp
-        // overwrites the earlier one a moment afterwards.
+        // them apart needs the nonces from transport/, which stats/ may not import.
+        // Calling markLoaded unconditionally used to rely on the later, correct
+        // timestamp overwriting the earlier one a moment afterwards - that
+        // argument no longer holds now that markLoaded is itself guarded
+        // (NodeDirectory.pendingReceivedAny, Ruling 52): a config-only round that
+        // carried no node_info frame is a no-op here, so there is nothing left to
+        // overwrite, and the guard is what makes calling this for every round safe
+        // rather than the ordering.
         if (frame.config_complete_id != null) directory.markLoaded(timestamped.rxMillis)
 
         val packet = frame.packet ?: return
@@ -638,6 +668,7 @@ class MeshStatsEngine(
         if (stats.hasData) stats.avg else Float.NEGATIVE_INFINITY
 
     private companion object {
+        const val TAG = "MeshStatsEngine"
         const val COMMAND_CAPACITY = 256
 
         /** relay_node carries the low byte of a NodeNum and nothing wider. */

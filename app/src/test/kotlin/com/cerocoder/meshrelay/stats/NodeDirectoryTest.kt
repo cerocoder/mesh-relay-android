@@ -846,7 +846,7 @@ class NodeDirectoryTest {
     }
 
     @Test
-    fun `an air record wins whole, blanks included`() {
+    fun `an air record wins whole, blanks included - except hasPublicKey, I1's named exception`() {
         // The owner's ruling, made against a per-field alternative: if an air record
         // exists, all five identity fields come from it. A node that broadcast only a
         // short name shows only a short name, and the label says the data is from the
@@ -854,12 +854,17 @@ class NodeDirectoryTest {
         //
         // The database record staged below is deliberately fuller than the air one -
         // a real hardware model, a real public key, alongside the long name - so a
-        // field-level `?:` back to it would leave a trace: hwModel and hasPublicKey
-        // would read the database's values instead of the air broadcast's blanks, and
-        // every one of them is asserted below. Asserting only longName (as this test
-        // used to) would not catch that: the staged database record set no hwModel,
-        // role or public key, so a borrowed value would coincidentally equal the
-        // blank one this test expects, and the assertion would pass either way.
+        // field-level `?:` back to it would leave a trace: hwModel would read the
+        // database's value instead of the air broadcast's blank, and it is asserted
+        // below. Asserting only longName (as this test used to) would not catch that:
+        // the staged database record set no hwModel or role, so a borrowed value
+        // would coincidentally equal the blank one this test expects, and the
+        // assertion would pass either way.
+        //
+        // hasPublicKey is asserted `true`, not `false` - the one field this ruling
+        // does not cover per-record. It is I1's own exception, not this test's
+        // oversight: see `a public key the database credits is not unlearned by a
+        // thin air broadcast` below for the case pinned on its own.
         directory.applyNodeInfo(
             NodeInfo(
                 num = PINTO,
@@ -882,8 +887,41 @@ class NodeDirectoryTest {
         assertNull(identity.longName)
         assertNull(identity.hwModel)
         assertEquals("CLIENT", identity.role)
-        assertFalse(identity.hasPublicKey)
+        assertTrue(identity.hasPublicKey)
         assertEquals(LIVE_AT_MILLIS, identity.receivedAtMillis)
+    }
+
+    @Test
+    fun `a public key the database credits is not unlearned by a thin air broadcast`() {
+        // I1: "a public key is never unlearned" is asserted absolutely by
+        // NodeDirectory.merge's KDoc, AirNodeRecord.folding's KDoc and the design
+        // spec - but identity()'s per-record precedence broke it, because
+        // AirNodeRecord.folding only ORs a broadcast's own key against what the air
+        // store already knew, never against the database. A node whose database
+        // record has hasPublicKey == true, which then broadcasts a User with no
+        // public_key at all, must still read hasPublicKey == true here.
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(public_key = PUBLIC_KEY)))
+        directory.markLoaded(DB_AT_MILLIS)
+        // No public_key on this broadcast - proto3's own empty-ByteString default.
+        directory.applyUser(PINTO, User(short_name = "pnt2"), LIVE_AT_MILLIS)
+
+        val identity = directory.snapshot(emptySet()).identity(PINTO)
+        assertEquals(IdentitySource.AIR, identity.source)
+        assertTrue(identity.hasPublicKey)
+    }
+
+    @Test
+    fun `hasPublicKey stays false when neither store has ever seen a key`() {
+        // The exception's other side: it must not manufacture a key neither store
+        // has actually reported, just because the field is no longer strictly
+        // per-record.
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(long_name = "Pinto Norte")))
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(short_name = "pnt2"), LIVE_AT_MILLIS)
+
+        val identity = directory.snapshot(emptySet()).identity(PINTO)
+        assertEquals(IdentitySource.AIR, identity.source)
+        assertFalse(identity.hasPublicKey)
     }
 
     @Test

@@ -955,12 +955,89 @@ a node heard only over the air is as valid a candidate as one the database lists
 
 ---
 
+### L8. A neighbour known only from the air
+**Do:** Open the neighbour tab for a node heard directly that the radio's database does not list.
+**Pass looks like:** a full card with its name, position and telemetry — *not* "not in the database".
+This is C1's acceptance item: before the fix, the tab gated on the database store alone and hid a
+full card's worth of data for exactly the nodes most likely to have just broadcast.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L9. A node the radio knows by number only
+**Do:** Open the panel for a node the radio's database lists (it appears in the header's `DB(n)`
+count and in matching-node lists) but whose `NodeInfo` carried no `user` submessage at all — no
+name, no role, nothing but the bare number.
+**Pass looks like:** no **NODE INFORMATION** heading at all — not even a heading over a bare
+"Public key: No" and a date. **FROM THE NODE DATABASE** still shows its **DB Received** stamp; the
+record's real receipt time does not vanish along with the heading it used to sit under. This is the
+P6 ruling, and `NodeCardNoPositionPreview` ("Candidate, known by number only (P6)") is its fixture
+proof.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L10. A public key across the split
+**Do:** Find (or arrange) a node the radio's database already credits with a public key, then wait
+for it to broadcast a NODEINFO_APP that carries no `public_key` of its own.
+**Pass looks like:** the panel must not read **Public key: No** after that broadcast — the database
+still says the node has a key, and I1's exception means `hasPublicKey` consults both stores rather
+than the newest broadcast alone.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L11. An air-heard name survives a reload and a reset
+**Do:** Note a relay's name, one that is unique only because of a node heard exclusively over the
+air. Press **Reload node DB**, then **Reset**.
+**Pass looks like:** the relay's *name* is unchanged after each action — not just L4/L5's counts.
+Check the name specifically: I4 is a recorded way a name can silently disappear (a node in both
+stores whose newest broadcast happened to omit `short_name`), so a count staying steady is not
+proof the name held too.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L12. Scroll the relay list on the live mesh for thirty seconds
+**Do:** With the relay list showing a large mesh, scroll it continuously for about thirty seconds,
+watching for jank. Separately, compare battery use over an hour against the pre-branch build.
+**Pass looks like:** no visible jank while scrolling, and no material battery regression. I3 replaced
+a per-call union rebuild (`nodes.keys + airNodes.keys`, a fresh `LinkedHashSet` every call) with a
+value computed once per snapshot — on a 1000-node mesh with an uncapped air store this was on the
+order of 10^5 avoidable set insertions per snapshot before the fix.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L13. `DB(n)` during the handshake
+**Do:** Connect to a real node and watch the header's `DB(n)` count through the handshake.
+**Pass looks like:** `DB(n)` reaches the radio's true node count once the handshake finishes, and
+does not sit at 0 or flicker partway there. Real firmware replays everything for every
+`want_config_id`, so an early stage of the handshake carries node infos that a later stage discards —
+the count no longer rises incrementally the way it might have before the split. Several seconds of
+`DB(0)` followed by a jump straight to the true count is expected, not a bug.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 72
+- **Total items run:** _____ / 78
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

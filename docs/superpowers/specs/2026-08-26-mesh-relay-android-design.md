@@ -68,7 +68,7 @@ Settled during brainstorming:
 | Language override | Locale-overridden `Context` at the composition root | Consequence of the above. `AppCompatDelegate.setApplicationLocales` would pull in `androidx.appcompat` |
 | Protocol vocabulary | Stays English, untranslated | Precedent from `2026-08-24-frame-inspector-design.md`: a home-made label that diverges from the schema costs more than it saves. Port numbers, roles, hardware models and proto field names are looked up in the schema |
 | Licence | GPL-3.0 | `mesh_stats` is GPL-3.0 and this is a derivative work |
-| Node database | Built from handshake `node_info` frames, merged live from `NODEINFO_APP` / `POSITION_APP` | The Android equivalent of `interface.nodesByNum` |
+| Node database | Built from handshake `node_info` frames, replaced wholesale at each committed want_config round; identity heard live over `NODEINFO_APP` is kept in a separate store, merged field by field (see `2026-09-03-node-storage-split-design.md`) | The Android equivalent of `interface.nodesByNum` |
 | Signal presence | A packet carries signal information **iff `rx_rssi != 0`** | See §6.3. Wire cannot distinguish an absent proto3 scalar from its default; the Python dict layer can |
 | Sample history | Capped at 500 samples per metric | Python keeps it unbounded; a multi-hour session on a phone would leak |
 
@@ -404,7 +404,7 @@ Ports `haversine_distance`, `obfuscation_radius_meters`, `bearing_to_direction`,
 // stats/NodeDirectory.kt — mutable, engine-confined
 class NodeDirectory(private val time: TimeSource) {
     fun applyNodeInfo(info: NodeInfo)
-    fun applyUser(nodeNum: Int, user: User)
+    fun applyUser(nodeNum: Int, user: User, atMillis: Long)
     fun applyPosition(nodeNum: Int, position: Position)
     fun applyTelemetry(nodeNum: Int, telemetry: Telemetry, atMillis: Long)
     fun setLocalNodeNum(num: Int)

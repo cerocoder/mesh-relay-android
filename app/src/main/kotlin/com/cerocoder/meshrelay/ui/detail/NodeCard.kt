@@ -77,8 +77,14 @@ import java.util.Locale
  * Two things this card does not do, both spelled out in this task's brief:
  * - **Role.** [NodeIdentity.role] already reads `"CLIENT"` for a heard-but-
  *   unset role - the protocol's own default - so this card adds no second
- *   default on top of it. A `null` role (neither store has ever heard from
- *   this node) hides the row instead.
+ *   default on top of it. A `null` role hides the row instead, which is not
+ *   the same as "neither store has ever heard from this node": an air record
+ *   always carries a role
+ *   ([com.cerocoder.meshrelay.stats.model.AirNodeRecord.folding] assigns one
+ *   unconditionally), so `null` here means either the database record's own
+ *   `NodeInfo` carried no `user` submessage at all - the store has heard of
+ *   the node, by number, just not what it is - or neither store has heard of
+ *   it, in which case every other identity field is `null` too.
  * - **Firmware.** `NodeInfo` - what [NodeRecord] is built from - carries no
  *   `firmware_version` field at all, unlike `DeviceMetadata`. The terminal
  *   tool reads one from its own local-node info and can never find it for a
@@ -134,8 +140,20 @@ fun NodeCard(
             // is gated on its own field independently, exactly as the original
             // four-field User gating this replaced (mesh_stats.py:1860-1870), but
             // reading through the resolved identity rather than the raw record.
+            //
+            // The section itself is gated on identityRows alone, not on
+            // identity.source != NONE - the controller's ruling. A node the radio
+            // knows only by number (source == DB, but its NodeInfo carried no
+            // `user` submessage, so all four name/role/model fields are null) used
+            // to get this heading anyway, over nothing but a "Public key: No" row
+            // and a date - a heading over data that says nothing. Safe because
+            // identityRows is never empty when there is a key to report: hasPublicKey
+            // can only be true when a `user` submessage was actually present, and a
+            // present `user` always carries at least a role (proto3's own default,
+            // never null - see this file's own KDoc on role above).
             val identityRows = listOfNotNull(identity.longName, identity.shortName, identity.role, identity.hwModel)
-            if (identityRows.isNotEmpty() || identity.source != IdentitySource.NONE) {
+            val identityShown = identityRows.isNotEmpty()
+            if (identityShown) {
                 Text(stringResource(R.string.section_node_information), style = MaterialTheme.typography.labelSmall)
                 identity.longName?.let { LabelValueRow(stringResource(R.string.node_long_name), it) }
                 identity.shortName?.let { LabelValueRow(stringResource(R.string.node_short_name), it) }
@@ -220,12 +238,20 @@ fun NodeCard(
             // FROM THE NODE DATABASE - what only the radio's own database ever
             // said about this node: the SNR and last-heard time it recorded, and
             // when the phone last committed this record. dbStamp is suppressed
-            // when the identity block above already showed a DB stamp: when
-            // identity resolved to the database, that stamp and this one are the
-            // same value off the same record, and two identical lines on one
-            // panel would read as a defect.
+            // only when the identity block above actually rendered a DB stamp of
+            // its own - not merely when identity resolved to the database, which
+            // is what identity.source != IdentitySource.DB alone would test.
+            // Since the NODE INFORMATION section above is now gated on
+            // identityRows (identityShown), a DB-sourced identity with no
+            // identity rows to show - the "known by number only" case this same
+            // guard protects - renders no stamp up there at all, and suppressing
+            // this one too would make the record's real receipt time vanish from
+            // the panel entirely, contradicting spec requirements 4 and 6.
+            // Suppressed, therefore, exactly when the block above both rendered
+            // (identityShown) and would have shown the same value off the same
+            // record (source == DB).
             val dbStamp = record.receivedAtMillis
-                .takeIf { it != 0L && identity.source != IdentitySource.DB }
+                .takeIf { it != 0L && !(identityShown && identity.source == IdentitySource.DB) }
             if (record.dbSnr != null || record.lastHeardEpochSeconds != null || dbStamp != null) {
                 Text(stringResource(R.string.section_from_node_database), style = MaterialTheme.typography.labelSmall)
 
@@ -420,7 +446,7 @@ private fun NodeCardTelemetryPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Candidate, nothing known in either store")
+@Preview(showBackground = true, name = "Candidate, known by number only (P6)")
 @Composable
 private fun NodeCardNoPositionPreview() {
     MeshRelayTheme {
@@ -428,10 +454,18 @@ private fun NodeCardNoPositionPreview() {
             NodeCard(
                 index = 3,
                 record = SampleData.directory.node(SampleData.NUM_TOLEDO_BAJA)!!,
-                // Neither store has ever named this node - all three sections are
-                // omitted, heading included, leaving only the header row. Pins the
-                // omission rule this task adds, at its most extreme case.
-                identity = NodeIdentity.NONE,
+                // NUM_TOLEDO_BAJA is in SampleData.directory.nodes (a bare node
+                // known only because routing mentioned its number - see
+                // SampleData's own case index) with a real receivedAtMillis, so
+                // the real identity() returns source == DB with all five fields
+                // null - never NodeIdentity.NONE, which would misrepresent a node
+                // the database *does* have a record for. This is the visual proof
+                // of the P6 ruling: NODE INFORMATION is omitted whole, heading
+                // included, because identityRows is empty - but FROM THE NODE
+                // DATABASE still shows this record's own DB Received stamp,
+                // which a naive identity.source != DB suppression would have
+                // erased along with the heading.
+                identity = SampleData.directory.identity(SampleData.NUM_TOLEDO_BAJA),
                 location = SampleData.directory.locationInfo(SampleData.NUM_TOLEDO_BAJA, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_TOLEDO_BAJA),
                 meshviewUrl = "https://meshview.meshtastic.es",

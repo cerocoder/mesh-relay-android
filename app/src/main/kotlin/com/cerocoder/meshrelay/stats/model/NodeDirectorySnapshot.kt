@@ -30,6 +30,19 @@ class NodeDirectorySnapshot(
     private val telemetryByNode = telemetry
     private val skippedNodes = skipped
 
+    /**
+     * The union of both stores' node numbers, computed once. This class is
+     * immutable by its own KDoc above, so the union never changes after
+     * construction - `matchingNodeNums` used to rebuild `nodes.keys +
+     * airNodes.keys` (a fresh `LinkedHashSet`) on every call, and it is called
+     * for every relay byte seen, every packet, before every snapshot build
+     * (`MeshStatsEngine.refreshRelayNames`), and again per row per
+     * recomposition (`RelayListScreen`). On a 1000-node mesh with an uncapped
+     * air store that was on the order of 10^5 set insertions per snapshot where
+     * an allocation-free filter would do.
+     */
+    private val allNodeNums: Set<Int> by lazy { nodes.keys + airNodes.keys }
+
     val count: Int get() = nodes.size
 
     /**
@@ -71,6 +84,22 @@ class NodeDirectorySnapshot(
      * one of the two paths honoured would not really be a contract, and a
      * caller could no longer treat the two sources as indistinguishable, which
      * is the whole point of this type.
+     *
+     * **`hasPublicKey` is the one field that is not per-record**, an explicit,
+     * narrow exception to the per-record ruling above - recorded in
+     * `docs/decisions.md` as its own ruling, naming itself an exception to that
+     * one rather than weakening it. `NodeDirectory.merge()`'s KDoc,
+     * [AirNodeRecord.folding]'s KDoc and the design spec all state, absolutely,
+     * that a public key is never unlearned - but resolving this field from the
+     * air record alone would break that the moment a database record already
+     * credited the node with a key and its newest broadcast's `User` carried an
+     * empty one: [AirNodeRecord.folding] only ORs a broadcast against what the
+     * *air* store already knew, never against the database. So this reads
+     * `true` when *either* store ever has: the air record's own value, or the
+     * database record's, consulted directly here rather than through
+     * [AirNodeRecord.folding]. A wrong "No" would be a factual claim about a
+     * security property, not a cosmetic blank - worth a narrower rule than the
+     * other four fields get.
      */
     fun identity(nodeNum: Int): NodeIdentity {
         airNodes[nodeNum]?.let { air ->
@@ -80,7 +109,7 @@ class NodeDirectorySnapshot(
                 shortName = air.shortName,
                 hwModel = air.hwModel,
                 role = air.role,
-                hasPublicKey = air.hasPublicKey,
+                hasPublicKey = air.hasPublicKey || nodes[nodeNum]?.hasPublicKey == true,
                 receivedAtMillis = air.receivedAtMillis,
             )
         }
@@ -117,8 +146,12 @@ class NodeDirectorySnapshot(
      * Sorted ascending, which the original had no reason to do: the detail screen
      * numbers the candidates `[1]`, `[2]`, and drawing them in a hash map's order
      * would let the numbering change between recompositions.
+     *
+     * Filters [allNodeNums], the union computed once at construction rather than
+     * rebuilt here per call - see its own KDoc for why that matters on a large
+     * mesh.
      */
-    fun matchingNodeNums(relayByte: Int): List<Int> = (nodes.keys + airNodes.keys)
+    fun matchingNodeNums(relayByte: Int): List<Int> = allNodeNums
         .filter { Geo.lastByteOfNodeNum(it) == relayByte && it !in skippedNodes }
         .sorted()
 

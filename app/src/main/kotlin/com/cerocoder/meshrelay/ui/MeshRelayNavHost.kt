@@ -40,11 +40,13 @@ import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.SeriesKey
+import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
+import com.cerocoder.meshrelay.ui.detail.candidateRecord
 import com.cerocoder.meshrelay.ui.detail.DetailMenuItem
 import com.cerocoder.meshrelay.ui.detail.DetailScreen
 import com.cerocoder.meshrelay.ui.detail.MatchingNodesTab
@@ -492,12 +494,27 @@ private fun NeighbourNodeTab(
     modifier: Modifier = Modifier,
 ) {
     val directory = snapshot.directory
-    val record = directory.node(nodeNum)
+    val identity = directory.identity(nodeNum)
 
-    if (record == null) {
-        // A node heard directly whose NodeInfo has never arrived. Real, and not an
-        // error: the packet that made it a neighbour carried its number, not its
-        // name.
+    // Gated on neither store holding the number, not just the database: a
+    // neighbour is a node heard directly, and the packet that made it one is
+    // exactly as likely to be a NODEINFO_APP as anything else - the radio's own
+    // database only refreshes at a want_config round, so a node that joined
+    // since connect is real and known well before it is in `nodes`. Gating on
+    // directory.node(nodeNum) alone - the fault this shares with the one
+    // MatchingNodesTab.candidateRecord fixed - hid a full card's worth of name,
+    // position and telemetry behind "not in the database" for precisely the
+    // nodes most likely to have just broadcast.
+    //
+    // identity.source == NONE is the whole test: identity() falls through to
+    // NodeIdentity.NONE only when both airNodes[nodeNum] and nodes[nodeNum] are
+    // absent, so this already implies directory.node(nodeNum) == null too -
+    // testing both would be redundant.
+    if (identity.source == IdentitySource.NONE) {
+        // A node heard directly whose NodeInfo has never arrived, and which has
+        // never broadcast a NODEINFO_APP of its own either - neither store has
+        // heard of it. Real, and not an error: the packet that made it a
+        // neighbour carried its number, not its name.
         EmptyState(
             title = stringResource(R.string.node_not_in_db_title),
             body = stringResource(R.string.node_not_in_db_body),
@@ -514,8 +531,12 @@ private fun NeighbourNodeTab(
     ) {
         NodeCard(
             index = null,
-            record = record,
-            identity = directory.identity(nodeNum),
+            // The same seam MatchingNodesTab's own candidate list uses: never
+            // null, database-only fields from `nodes` when present and left at
+            // their all-absent defaults otherwise, so an air-only neighbour gets
+            // a real card rather than a crash on `directory.node(nodeNum)!!`.
+            record = candidateRecord(directory, nodeNum),
+            identity = identity,
             location = directory.locationInfo(nodeNum, from = directory.localPosition()),
             telemetry = directory.telemetry(nodeNum),
             meshviewUrl = meshviewUrl,
