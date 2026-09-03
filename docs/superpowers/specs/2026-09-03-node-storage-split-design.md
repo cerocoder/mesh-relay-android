@@ -149,11 +149,29 @@ here is about a default that must be read as absence.
 | `public_key` | `null` or empty | Presence is remembered once observed and never unlearned, matching the existing `NodeDirectory.merge()` rule and its recorded reasoning |
 | `role` | **never** | See §3. `CLIENT` is the default and cannot be told from absence; the transition is worth more than the omission |
 
-Written to be correct whether Wire generates these as `String?` or as non-null
-`String` defaulting to `""`, because it treats the two identically. That question is
-still open — the artifact is not available locally to inspect, and
-`allWarningsAsErrors` is not set, so a green build does not settle it. §9 pins it
-with a test instead of assuming.
+**Settled during implementation: they are non-null with proto3 defaults.** A copy of
+the Wire-generated `User.kt` was found on this machine and read directly:
+
+```kotlin
+public val id: String = ""
+public val long_name: String = ""
+public val short_name: String = ""
+public val macaddr: ByteString = ByteString.EMPTY
+public val hw_model: HardwareModel = HardwareModel.UNSET
+public val role: Config.DeviceConfig.Role = Config.DeviceConfig.Role.CLIENT
+public val public_key: ByteString = ByteString.EMPTY
+public val is_unmessagable: Boolean? = null
+```
+
+So an omitted `long_name` reaches this code as `""`, never as `null`, and the rule
+above treating `""` as absence is load-bearing rather than defensive. It also
+confirms the defect noted before this work began: the old `applyUser` assigned
+`user.long_name` with no fallback, so a `NODEINFO_APP` that omitted the name wrote
+`""` over a good one.
+
+Note also that `HardwareModel` is **top-level** (`org.meshtastic.proto.HardwareModel`)
+and `Role` is nested under `Config.DeviceConfig`, not under `User`. §9 still pins the
+behaviour with a test rather than relying on this file.
 
 ### 5.4 Memory
 
