@@ -76,6 +76,7 @@ fun StatusStrip(
             text = stringResource(
                 R.string.format_db_header,
                 snapshot.directory.count,
+                snapshot.directory.airCount,
                 dbLoadTimeText(snapshot.directory.loadedAtMillis, nowMillis),
             ),
             style = MaterialTheme.typography.bodySmall,

@@ -3,8 +3,10 @@ package com.cerocoder.meshrelay.ui.preview
 import com.cerocoder.meshrelay.stats.SignalSeriesBuffer
 import com.cerocoder.meshrelay.stats.SortMode
 import com.cerocoder.meshrelay.stats.model.Counters
+import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeIdentity
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
@@ -314,6 +316,32 @@ object SampleData {
         hasPublicKey = false,
         receivedAtMillis = 0L,
     )
+
+    // ------------------------------------------------------------------
+    // Identities heard over the air. NodeCard's five previews draw these
+    // directly - the fixture directory below keeps airNodes empty, so a
+    // preview that wants to show the AIR-sourced half of the split passes
+    // one of these to NodeCard's identity parameter rather than reading it
+    // off the directory.
+    // ------------------------------------------------------------------
+
+    /** A node resolved from the air, complete. */
+    val airIdentity = NodeIdentity(
+        source = IdentitySource.AIR,
+        longName = "PQPL1 Getafe",
+        shortName = "1ce5",
+        hwModel = "HELTEC_MESH_NODE_T114",
+        role = "ROUTER",
+        hasPublicKey = true,
+        receivedAtMillis = 1_756_890_761_000L,
+    )
+
+    /**
+     * A node that broadcast only a short name. Per-record precedence means the panel
+     * shows this whole, blanks included, so the preview pane is where that case is
+     * seen without waiting for such a node on the mesh.
+     */
+    val thinAirIdentity = airIdentity.copy(longName = null, hwModel = null, role = null)
 
     // ------------------------------------------------------------------
     // Live positions. Only NUM_TOLEDO_NIEBLA has one: a report heard this

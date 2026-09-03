@@ -128,6 +128,7 @@ fun MatchingNodesTab(
                     NodeCard(
                         index = index + 1,
                         record = record,
+                        identity = directory.identity(nodeNum),
                         location = directory.locationInfo(nodeNum, localPosition),
                         telemetry = directory.telemetry(nodeNum),
                         meshviewUrl = meshviewUrl,
@@ -163,22 +164,20 @@ fun MatchingNodesTab(
 }
 
 /**
- * The record [NodeCard] renders for [nodeNum]: the five identity fields
- * resolved through [NodeDirectorySnapshot.identity] - so a candidate the radio
- * has never listed still shows what it has broadcast about itself - and the
- * database-only fields (position, SNR, last-heard, hops) taken from
- * [NodeDirectorySnapshot.node] when the database has an entry, or left at the
- * same empty defaults [RemoteNodeScreen]'s own stale-node fallback uses when it
- * has not.
+ * The database-only half of [nodeNum]'s card: position, SNR, last-heard, hops
+ * and the record's own receipt stamp, taken from [NodeDirectorySnapshot.node]
+ * when the database has an entry, or left at the same empty defaults
+ * [RemoteNodeScreen]'s own stale-node fallback uses when it has not - so a
+ * candidate the radio has never listed still gets a card, never `null`.
  *
- * [NodeCard] does not yet take a [com.cerocoder.meshrelay.stats.model.NodeIdentity]
- * argument of its own - that lands in a later task - so this composes the two
- * stores into one [NodeRecord] here rather than in [NodeCard], which is why
- * the database record's own identity fields (`longName`, `shortName`,
- * `hwModel`, `role`, `hasPublicKey`) are never read below: the resolved
- * identity already decided them, and reading the database record's copies too
- * would silently reintroduce the DB-only candidate list this function
- * replaces.
+ * [NodeCard] now takes a [com.cerocoder.meshrelay.stats.model.NodeIdentity]
+ * argument of its own, resolved separately at the call site through
+ * [NodeDirectorySnapshot.identity] - so this carries only the fields
+ * [com.cerocoder.meshrelay.stats.model.NodeIdentity] does not: the identity
+ * fields (`longName`, `shortName`, `hwModel`, `role`, `hasPublicKey`) are left
+ * at their all-absent defaults here on purpose, never read from either store,
+ * because reading them from the database record would silently reintroduce
+ * the field-level blend the per-record precedence rule was written against.
  *
  * `internal`, not `private`: this is the seam the Critical review finding
  * fixed, and `MatchingNodesTabCandidateRecordTest` exercises it directly
@@ -186,19 +185,18 @@ fun MatchingNodesTab(
  * instrumented-test setup to run.
  */
 internal fun candidateRecord(directory: NodeDirectorySnapshot, nodeNum: Int): NodeRecord {
-    val identity = directory.identity(nodeNum)
     val record = directory.node(nodeNum)
     return NodeRecord(
         num = nodeNum,
-        longName = identity.longName,
-        shortName = identity.shortName,
-        hwModel = identity.hwModel,
-        role = identity.role,
+        longName = null,
+        shortName = null,
+        hwModel = null,
+        role = null,
         dbPosition = record?.dbPosition,
         dbSnr = record?.dbSnr,
         lastHeardEpochSeconds = record?.lastHeardEpochSeconds,
         hopsAway = record?.hopsAway,
-        hasPublicKey = identity.hasPublicKey,
+        hasPublicKey = false,
         receivedAtMillis = record?.receivedAtMillis ?: 0L,
     )
 }

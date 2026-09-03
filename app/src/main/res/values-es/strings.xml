@@ -30,7 +30,7 @@
     <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Fuente: %1$s</string>
     <string name="format_source_aged">Fuente: %1$s:%2$s</string>
-    <string name="format_db_header">DB(%1$d) · %2$s</string>
+    <string name="format_db_header">DB(%1$d) · Air(%2$d) · %3$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$ddías %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (hora local)</string>
@@ -177,6 +177,11 @@
     <string name="graph_position_from_phone">Abrir en un mapa: posición del teléfono</string>
 
     <!-- Node card -->
+    <string name="section_node_information">INFORMACIÓN DEL NODO</string>
+    <string name="section_heard_over_air">RECIBIDO POR EL AIRE</string>
+    <string name="section_from_node_database">DE LA BASE DE NODOS</string>
+    <string name="label_air_received">Recepción por aire</string>
+    <string name="label_db_received">Recepción de la DB</string>
     <string name="node_long_name">Nombre largo</string>
     <string name="node_short_name">Nombre corto</string>
     <string name="node_role">Rol</string>

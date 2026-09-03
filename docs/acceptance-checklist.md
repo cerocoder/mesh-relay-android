@@ -875,13 +875,92 @@ it resolves for nodes it previously did not.
 
 ---
 
+## Group L — The node database and what's heard over the air, kept apart (2026-09-03)
+
+### L1. The header counts both stores independently
+**Do:** Leave the app running and connected for a while, watching the header line above the node
+list.
+**Pass looks like:** the header reads **DB(n) · Air(m)**, and `Air(m)` grows as nodes broadcast
+NODEINFO_APP packets while `DB(n)` stays fixed at the radio's own node count. This is the original
+complaint this whole change answers — an overnight run whose header never moved off `DB(80)` even
+though the mesh kept talking — so a rising `Air(m)` beside a steady `DB(n)` is the proof it is
+fixed.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L2. A recently-broadcast node's panel is headed NODE INFORMATION → Air Received
+**Do:** Open the panel for a node that has broadcast recently.
+**Pass looks like:** the card is divided into headed sections; **NODE INFORMATION** ends with
+**Air Received** and a recent time, rather than an unlabelled stamp or none at all.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L3. A database-only node reads DB Received once, not twice
+**Do:** Open the panel for a node the radio's database knows but which has not broadcast a
+NODEINFO_APP packet this session.
+**Pass looks like:** the identity block reads **DB Received**, and the **FROM THE NODE DATABASE**
+section further down does **not** repeat that same stamp — the duplicate is suppressed because
+both would be the same value off the same record.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L4. Reload node DB moves every DB Received stamp, and no Air Received stamp
+**Do:** Press **Reload node DB**.
+**Pass looks like:** every **DB Received** stamp on screen becomes the reload time. No **Air
+Received** stamp changes — a reload replaces the radio's database, not what nodes have broadcast.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L5. Reset empties neither store
+**Do:** Press **Reset**.
+**Pass looks like:** node names survive, and the header's two counts — **DB(n)** and **Air(m)** —
+do not drop. Reset clears the session's measurements, not the mesh's identity.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L6. Connecting to a different node drops both counts, cleanly
+**Do:** Connect to a *different* node over Bluetooth.
+**Pass looks like:** both **DB(n)** and **Air(m)** drop to reflect the new node's own view of the
+mesh, and no name from the previous node survives anywhere on screen — a different radio describes
+a different mesh, and carrying a stale name over would be worse than showing none.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### L7. A relay named from a node the radio does not list
+**Do:** Find a relay whose one-byte id matches a node known only from the air — never listed in the
+radio's own database.
+**Pass looks like:** its short name is still shown. Relay naming scans the union of both stores, so
+a node heard only over the air is as valid a candidate as one the database lists.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
 
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 65
+- **Total items run:** _____ / 72
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

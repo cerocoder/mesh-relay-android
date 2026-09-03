@@ -648,3 +648,68 @@ Ruling: the position a node card shows is the newest report carrying coordinates
   existed.
   Cost if wrong: a node card can now show coordinates with no altitude beside them, where before
   it showed both - drawn from a database entry that could be days old.
+
+### 50
+
+Ruling: the node directory splits into two independent stores, kept apart because they are two
+  different observations of the same node, not two copies of one. `nodes` is populated only from
+  `node_info` frames the radio hands over during a want_config round (`NodeDirectory.applyNodeInfo`,
+  staged and only visible after `markLoaded` commits the round); the new `nodesFromAir`
+  (`NodeDirectorySnapshot.airNodes`) is populated only from NODEINFO_APP broadcasts heard on the
+  wire (`NodeDirectory.applyUser`, folded by `AirNodeRecord.folding`). Before this split, `applyUser`
+  wrote straight into `nodes` - a NODEINFO_APP broadcast silently overwrote whatever the radio's own
+  database said about that node, and the interface had no way to say which of the two had actually
+  answered, or when. `nodes` now means exactly what its name has always implied and nothing more:
+  the radio's database, and only that - which is also why an overnight run's header could sit at
+  `DB(80)` for ever even while the mesh kept talking: nothing arriving over the air was ever counted
+  anywhere.
+  Cost if wrong: reverting to one store loses the distinction the rest of this plan is built on -
+  the header's two independent counts, the per-record source label, and the two separate "Received"
+  timestamps all collapse back into one undated, unlabelled figure, and the original complaint
+  returns.
+
+### 51
+
+Ruling: `NodeDirectorySnapshot.identity()` resolves per record, not per field - when the air store
+  holds a node, all five identity fields come from it, blanks included, never blended with the
+  database's own copies of the same fields. The alternative considered and rejected was a per-field
+  fallback: `longName` from whichever store has one, `hwModel` from whichever store has one, and so
+  on, each field choosing independently. Per-field fallback was rejected because it would attribute
+  one identity to two different observations at once, and a caller could then no longer show one
+  label and one timestamp for the whole block - "Air Received, 2 minutes ago" would be a lie the
+  moment even one of its five fields actually came from a database entry hours old.
+  Cost if wrong (read here as the cost of the ruling actually taken, over the rejected per-field
+  alternative): a node that broadcasts a thin `User` - a NODEINFO_APP carrying only a short name,
+  say - shows less than the database knows about it, for as long as that thin broadcast is the
+  newest one heard from it. The database's own hardware model or role, sitting in the other store,
+  is not shown even though the application has it. `AirNodeRecord.folding`'s accumulate-not-replace
+  rule caps this exposure - the air record only ever grows richer as more of that node's own
+  broadcasts arrive, never thinner - but it does not eliminate it for a node whose only broadcast so
+  far was thin.
+
+### 52
+
+Ruling: a completed want_config round commits the staged node-database buffer into `nodes` only
+  when that round actually carried at least one `node_info` frame - `NodeDirectory.pendingReceivedAny`,
+  checked at `markLoaded` before anything is cleared or copied. `config_complete_id` alone cannot be
+  trusted as that signal: it terminates every want_config round indiscriminately, including a plain
+  config round that carries no node data at all, and `stats/` may not import `transport/` to read
+  which nonce actually completed and tell the rounds apart that way.
+  Cost if wrong: without the guard, `markLoaded` would run unconditionally on every
+  `config_complete_id` and commit whatever `pendingNodes` held at that instant regardless of what the
+  round was actually for - a config-only round arriving after a real node-database load would find
+  the staging buffer empty and commit that emptiness: an eighty-entry database replaced by an empty
+  map, silently, on a round that was never about nodes in the first place.
+
+### 53
+
+Ruling: `NodeDirectorySnapshot.matchingNodeNums` - and therefore the relay-naming path built on it -
+  scans the **union** of both stores' node numbers (`nodes.keys + airNodes.keys`), not `nodes.keys`
+  alone. A relay identifies itself with one byte, matched against known node numbers; a node heard
+  only over the air, never yet listed in the radio's own database, is exactly as valid a candidate
+  for that byte as one the database does list, and the split this plan makes must not quietly narrow
+  who counts.
+  Cost if wrong: scanning `nodes` alone, now that the two stores are separate, would name fewer
+  relays than this project named before the split - silently, since nothing in the panel signals a
+  candidate that `matchingNodeNums` failed to surface at all, however many times that node has
+  announced itself over the air.

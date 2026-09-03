@@ -515,6 +515,7 @@ private fun NeighbourNodeTab(
         NodeCard(
             index = null,
             record = record,
+            identity = directory.identity(nodeNum),
             location = directory.locationInfo(nodeNum, from = directory.localPosition()),
             telemetry = directory.telemetry(nodeNum),
             meshviewUrl = meshviewUrl,

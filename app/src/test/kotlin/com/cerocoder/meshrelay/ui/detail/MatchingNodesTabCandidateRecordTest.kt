@@ -12,7 +12,6 @@ import org.junit.Test
 // hold an entry for its own number, not the number itself.
 private const val DB_ONLY = 0xA100101
 private const val AIR_ONLY = 0xA100102
-private const val BOTH = 0xA100103
 
 private fun dbRecord(num: Int) = NodeRecord(
     num = num,
@@ -53,12 +52,23 @@ private fun snapshotOf(
 
 /**
  * Pins [candidateRecord] directly - the seam Critical finding C1 fixed. Before
- * the fix, [MatchingNodesTab] built its candidate list with
+ * that fix, [MatchingNodesTab] built its candidate list with
  * `candidates.mapNotNull { directory.node(it)?.let { ... } }`, which silently
  * dropped any candidate [NodeDirectorySnapshot.node] returns null for. Since
  * `matchingNodeNums` scans the union of both stores, that included every
  * air-only candidate - exactly the node the ambiguity is often about, per the
  * finding's own case acceptance item.
+ *
+ * Task 4 narrowed [candidateRecord]'s job: [NodeCard] now takes a
+ * [com.cerocoder.meshrelay.stats.model.NodeIdentity] argument of its own,
+ * resolved separately at the call site through
+ * [NodeDirectorySnapshot.identity], so [candidateRecord] carries only the
+ * database-only fields and leaves the identity fields at their all-absent
+ * defaults - never reading them from either store. These tests were rewritten
+ * to pin that shape: the "both stores" case from the first round no longer
+ * has anything distinct to say now that identity has moved out of this
+ * function entirely, so it was dropped rather than kept as a duplicate of the
+ * database-only case.
  *
  * No Compose/instrumented test harness exists in this module (see
  * `AGENTS.md`/the project's own note on verifying on-device instead), so this
@@ -68,7 +78,7 @@ private fun snapshotOf(
 class MatchingNodesTabCandidateRecordTest {
 
     @Test
-    fun `an air-only candidate keeps its card with identity but no database fields`() {
+    fun `a candidate absent from the database gets null database fields, not a crash`() {
         // This is the Critical finding's own failure mode: a node the radio has
         // never listed, reachable only because matchingNodeNums now scans the
         // union. directory.node(AIR_ONLY) is null here - candidateRecord must not
@@ -78,56 +88,40 @@ class MatchingNodesTabCandidateRecordTest {
         val record = candidateRecord(directory, AIR_ONLY)
 
         assertEquals(AIR_ONLY, record.num)
-        assertEquals("Air Long", record.longName)
-        assertEquals("airsh", record.shortName)
-        assertEquals("HELTEC_V3", record.hwModel)
-        assertEquals("ROUTER", record.role)
-        assertFalse(record.hasPublicKey)
-        // Nothing the radio's own database ever said - there is no database
-        // entry to read one from.
         assertNull(record.dbPosition)
         assertNull(record.dbSnr)
         assertNull(record.lastHeardEpochSeconds)
         assertNull(record.hopsAway)
         assertEquals(0L, record.receivedAtMillis)
+        // Identity fields are never sourced here any more - NodeCard's own
+        // identity argument, resolved separately at the call site, is what
+        // decides these now.
+        assertNull(record.longName)
+        assertNull(record.shortName)
+        assertNull(record.hwModel)
+        assertNull(record.role)
+        assertFalse(record.hasPublicKey)
     }
 
     @Test
-    fun `a database-only candidate gets its identity through the normalising path`() {
+    fun `a candidate in the database carries its own database fields, and no identity fields`() {
         val directory = snapshotOf(nodes = mapOf(DB_ONLY to dbRecord(DB_ONLY)))
 
         val record = candidateRecord(directory, DB_ONLY)
 
-        assertEquals("DB Long", record.longName)
-        assertEquals("dbsh", record.shortName)
-        assertEquals("T_ECHO", record.hwModel)
-        assertEquals("CLIENT", record.role)
-        assertEquals(true, record.hasPublicKey)
+        assertEquals(DB_ONLY, record.num)
         assertEquals(6.5f, record.dbSnr!!, 1e-6f)
         assertEquals(111, record.lastHeardEpochSeconds)
         assertEquals(2, record.hopsAway)
         assertEquals(555L, record.receivedAtMillis)
-    }
-
-    @Test
-    fun `a candidate in both stores shows air identity with the database's own fields`() {
-        // The per-record ruling (I1/C1's shared premise): identity comes from the
-        // air record whole, never blended field by field with the database's -
-        // even though the database also has an opinion about every field here.
-        val directory = snapshotOf(nodes = mapOf(BOTH to dbRecord(BOTH)), airNodes = mapOf(BOTH to airRecord(BOTH)))
-
-        val record = candidateRecord(directory, BOTH)
-
-        assertEquals("Air Long", record.longName)
-        assertEquals("airsh", record.shortName)
-        assertEquals("HELTEC_V3", record.hwModel)
-        assertEquals("ROUTER", record.role)
+        // The database record's own longName/shortName/hwModel/role/hasPublicKey
+        // ("DB Long", "dbsh", "T_ECHO", "CLIENT", true) are never copied - if a
+        // future change reintroduced them here, the panel would blend a database
+        // identity underneath whatever NodeCard's own identity argument shows.
+        assertNull(record.longName)
+        assertNull(record.shortName)
+        assertNull(record.hwModel)
+        assertNull(record.role)
         assertFalse(record.hasPublicKey)
-        // The database-only fields still come from the database record: identity
-        // never carries them, so this is the only place they can come from.
-        assertEquals(6.5f, record.dbSnr!!, 1e-6f)
-        assertEquals(111, record.lastHeardEpochSeconds)
-        assertEquals(2, record.hopsAway)
-        assertEquals(555L, record.receivedAtMillis)
     }
 }

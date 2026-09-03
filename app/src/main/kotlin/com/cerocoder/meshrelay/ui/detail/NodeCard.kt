@@ -26,7 +26,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.NodeId
+import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.LocationInfo
+import com.cerocoder.meshrelay.stats.model.NodeIdentity
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
 import com.cerocoder.meshrelay.ui.common.FieldIcon
@@ -56,25 +58,43 @@ import java.util.Locale
  *   relay - that judgment is the whole point of the tab it lives in, and stays
  *   with the human looking at the list, not this component.
  *
+ * [record] and [identity] are two different views of the same node, kept
+ * apart on purpose: [identity] is
+ * [com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot.identity]'s own
+ * per-record resolution across both stores - long name, short name, role,
+ * hardware model, public key, one timestamp and one label naming which store
+ * it came from - while [record] supplies what only the radio's own database
+ * ever measured (`dbSnr`, `lastHeardEpochSeconds`, its own receipt stamp),
+ * plus [NodeRecord.num]. The card renders three headed sections in order:
+ * NODE INFORMATION ([identity]'s five fields and its stamp), HEARD OVER THE
+ * AIR (position, uptime, restarts, telemetry - none of it ever in the node
+ * database), and FROM THE NODE DATABASE ([record]'s own SNR, last-heard and
+ * receipt stamp). A section with nothing to show is omitted whole, heading
+ * included - the same reasoning [PositionLine] already applies to its own
+ * row: a heading with nothing under it reads as a missing row rather than an
+ * absent one.
+ *
  * Two things this card does not do, both spelled out in this task's brief:
- * - **Role.** [NodeRecord.role] already reads `"CLIENT"` for a heard-but-unset
- *   role - the protocol's own default - so this card adds no second default on
- *   top of it. A `null` role (no `User` message ever heard at all) hides the
- *   row instead.
+ * - **Role.** [NodeIdentity.role] already reads `"CLIENT"` for a heard-but-
+ *   unset role - the protocol's own default - so this card adds no second
+ *   default on top of it. A `null` role (neither store has ever heard from
+ *   this node) hides the row instead.
  * - **Firmware.** `NodeInfo` - what [NodeRecord] is built from - carries no
  *   `firmware_version` field at all, unlike `DeviceMetadata`. The terminal
  *   tool reads one from its own local-node info and can never find it for a
  *   remote node (`node_info.get("firmwareVersion") or
  *   node_info.get("firmware_version")`, mesh_stats.py:1894). [firmwareVersion]
  *   below is `null` unconditionally, with nothing in [NodeRecord] to ever
- *   change that - the row is kept, in its ported position, for a future task
- *   that threads real firmware data through [NodeRecord] to fill in, not
- *   invented here.
+ *   change that - the row is kept, in the FROM THE NODE DATABASE section
+ *   next to the other fields `NodeInfo` does carry, in its ported position,
+ *   for a future task that threads real firmware data through [NodeRecord]
+ *   to fill in, not invented here.
  */
 @Composable
 fun NodeCard(
     index: Int?,
     record: NodeRecord,
+    identity: NodeIdentity,
     location: LocationInfo,
     telemetry: TelemetryRecord?,
     meshviewUrl: String?,
@@ -108,106 +128,154 @@ fun NodeCard(
                 }
             }
 
-            // User fields all arrive (or not) together - NodeRecord.fromProto reads
-            // every one of them off the same optional `user` submessage - but each
-            // row is gated on its own field independently, exactly as the original
-            // gates each of its four `if "x" in user:` lines separately
-            // (mesh_stats.py:1860-1870).
-            if (record.longName != null) {
-                LabelValueRow(stringResource(R.string.node_long_name), record.longName)
-            }
-            if (record.shortName != null) {
-                LabelValueRow(stringResource(R.string.node_short_name), record.shortName)
-            }
-            if (record.role != null) {
-                LabelValueRow(stringResource(R.string.node_role), record.role)
-            }
-            if (record.hwModel != null) {
-                LabelValueRow(stringResource(R.string.node_hardware), record.hwModel)
-            }
-
-            // No preceding "Position" label - PositionLine renders nothing at all
-            // when there is truly nothing to say (no coordinates, no altitude, no
-            // Meshview link), and a label with nothing under it would look like a
-            // missing row rather than an absent one. Matches
-            // [com.cerocoder.meshrelay.ui.neighbours.NeighbourListScreen]'s own
-            // `LocalNodeLine`, which calls this composable the same bare way.
-            PositionLine(info = location, nodeNum = record.num, meshviewUrl = meshviewUrl)
-
-            record.dbSnr?.let { snr ->
+            // NODE INFORMATION - the five identity fields, one label, one stamp.
+            // identity() resolves per record: an air record, when there is one,
+            // wins whole - all five fields, blanks included - so each row below
+            // is gated on its own field independently, exactly as the original
+            // four-field User gating this replaced (mesh_stats.py:1860-1870), but
+            // reading through the resolved identity rather than the raw record.
+            val identityRows = listOfNotNull(identity.longName, identity.shortName, identity.role, identity.hwModel)
+            if (identityRows.isNotEmpty() || identity.source != IdentitySource.NONE) {
+                Text(stringResource(R.string.section_node_information), style = MaterialTheme.typography.labelSmall)
+                identity.longName?.let { LabelValueRow(stringResource(R.string.node_long_name), it) }
+                identity.shortName?.let { LabelValueRow(stringResource(R.string.node_short_name), it) }
+                identity.role?.let { LabelValueRow(stringResource(R.string.node_role), it) }
+                identity.hwModel?.let { LabelValueRow(stringResource(R.string.node_hardware), it) }
                 LabelValueRow(
-                    label = stringResource(R.string.node_last_snr_db),
-                    value = stringResource(R.string.format_snr_db, StatsFormat.nodeDatabaseSnr(snr, locale)),
+                    label = stringResource(R.string.node_public_key_present),
+                    icon = R.drawable.ic_field_public_key,
+                    value = stringResource(if (identity.hasPublicKey) R.string.common_yes else R.string.common_no),
                 )
-            }
-
-            // Absolute, unlike every other "when" in this app - the one deliberate
-            // exception. mesh_stats.py:1891 renders this exact field ("Last Heard in
-            // DB") as an absolute `%Y-%m-%d %H:%M:%S`, while :1639-1648's *live*
-            // last-packet age (what AgeLabel ports elsewhere in this app) renders as
-            // clock time plus "Xs ago" - the original itself draws this line between
-            // a session age (never more than hours old) and a database timestamp
-            // (which can be weeks old, well past anything AgeText's buckets cover).
-            // StatsFormat.nodeDatabaseLastHeard does the conversion and the
-            // locale-aware formatting, in the device's own zone (ZoneId.systemDefault,
-            // matching the original's naive datetime.fromtimestamp); nothing here does
-            // arithmetic on the raw epoch-seconds value. format_last_heard_db appends
-            // "(local time)" to the rendered value itself, not just a code comment -
-            // the ambiguity ("is this UTC or local?") is exactly what a user
-            // cross-checking against another Meshtastic tool would otherwise ask.
-            record.lastHeardEpochSeconds?.let { epochSeconds ->
-                LabelValueRow(
-                    label = stringResource(R.string.node_last_heard_db),
-                    icon = R.drawable.ic_field_last_heard,
-                    value = stringResource(
-                        R.string.format_last_heard_db,
-                        StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale, LocalTimeFormat.current),
-                    ),
-                )
-            }
-
-            firmwareVersion?.let { firmware ->
-                LabelValueRow(stringResource(R.string.node_firmware), firmware)
-            }
-
-            if (telemetry != null && telemetry.lastUptimeSeconds != null) {
-                val uptime = StatsFormat.uptimeParts(telemetry.lastUptimeSeconds)
-                LabelValueRow(
-                    label = stringResource(R.string.node_uptime),
-                    icon = R.drawable.ic_field_uptime,
-                    value = stringResource(R.string.format_uptime, uptime.days, uptime.hours, uptime.minutes),
-                )
-                LabelValueRow(
-                    label = stringResource(R.string.node_restarts),
-                    icon = R.drawable.ic_field_restarts,
-                    value = telemetry.observedRestartCount.toString(),
-                )
+                identity.receivedAtMillis?.takeIf { it != 0L }?.let { stamp ->
+                    LabelValueRow(
+                        label = stringResource(
+                            if (identity.source == IdentitySource.AIR) R.string.label_air_received
+                            else R.string.label_db_received
+                        ),
+                        value = StatsFormat.nodeDatabaseLastHeard(
+                            epochSeconds = (stamp / 1000L).toInt(),
+                            locale = locale,
+                            timeFormat = LocalTimeFormat.current,
+                        ),
+                    )
+                }
             }
 
             // Sorted by key, ports `sorted(trec.history_metrics.items())`
             // (mesh_stats.py:1908); only a metric with at least one sample is shown,
-            // ports its `if hist.count > 0` guard (mesh_stats.py:1909).
+            // ports its `if hist.count > 0` guard (mesh_stats.py:1909). Hoisted above
+            // the HEARD OVER THE AIR block below, which needs it to decide whether
+            // that section has anything to show, so it is computed once rather than
+            // twice.
             val telemetryRows = telemetry?.metrics
                 ?.filterValues { it.stats.hasData }
                 ?.toSortedMap()
                 .orEmpty()
-            if (telemetryRows.isNotEmpty()) {
-                Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    Text(text = stringResource(R.string.node_telemetry), style = MaterialTheme.typography.labelSmall)
-                    telemetryRows.forEach { (key, history) ->
-                        // The key is the protobuf field name itself, shown verbatim -
-                        // NodeDirectory.applyTelemetry's own KDoc documents why there
-                        // is no translation table for these.
-                        LabelValueRow(label = key, value = StatsFormat.telemetryMetricValue(history.stats.lastVal, locale))
+
+            // HEARD OVER THE AIR. None of these were ever in the node database:
+            // telemetry, uptime and restarts are folded from TELEMETRY_APP packets
+            // and the position from POSITION_APP. Position keeps its own Src:
+            // CUR|DB marker, which is finer-grained than this heading and stays
+            // authoritative for that row.
+            val hasTelemetryRows = telemetry != null && telemetry.lastUptimeSeconds != null
+            val airRows = telemetryRows.isNotEmpty() || hasTelemetryRows || location != LocationInfo.EMPTY
+            if (airRows) {
+                Text(stringResource(R.string.section_heard_over_air), style = MaterialTheme.typography.labelSmall)
+
+                // No preceding "Position" label - PositionLine renders nothing at all
+                // when there is truly nothing to say (no coordinates, no altitude, no
+                // Meshview link), and a label with nothing under it would look like a
+                // missing row rather than an absent one. Matches
+                // [com.cerocoder.meshrelay.ui.neighbours.NeighbourListScreen]'s own
+                // `LocalNodeLine`, which calls this composable the same bare way.
+                PositionLine(info = location, nodeNum = record.num, meshviewUrl = meshviewUrl)
+
+                if (telemetry != null && telemetry.lastUptimeSeconds != null) {
+                    val uptime = StatsFormat.uptimeParts(telemetry.lastUptimeSeconds)
+                    LabelValueRow(
+                        label = stringResource(R.string.node_uptime),
+                        icon = R.drawable.ic_field_uptime,
+                        value = stringResource(R.string.format_uptime, uptime.days, uptime.hours, uptime.minutes),
+                    )
+                    LabelValueRow(
+                        label = stringResource(R.string.node_restarts),
+                        icon = R.drawable.ic_field_restarts,
+                        value = telemetry.observedRestartCount.toString(),
+                    )
+                }
+
+                if (telemetryRows.isNotEmpty()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Text(text = stringResource(R.string.node_telemetry), style = MaterialTheme.typography.labelSmall)
+                        telemetryRows.forEach { (key, history) ->
+                            // The key is the protobuf field name itself, shown verbatim -
+                            // NodeDirectory.applyTelemetry's own KDoc documents why there
+                            // is no translation table for these.
+                            LabelValueRow(label = key, value = StatsFormat.telemetryMetricValue(history.stats.lastVal, locale))
+                        }
                     }
                 }
             }
 
-            LabelValueRow(
-                label = stringResource(R.string.node_public_key_present),
-                icon = R.drawable.ic_field_public_key,
-                value = stringResource(if (record.hasPublicKey) R.string.common_yes else R.string.common_no),
-            )
+            // FROM THE NODE DATABASE - what only the radio's own database ever
+            // said about this node: the SNR and last-heard time it recorded, and
+            // when the phone last committed this record. dbStamp is suppressed
+            // when the identity block above already showed a DB stamp: when
+            // identity resolved to the database, that stamp and this one are the
+            // same value off the same record, and two identical lines on one
+            // panel would read as a defect.
+            val dbStamp = record.receivedAtMillis
+                .takeIf { it != 0L && identity.source != IdentitySource.DB }
+            if (record.dbSnr != null || record.lastHeardEpochSeconds != null || dbStamp != null) {
+                Text(stringResource(R.string.section_from_node_database), style = MaterialTheme.typography.labelSmall)
+
+                record.dbSnr?.let { snr ->
+                    LabelValueRow(
+                        label = stringResource(R.string.node_last_snr_db),
+                        value = stringResource(R.string.format_snr_db, StatsFormat.nodeDatabaseSnr(snr, locale)),
+                    )
+                }
+
+                // Absolute, unlike every other "when" in this app - the one deliberate
+                // exception. mesh_stats.py:1891 renders this exact field ("Last Heard in
+                // DB") as an absolute `%Y-%m-%d %H:%M:%S`, while :1639-1648's *live*
+                // last-packet age (what AgeLabel ports elsewhere in this app) renders as
+                // clock time plus "Xs ago" - the original itself draws this line between
+                // a session age (never more than hours old) and a database timestamp
+                // (which can be weeks old, well past anything AgeText's buckets cover).
+                // StatsFormat.nodeDatabaseLastHeard does the conversion and the
+                // locale-aware formatting, in the device's own zone (ZoneId.systemDefault,
+                // matching the original's naive datetime.fromtimestamp); nothing here does
+                // arithmetic on the raw epoch-seconds value. format_last_heard_db appends
+                // "(local time)" to the rendered value itself, not just a code comment -
+                // the ambiguity ("is this UTC or local?") is exactly what a user
+                // cross-checking against another Meshtastic tool would otherwise ask.
+                record.lastHeardEpochSeconds?.let { epochSeconds ->
+                    LabelValueRow(
+                        label = stringResource(R.string.node_last_heard_db),
+                        icon = R.drawable.ic_field_last_heard,
+                        value = stringResource(
+                            R.string.format_last_heard_db,
+                            StatsFormat.nodeDatabaseLastHeard(epochSeconds, locale, LocalTimeFormat.current),
+                        ),
+                    )
+                }
+
+                firmwareVersion?.let { firmware ->
+                    LabelValueRow(stringResource(R.string.node_firmware), firmware)
+                }
+
+                dbStamp?.let { stamp ->
+                    LabelValueRow(
+                        label = stringResource(R.string.label_db_received),
+                        value = StatsFormat.nodeDatabaseLastHeard(
+                            epochSeconds = (stamp / 1000L).toInt(),
+                            locale = locale,
+                            timeFormat = LocalTimeFormat.current,
+                        ),
+                    )
+                }
+            }
         }
     }
 
@@ -320,6 +388,7 @@ private fun NodeCardCandidatePreview() {
             NodeCard(
                 index = 1,
                 record = SampleData.directory.node(SampleData.NUM_GETAFE_ROUTER)!!,
+                identity = SampleData.airIdentity,
                 location = SampleData.directory.locationInfo(SampleData.NUM_GETAFE_ROUTER, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_GETAFE_ROUTER),
                 meshviewUrl = "https://meshview.meshtastic.es",
@@ -337,6 +406,11 @@ private fun NodeCardTelemetryPreview() {
             NodeCard(
                 index = 2,
                 record = SampleData.directory.node(SampleData.NUM_YUNCOS_REINICIO)!!,
+                // Same rich fields as the air-sourced fixture, but labelled as if the
+                // database were the source - so this card's stamp reads "DB Received"
+                // beside the first preview's "Air Received", and the two labels this
+                // step adds are visible side by side across the pane.
+                identity = SampleData.airIdentity.copy(source = IdentitySource.DB),
                 location = SampleData.directory.locationInfo(SampleData.NUM_YUNCOS_REINICIO, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_YUNCOS_REINICIO),
                 meshviewUrl = "https://meshview.meshtastic.es",
@@ -346,7 +420,7 @@ private fun NodeCardTelemetryPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Candidate, no position, no name ever heard")
+@Preview(showBackground = true, name = "Candidate, nothing known in either store")
 @Composable
 private fun NodeCardNoPositionPreview() {
     MeshRelayTheme {
@@ -354,6 +428,10 @@ private fun NodeCardNoPositionPreview() {
             NodeCard(
                 index = 3,
                 record = SampleData.directory.node(SampleData.NUM_TOLEDO_BAJA)!!,
+                // Neither store has ever named this node - all three sections are
+                // omitted, heading included, leaving only the header row. Pins the
+                // omission rule this task adds, at its most extreme case.
+                identity = NodeIdentity.NONE,
                 location = SampleData.directory.locationInfo(SampleData.NUM_TOLEDO_BAJA, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_TOLEDO_BAJA),
                 meshviewUrl = "https://meshview.meshtastic.es",
@@ -363,7 +441,7 @@ private fun NodeCardNoPositionPreview() {
     }
 }
 
-@Preview(showBackground = true, name = "Neighbour identity - no index, no skip")
+@Preview(showBackground = true, name = "Neighbour identity - thin air broadcast, no index, no skip")
 @Composable
 private fun NodeCardNeighbourPreview() {
     MeshRelayTheme {
@@ -371,6 +449,12 @@ private fun NodeCardNeighbourPreview() {
             NodeCard(
                 index = null,
                 record = SampleData.directory.node(SampleData.NUM_ILLESCAS_MUDO)!!,
+                // A node that broadcast only a short name over the air. Per-record
+                // precedence means this whole block shows the air record's blanks
+                // even though the database entry for this same node (see
+                // SampleData.NUM_ILLESCAS_MUDO) knows a hardware model and a role -
+                // the cost the owner accepted when a per-field fallback was ruled out.
+                identity = SampleData.thinAirIdentity,
                 location = SampleData.directory.locationInfo(SampleData.NUM_ILLESCAS_MUDO, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_ILLESCAS_MUDO),
                 meshviewUrl = "https://meshview.meshtastic.es",
@@ -388,6 +472,7 @@ private fun NodeCardDarkPreview() {
             NodeCard(
                 index = 1,
                 record = SampleData.directory.node(SampleData.NUM_GETAFE_ROUTER)!!,
+                identity = SampleData.airIdentity,
                 location = SampleData.directory.locationInfo(SampleData.NUM_GETAFE_ROUTER, SampleData.directory.localPosition()),
                 telemetry = SampleData.directory.telemetry(SampleData.NUM_GETAFE_ROUTER),
                 meshviewUrl = "https://meshview.meshtastic.es",

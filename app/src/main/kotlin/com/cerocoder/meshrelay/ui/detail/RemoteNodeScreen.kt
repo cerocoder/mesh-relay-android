@@ -95,6 +95,11 @@ fun RemoteNodeScreen(
         hasPublicKey = false,
         receivedAtMillis = 0L,
     )
+    // directory.identity already returns NodeIdentity.NONE when neither store
+    // holds this node - the same "stale navigation target" case the record
+    // fallback above handles by hand - so this needs no fallback of its own,
+    // and never invents a stamp the way a hand-rolled synthetic identity would.
+    val identity = directory.identity(nodeNum)
     val shortName = directory.shortName(nodeNum)
     val localPosition = directory.localPosition()
     val location = directory.locationInfo(nodeNum, localPosition)
@@ -128,6 +133,7 @@ fun RemoteNodeScreen(
                 NodeCard(
                     index = null,
                     record = record,
+                    identity = identity,
                     location = location,
                     telemetry = telemetry,
                     meshviewUrl = meshviewUrl,

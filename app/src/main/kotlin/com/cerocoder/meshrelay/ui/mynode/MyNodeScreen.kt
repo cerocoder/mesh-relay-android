@@ -112,6 +112,7 @@ fun MyNodeScreen(
                 else -> NodeCard(
                     index = null,
                     record = record,
+                    identity = snapshot.directory.identity(localNodeNum),
                     // from = null: there is no "self" to measure a distance from,
                     // so PositionLine draws coordinates, altitude and Src with no
                     // distance figure.
