@@ -334,9 +334,15 @@ finer-grained than the section heading and stays authoritative for that row.
 **From the node database** — `Last DB SNR`, `Last DB heard`, and the database
 record's own `DB Received` stamp.
 
-`Public key` is added to the identity block. The panel does not render it today,
-although `NodeRecord.hasPublicKey` has been carried since the port; requirement 5
-names it, so it appears as a present/absent row.
+`Public key` **moves** into the identity block. It is rendered today, but as the very
+last row of the card, below the telemetry metrics (`NodeCard.kt:206-210`, string
+`node_public_key_present`, icon `ic_field_public_key`). It is an identity field and
+belongs with the other four; leaving it stranded under a telemetry list would put a
+field the air record owns outside the block whose stamp describes it.
+
+*(An earlier revision of this section claimed the panel did not render it at all.
+That was wrong, and is corrected here rather than silently: the work is a move, not
+an addition.)*
 
 **An empty section is omitted entirely, heading included.** A heading with nothing
 under it reads as a missing row rather than an absent one — the reasoning already
