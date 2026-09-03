@@ -151,6 +151,7 @@ object SampleData {
         lastHeardEpochSeconds = null,
         hopsAway = 0,
         hasPublicKey = true,
+        receivedAtMillis = 0L,
     )
 
     private val getafeRouter = NodeRecord(
@@ -172,6 +173,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 900_000L) / 1000L).toInt(),
         hopsAway = 1,
         hasPublicKey = true,
+        receivedAtMillis = 0L,
     )
 
     private val toledoAlta = NodeRecord(
@@ -195,6 +197,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 7_200_000L) / 1000L).toInt(),
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val toledoBaja = NodeRecord(
@@ -212,6 +215,7 @@ object SampleData {
         lastHeardEpochSeconds = null,
         hopsAway = 3,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val toledoNiebla = NodeRecord(
@@ -227,6 +231,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 45_000L) / 1000L).toInt(),
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val illescasMudo = NodeRecord(
@@ -248,6 +253,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 300_000L) / 1000L).toInt(),
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val sierraLarga = NodeRecord(
@@ -264,6 +270,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 5_000L) / 1000L).toInt(),
         hopsAway = 1,
         hasPublicKey = true,
+        receivedAtMillis = 0L,
     )
 
     private val valdemoroQuieto = NodeRecord(
@@ -277,6 +284,7 @@ object SampleData {
         lastHeardEpochSeconds = null,
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val pintoSinDatos = NodeRecord(
@@ -290,6 +298,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 60_000L) / 1000L).toInt(),
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     private val yuncosReinicio = NodeRecord(
@@ -303,6 +312,7 @@ object SampleData {
         lastHeardEpochSeconds = ((NOW - 200_000L) / 1000L).toInt(),
         hopsAway = 2,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
 
     // ------------------------------------------------------------------

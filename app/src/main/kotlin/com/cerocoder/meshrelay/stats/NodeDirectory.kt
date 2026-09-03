@@ -80,6 +80,7 @@ class NodeDirectory(private val time: TimeSource) {
             lastHeardEpochSeconds = null,
             hopsAway = null,
             hasPublicKey = false,
+            receivedAtMillis = 0L,
         )
         nodes[nodeNum] = existing.copy(
             longName = user.long_name,
@@ -251,5 +252,6 @@ class NodeDirectory(private val time: TimeSource) {
         lastHeardEpochSeconds = incoming.lastHeardEpochSeconds ?: existing.lastHeardEpochSeconds,
         hopsAway = incoming.hopsAway ?: existing.hopsAway,
         hasPublicKey = incoming.hasPublicKey || existing.hasPublicKey,
+        receivedAtMillis = incoming.receivedAtMillis,
     )
 }

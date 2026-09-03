@@ -18,6 +18,19 @@ data class NodeRecord(
     val lastHeardEpochSeconds: Int?,
     val hopsAway: Int?,
     val hasPublicKey: Boolean,
+    /**
+     * When the refresh that carried this record completed.
+     *
+     * Every record from one refresh shares one value, because they do: the radio
+     * streams a whole database in a burst of a few seconds and the phone cannot tell
+     * when the radio learned any of it.
+     *
+     * Set by [NodeDirectory.markLoaded] at commit, not here: [fromProto] has no clock
+     * and must not acquire one. It constructs the record with `0L`, which is never
+     * observable, because nothing outside the refresh buffer can see a record before
+     * it is committed.
+     */
+    val receivedAtMillis: Long,
 ) {
     companion object {
         fun fromProto(info: NodeInfo): NodeRecord {
@@ -50,6 +63,7 @@ data class NodeRecord(
                 lastHeardEpochSeconds = info.last_heard.takeIf { it != 0 },
                 hopsAway = info.hops_away,
                 hasPublicKey = (user?.public_key?.size ?: 0) > 0,
+                receivedAtMillis = 0L,
             )
         }
     }

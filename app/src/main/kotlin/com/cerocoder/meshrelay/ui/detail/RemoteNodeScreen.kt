@@ -93,6 +93,7 @@ fun RemoteNodeScreen(
         lastHeardEpochSeconds = null,
         hopsAway = null,
         hasPublicKey = false,
+        receivedAtMillis = 0L,
     )
     val shortName = directory.shortName(nodeNum)
     val localPosition = directory.localPosition()
