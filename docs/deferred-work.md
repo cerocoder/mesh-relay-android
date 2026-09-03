@@ -367,3 +367,20 @@ None blocking; each was seen by a reviewer and judged non-blocking at the time.
 - **`shutdown()` does not unwind the application scope or the location source** — three collectors and
   the notification updater keep running; `exitProcess` is what ends them. Acceptable only because the
   owner chose the kill.
+
+## From the node-storage split (2026-09-03)
+
+- **Two more database-only gates of the shape that produced this branch's two Criticals.**
+  `ui/mynode/MyNodeScreen.kt:101-111` still gates on `directory.node(localNodeNum) == null`, and
+  `ui/detail/RemoteNodeScreen.kt:85-97` hand-rolls its own all-absent `NodeRecord` instead of
+  calling `MatchingNodesTab.candidateRecord`, which exists as an `internal` seam precisely so it
+  can be shared. Both are benign **today**: a node never hears its own broadcast, so the local
+  node cannot reach `airNodes`, and `RemoteNodeScreen`'s fallback is semantically identical to
+  the seam's. Neither is a bug; both are the pattern that twice produced one. If a third site of
+  this shape is ever added, fix all three together rather than one more in isolation.
+- **`SampleData.NOW` is `System.currentTimeMillis()`**, and two record stamps now feed from it, so
+  a preview renders a moving "15 min ago" and preview screenshots are not reproducible. Pre-
+  existing and preview-only, but it is now visible in the new **DB Received** row.
+- **`NodeDirectorySnapshot`'s KDoc says the union is "computed once at construction"**; `by lazy`
+  computes it at first use. Cosmetic, but the distinction is the reason the cache is safe (the
+  maps are defensive copies), so the wording is worth getting right if that paragraph is edited.
