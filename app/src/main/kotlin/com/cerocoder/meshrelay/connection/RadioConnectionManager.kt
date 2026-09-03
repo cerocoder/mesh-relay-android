@@ -58,7 +58,7 @@ class RadioConnectionManager(
     // call site for why that ordering is the whole correctness argument. Defaults
     // to a no-op so a test with no opinion about the node database does not need
     // to build a MeshStatsEngine just to construct this class.
-    private val onBeginNodeDbRound: () -> Unit = {},
+    private val onBeginNodeDbRound: () -> Boolean = { true },
 ) : RadioTransportCallback {
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected())
@@ -224,6 +224,26 @@ class RadioConnectionManager(
      *
      * Statistics are untouched, exactly as in the original.
      */
+    /**
+     * Tell the engine a node-database round is starting, and say so if it could not
+     * be told.
+     *
+     * The engine reports rather than logs, because `stats/` may not import
+     * `android.*` and that package's answer has always been silence rather than a
+     * second logging mechanism. This is where the failure belongs: beside every
+     * other message about the round it concerns.
+     *
+     * A dropped command means the stale-round reset did not happen, so this round
+     * can commit a union of two refreshes instead of replacing the store - the leak
+     * ruling P4 closed. It is rare, it corrects itself at the next completed round,
+     * and it is worth seeing in a bug report.
+     */
+    private fun beginNodeDbRound() {
+        if (!onBeginNodeDbRound()) {
+            Log.w(TAG, "node database round start was dropped: the engine command queue is full")
+        }
+    }
+
     fun reloadNodeDatabase() {
         if (_connectionState.value != ConnectionState.Connected) {
             Log.d(TAG, "reload ignored: not connected")
@@ -245,7 +265,7 @@ class RadioConnectionManager(
         // command before the request even leaves makes it physically impossible
         // for a node_info reply to be processed first: the round trip to the radio
         // cannot complete before this line does.
-        onBeginNodeDbRound()
+        beginNodeDbRound()
         sendToRadio(ToRadio(want_config_id = MeshProtocol.NODE_INFO_RELOAD_NONCE))
     }
 
@@ -338,7 +358,7 @@ class RadioConnectionManager(
                 // stage, already clears the buffer for a reconnect, but this call
                 // does not depend on that: it covers this request on its own terms,
                 // exactly as the reload's does, and the two are idempotent together.
-                onBeginNodeDbRound()
+                beginNodeDbRound()
                 sendToRadio(ToRadio(want_config_id = MeshProtocol.NODE_INFO_NONCE))
             }
 

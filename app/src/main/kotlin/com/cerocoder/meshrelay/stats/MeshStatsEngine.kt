@@ -10,7 +10,6 @@ import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StampedPosition
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
-import java.util.logging.Logger
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
@@ -238,20 +237,21 @@ class MeshStatsEngine(
     /**
      * A node-database round is starting: see [Command.BeginNodeDbRound].
      *
-     * Checks `trySend`'s result and logs a failure, unlike every other command
+     * **Returns whether the command was queued**, unlike every other command
      * function above - see the [commands] channel's own KDoc for why this one
-     * caller cannot lean on the same "that does not happen" argument. `stats/`
-     * may not import `android.*`, so this reaches for [java.util.logging.Logger]
-     * rather than `android.util.Log`, which is what every other file in this
-     * app logs through.
+     * caller cannot lean on the same "that does not happen" argument.
+     *
+     * It reports rather than logs. `stats/` may not import `android.*`, and this
+     * package's answer to that has always been to stay silent rather than to
+     * reach for a second logging mechanism - the comment in [decodePayload] says
+     * so where a malformed packet is swallowed. A `java.util.logging` line here
+     * would be the only one in the package, and logcat's capture of it varies by
+     * Android version, so it could be relied on least exactly when it mattered.
+     * The caller is [com.cerocoder.meshrelay.connection.RadioConnectionManager],
+     * which already logs through `android.util.Log`; the failure surfaces there,
+     * beside every other message about the round it belongs to.
      */
-    fun beginNodeDbRound() {
-        if (commands.trySend(Command.BeginNodeDbRound).isFailure) {
-            Logger.getLogger(TAG).warning(
-                "beginNodeDbRound command dropped - the command queue is full",
-            )
-        }
-    }
+    fun beginNodeDbRound(): Boolean = commands.trySend(Command.BeginNodeDbRound).isSuccess
 
     /** Open a chart on [key], or pass null when it closes. */
     fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
