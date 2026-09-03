@@ -797,8 +797,8 @@ matters — a database entry can genuinely be weeks old — and it is what this 
 after an earlier draft accidentally reshaped it. Check it in both Time settings and in Spanish
 (`26 ago 2025, 16:45:12`).
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-
+- [x] Ran on: 2026-09-03, SM-S721B / Android 16 (API 36), build a5d8c24 — by the owner
+  Notes: PASS. The Time setting changes the Graph's two Time fields, the crosshair and Last DB heard; relative ages are untouched. Midnight and noon read 12:0x AM / 12:0x PM in 12-hour form, not 00. Last DB heard reads its full date again (Aug 26, 2025, 16:45:12) after the round that repaired the date shape. Default is 24-hour.
 ---
 
 ### J2. One map link on a node panel, per the Map provider setting
@@ -809,9 +809,22 @@ after an earlier draft accidentally reshaped it. Check it in both Time settings 
 provider** changes both the label and the destination. The **Meshview** button is unaffected either
 way — it is a different destination, not a map provider, and keeps its own condition.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-03, SM-S721B / Android 16 (API 36), build a5d8c24 — by the owner
+  Notes: PASS. One map link on a node panel, named for the chosen provider and opening it; Meshview still beside it.
+---
+
+### J3. The Meshview link carries an unsigned node number
+**Do:** On a node panel, open **Meshview** for a node whose number is above 2^31 — `!9e75f1a4` is one —
+and then for one below it, such as `!5ead49bf`.
+**Pass looks like:** both resolve. A node number is a uint32 carried in a Kotlin `Int`, so roughly half
+of all real node numbers were rendering negative (`/node/-1636437596`); the second node is under the
+boundary and always worked, so checking it confirms the fix disturbed nothing.
+
+- [x] Ran on: 2026-09-03, SM-S721B / Android 16 (API 36), build a5d8c24 — by the owner
+  Notes: PASS. Both node numbers resolve.
 
 ---
+
 
 ## Overall verdict
 
