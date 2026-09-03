@@ -32,6 +32,7 @@ data class StatsSnapshot(
             lastRelayedPacketAtMillis = null,
             directory = NodeDirectorySnapshot(
                 nodes = emptyMap(),
+                airNodes = emptyMap(),
                 loadedAtMillis = null,
                 localNodeNum = null,
                 positions = emptyMap(),

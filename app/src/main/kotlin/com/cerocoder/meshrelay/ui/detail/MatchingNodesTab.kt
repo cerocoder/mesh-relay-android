@@ -202,6 +202,7 @@ private fun EmptyMatchingNodesState(modifier: Modifier = Modifier) {
  */
 private val previewThreeMatchOneSkippedDirectory = NodeDirectorySnapshot(
     nodes = SampleData.directory.nodes,
+    airNodes = emptyMap(),
     loadedAtMillis = SampleData.directory.loadedAtMillis,
     localNodeNum = SampleData.directory.localNodeNum,
     positions = emptyMap(),

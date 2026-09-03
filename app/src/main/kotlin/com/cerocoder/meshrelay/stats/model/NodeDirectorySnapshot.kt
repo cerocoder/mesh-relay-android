@@ -13,6 +13,13 @@ import com.cerocoder.meshrelay.stats.Geo
  */
 class NodeDirectorySnapshot(
     val nodes: Map<Int, NodeRecord>,
+    /**
+     * Identity heard over the air, keyed by node number - what nodes have said about
+     * themselves in NODEINFO_APP packets, as opposed to what the radio's own database
+     * says in [nodes]. The two are separate accounts of the same mesh and are kept
+     * apart so the interface can name which one it is showing.
+     */
+    val airNodes: Map<Int, AirNodeRecord>,
     val loadedAtMillis: Long?,
     val localNodeNum: Int?,
     positions: Map<Int, PositionHistory>,

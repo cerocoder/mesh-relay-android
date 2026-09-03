@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.stats
 
+import com.cerocoder.meshrelay.stats.model.AirNodeRecord
 import com.cerocoder.meshrelay.stats.model.LatLon
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.NodeRecord
@@ -32,8 +33,32 @@ import org.meshtastic.proto.User
 class NodeDirectory(private val time: TimeSource) {
 
     private val nodes = HashMap<Int, NodeRecord>()
+    private val nodesFromAir = HashMap<Int, AirNodeRecord>()
     private val positions = HashMap<Int, PositionHistory>()
     private val telemetryRecords = HashMap<Int, TelemetryRecord>()
+
+    /**
+     * A node-database refresh in progress. The radio streams one `node_info` frame
+     * per entry and terminates the round with `config_complete_id`; entries land
+     * here and replace [nodes] wholesale at [markLoaded], so a node the firmware has
+     * evicted disappears from this application too rather than lingering for ever.
+     */
+    private val pendingNodes = HashMap<Int, NodeRecord>()
+
+    /**
+     * Whether the round in progress has carried a `node_info` frame.
+     *
+     * `config_complete_id` terminates **any** want_config round, and this package may
+     * not import `transport/` to tell the nonces apart. Without this flag a completed
+     * *config* round - which carries no node info at all - would commit an empty
+     * buffer and replace an eighty-entry database with nothing. A node-database round
+     * always carries at least the local node's own entry.
+     *
+     * A flag rather than `pendingNodes.isNotEmpty()`, so the rule reads as "a frame
+     * arrived" rather than "the buffer happens to be non-empty", and a future change
+     * cannot make an empty-but-real round wipe the store.
+     */
+    private var pendingReceivedAny = false
 
     /**
      * Which node is ours, or null before the handshake.
@@ -49,46 +74,44 @@ class NodeDirectory(private val time: TimeSource) {
     private var loadedAtMillis: Long? = null
 
     /**
-     * Records one node database entry, **merged** onto whatever is already known
-     * rather than replacing it: a field this message leaves absent keeps the value
-     * it already had. The radio sends node info in several shapes - a full entry at
-     * connect, a thinner one later - and a replace would make the record oscillate.
+     * Records one node database entry **into the refresh in progress**, not into
+     * [nodes] - nothing is visible until [markLoaded] commits the round.
+     *
+     * Each round stands alone: the buffer starts empty, so a node the radio no longer
+     * reports is simply absent from the next commit. The merge below therefore only
+     * ever combines two frames *within one round*, which the radio does not currently
+     * send; it is kept because it costs nothing, because a thinner follow-up frame
+     * would otherwise erase a fuller one, and because [merge] carries a recorded
+     * decision about `hasPublicKey` that would be lost with its last caller.
      */
     fun applyNodeInfo(info: NodeInfo) {
         val incoming = NodeRecord.fromProto(info)
-        val existing = nodes[info.num]
-        nodes[info.num] = if (existing == null) incoming else merge(existing, incoming)
+        val existing = pendingNodes[info.num]
+        pendingNodes[info.num] = if (existing == null) incoming else merge(existing, incoming)
+        pendingReceivedAny = true
     }
 
     /**
-     * Records the identity half of a node, creating a bare record when the database
-     * has never mentioned it - nodes turn up in traffic before they turn up in the
-     * database, and a relay candidate nobody has heard of is still a candidate.
+     * Folds one NODEINFO_APP payload into the air store, creating the record when
+     * this node has not identified itself before - nodes turn up in traffic before
+     * they turn up in the database, and a relay candidate nobody has heard of is
+     * still a candidate.
      *
-     * A NODEINFO_APP packet carries a [User] and nothing else, so only the identity
-     * fields move; the position, signal and hop count learned elsewhere stay put.
+     * **It does not touch [nodes].** That map is what the radio's own database says
+     * and nothing else. What a node broadcasts is a separate account of the same
+     * node, and keeping the two apart is what lets the interface say which one it is
+     * showing, and when it learned it.
+     *
+     * The merge rule, and the reason this no longer assigns fields directly, is
+     * [AirNodeRecord.folding]'s: `User`'s string fields are non-`optional` in proto3
+     * and arrive as `""` when omitted, so the direct assignment this replaced wrote
+     * an empty name over a good one every time a node broadcast a thin identity.
+     *
+     * [atMillis] is a parameter because this class may not read the clock outside
+     * [TimeSource].
      */
-    fun applyUser(nodeNum: Int, user: User) {
-        val existing = nodes[nodeNum] ?: NodeRecord(
-            num = nodeNum,
-            longName = null,
-            shortName = null,
-            hwModel = null,
-            role = null,
-            dbPosition = null,
-            dbSnr = null,
-            lastHeardEpochSeconds = null,
-            hopsAway = null,
-            hasPublicKey = false,
-            receivedAtMillis = 0L,
-        )
-        nodes[nodeNum] = existing.copy(
-            longName = user.long_name,
-            shortName = user.short_name,
-            hwModel = user.hw_model?.name,
-            role = user.role?.name,
-            hasPublicKey = (user.public_key?.size ?: 0) > 0,
-        )
+    fun applyUser(nodeNum: Int, user: User, atMillis: Long) {
+        nodesFromAir[nodeNum] = AirNodeRecord.folding(nodesFromAir[nodeNum], nodeNum, user, atMillis)
     }
 
     /** Appends one heard position, timestamped by [time] - the packet carries none. */
@@ -157,8 +180,26 @@ class NodeDirectory(private val time: TimeSource) {
         localNodeNum = num
     }
 
+    /**
+     * A want_config round has completed. Commit the refresh it carried, if it
+     * carried one.
+     *
+     * A round that carried no `node_info` frame leaves both the store and
+     * [loadedAtMillis] untouched - see [pendingReceivedAny]. That guard is why this
+     * function can be called for every completed round without knowing which nonce
+     * finished.
+     *
+     * **The contents are copied; the buffer is never assigned.** `nodes =
+     * pendingNodes` would alias one map under two names, and the `clear()` below
+     * would then empty the store it had just filled.
+     */
     fun markLoaded(atMillis: Long) {
+        if (!pendingReceivedAny) return
+        nodes.clear()
+        pendingNodes.forEach { (num, record) -> nodes[num] = record.copy(receivedAtMillis = atMillis) }
         loadedAtMillis = atMillis
+        pendingNodes.clear()
+        pendingReceivedAny = false
     }
 
     /**
@@ -166,6 +207,12 @@ class NodeDirectory(private val time: TimeSource) {
      * go, the node database stays. Ports reset, mesh_stats.py:1100-1113 - resetting
      * the statistics is not the same as forgetting who is out there, and reloading
      * the database costs a round trip to the radio.
+     *
+     * **Neither node store is touched, deliberately.** Not [nodes], for the reason
+     * above, and not [nodesFromAir] either: an identity heard over the air is knowledge
+     * about the mesh, not a measurement of it, and a Reset that forgot every name would
+     * leave every relay unlabelled until each node next chose to announce itself -
+     * which can be hours. This omission is the requirement, not an oversight.
      */
     fun clearRuntimeData() {
         positions.clear()
@@ -184,6 +231,11 @@ class NodeDirectory(private val time: TimeSource) {
      */
     fun clearAll() {
         nodes.clear()
+        nodesFromAir.clear()
+        // An abandoned round must not be committed onto the new node's database: the
+        // frames in it describe the mesh as the *previous* radio saw it.
+        pendingNodes.clear()
+        pendingReceivedAny = false
         positions.clear()
         telemetryRecords.clear()
         localNodeNum = null
@@ -207,6 +259,7 @@ class NodeDirectory(private val time: TimeSource) {
      */
     fun snapshot(skipped: Set<Int>): NodeDirectorySnapshot = NodeDirectorySnapshot(
         nodes = HashMap(nodes),
+        airNodes = HashMap(nodesFromAir),
         loadedAtMillis = loadedAtMillis,
         localNodeNum = localNodeNum,
         positions = HashMap(positions),

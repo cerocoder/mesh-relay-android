@@ -178,6 +178,7 @@ private fun MyNodeScreenNoInfoPreview() {
                 snapshot = SampleData.snapshot.copy(
                     directory = NodeDirectorySnapshot(
                         nodes = emptyMap(),
+                        airNodes = emptyMap(),
                         loadedAtMillis = directory.loadedAtMillis,
                         localNodeNum = directory.localNodeNum,
                         positions = emptyMap(),

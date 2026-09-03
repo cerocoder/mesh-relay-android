@@ -362,7 +362,7 @@ class MeshStatsEngine(
                     directory.applyPosition(fromNode, Position.ADAPTER.decode(decoded.payload))
 
                 PortNum.NODEINFO_APP ->
-                    directory.applyUser(fromNode, User.ADAPTER.decode(decoded.payload))
+                    directory.applyUser(fromNode, User.ADAPTER.decode(decoded.payload), atMillis)
 
                 PortNum.TELEMETRY_APP ->
                     directory.applyTelemetry(fromNode, Telemetry.ADAPTER.decode(decoded.payload), atMillis)

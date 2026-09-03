@@ -505,6 +505,7 @@ object SampleData {
             NUM_PINTO_SINDATOS to pintoSinDatos,
             NUM_YUNCOS_REINICIO to yuncosReinicio,
         ),
+        airNodes = emptyMap(),
         loadedAtMillis = NOW - 900_000L,
         localNodeNum = NUM_LOCAL_DEVICE,
         positions = mapOf(

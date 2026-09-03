@@ -119,6 +119,10 @@ class NodeDirectoryTest {
         ).forEach { (num, shortName) ->
             directory.applyNodeInfo(NodeInfo(num = num, user = User(short_name = shortName)))
         }
+        // One completed refresh round carrying all five, which is how the radio
+        // delivers them. Committing per entry would replace the store four times and
+        // leave only the last candidate standing.
+        directory.markLoaded(DB_AT_MILLIS)
     }
 
     @Test
@@ -128,6 +132,7 @@ class NodeDirectoryTest {
         // answer, and the source label is what tells the user which they are
         // looking at.
         directory.applyNodeInfo(toledoInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
         now = LIVE_AT_MILLIS
         directory.applyPosition(
             GETAFE_ROUTER,
@@ -157,6 +162,7 @@ class NodeDirectoryTest {
                 last_heard = DB_LAST_HEARD_SECONDS,
             ),
         )
+        directory.markLoaded(DB_AT_MILLIS)
         now = LIVE_AT_MILLIS
 
         val info = directory.snapshot(emptySet()).locationInfo(GETAFE_ROUTER, MADRID_LOCAL)
@@ -179,6 +185,7 @@ class NodeDirectoryTest {
         // stayed there for ever, however many fresh positions arrived - the defect
         // the owner found by reasoning about the code.
         directory.applyNodeInfo(toledoInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
         now = LIVE_AT_MILLIS
         directory.applyPosition(GETAFE_ROUTER, position(GETAFE_LAT_I, GETAFE_LON_I))
 
@@ -273,6 +280,7 @@ class NodeDirectoryTest {
                 last_heard = DB_LAST_HEARD_SECONDS,
             ),
         )
+        directory.markLoaded(DB_AT_MILLIS)
 
         val info = directory.snapshot(emptySet()).locationInfo(GETAFE_ROUTER, MADRID_LOCAL)
 
@@ -288,6 +296,7 @@ class NodeDirectoryTest {
     @Test
     fun `a node with nothing known about it has no location at all`() {
         directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER, user = User(short_name = "gt2a")))
+        directory.markLoaded(DB_AT_MILLIS)
 
         val info = directory.snapshot(emptySet()).locationInfo(GETAFE_ROUTER, MADRID_LOCAL)
 
@@ -336,6 +345,7 @@ class NodeDirectoryTest {
         // no name to show, and showing either would present a guess as a fact.
         loadRelayCandidates()
         directory.applyNodeInfo(NodeInfo(num = BARE_NODE))
+        directory.markLoaded(DB_AT_MILLIS)
         val snapshot = directory.snapshot(emptySet())
 
         assertEquals("gv33", snapshot.uniqueRelayName(0x33))
@@ -361,25 +371,15 @@ class NodeDirectoryTest {
     }
 
     @Test
-    fun `a node info frame and a later node info packet merge rather than replace`() {
-        // A NODEINFO_APP packet carries a User and nothing else. Replacing the
-        // record would erase the position learned from the handshake.
+    fun `two node info frames in one round merge rather than replace`() {
+        // The radio sends node info in several shapes. Within one refresh round a
+        // thinner frame must not erase what a fuller one established: replacing
+        // would drop the position, the signal and the hop count.
+        //
+        // This test used to open by folding a NODEINFO_APP packet into the same
+        // record. That path is gone - a broadcast now lands in the air store, which
+        // `a NODEINFO_APP packet does not touch the database record` pins.
         directory.applyNodeInfo(getafeInDatabase())
-
-        directory.applyUser(
-            GETAFE_ROUTER,
-            User(long_name = "Getafe Router 2", short_name = "gt2b", hw_model = HardwareModel.T_ECHO),
-        )
-        val afterUser = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
-
-        assertEquals("gt2b", afterUser.shortName)
-        assertEquals("Getafe Router 2", afterUser.longName)
-        assertEquals("T_ECHO", afterUser.hwModel)
-        assertNotNull(afterUser.dbPosition)
-        assertEquals(GETAFE_LAT, afterUser.dbPosition!!.latitude!!, 1e-9)
-        assertEquals(DB_LAST_HEARD_SECONDS, afterUser.lastHeardEpochSeconds)
-        assertEquals(6.25f, afterUser.dbSnr!!, 1e-6f)
-        assertEquals(2, afterUser.hopsAway)
 
         // A second NodeInfo that omits the position, the signal and the hop count
         // keeps the ones already learned, and updates what it does carry.
@@ -390,9 +390,11 @@ class NodeDirectoryTest {
                 last_heard = DB_LAST_HEARD_SECONDS + 60,
             ),
         )
+        directory.markLoaded(DB_AT_MILLIS)
         val merged = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
 
         assertEquals("gt2c", merged.shortName)
+        assertNotNull(merged.dbPosition)
         assertEquals(GETAFE_LAT, merged.dbPosition!!.latitude!!, 1e-9)
         assertEquals(6.25f, merged.dbSnr!!, 1e-6f)
         assertEquals(2, merged.hopsAway)
@@ -407,9 +409,14 @@ class NodeDirectoryTest {
         // exercises that line, and flattening it to a straight assignment - the
         // obvious tidy-up - would silently unlearn every key.
 
+        // All three frames belong to ONE refresh round. Nothing is observable between
+        // them any more - a round is staged and committed whole - so the assertions
+        // that used to sit between these calls have moved to the end. Both halves of
+        // the || are still exercised: frame two supplies the key the first lacked,
+        // and frame three carries no user submessage at all.
+
         // Routing knows this node exists before anything has described it.
         directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER, last_heard = DB_LAST_HEARD_SECONDS))
-        assertFalse(directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!.hasPublicKey)
 
         // Then the full entry arrives and the key becomes known: the incoming half
         // of the || has to count for something.
@@ -420,13 +427,13 @@ class NodeDirectoryTest {
                 last_heard = DB_LAST_HEARD_SECONDS + 30,
             ),
         )
-        assertTrue(directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!.hasPublicKey)
 
         // And a later thin entry - no user submessage at all - says nothing about a
         // key, so it unsays nothing: the existing half has to count too.
         directory.applyNodeInfo(
             NodeInfo(num = GETAFE_ROUTER, last_heard = DB_LAST_HEARD_SECONDS + 60),
         )
+        directory.markLoaded(DB_AT_MILLIS)
         val record = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
 
         assertTrue(record.hasPublicKey)
@@ -437,53 +444,55 @@ class NodeDirectoryTest {
     }
 
     @Test
-    fun `a user message is authoritative about the identity it carries`() {
-        // The other half of that asymmetry, pinned so it stays a decision. Unlike a
-        // NodeInfo with no user submessage, a User message *is* the identity
-        // record: what it says is what is true, including that this node has no key
-        // and is not a router.
+    fun `a NODEINFO_APP packet does not touch the database record`() {
+        // This test used to assert the opposite: that a User message was folded into
+        // the database record and was authoritative over it. That merge is gone. The
+        // radio's database and what a node broadcasts are now two accounts of the
+        // same node, kept apart so the interface can say which one it is showing -
+        // and the rules for folding a User are AirNodeRecord.folding's, pinned by
+        // AirNodeRecordTest, not this file's.
         directory.applyNodeInfo(
             NodeInfo(num = GETAFE_ROUTER, user = User(short_name = "gt2a", public_key = PUBLIC_KEY)),
         )
-        val handshake = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
-        assertTrue(handshake.hasPublicKey)
-        assertEquals("CLIENT", handshake.role)
+        directory.markLoaded(DB_AT_MILLIS)
 
         directory.applyUser(
             GETAFE_ROUTER,
-            User(short_name = "gt2a", role = Config.DeviceConfig.Role.ROUTER),
+            User(short_name = "gt2b", role = Config.DeviceConfig.Role.ROUTER),
+            LIVE_AT_MILLIS,
         )
-        val promoted = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
 
-        assertEquals("ROUTER", promoted.role)
-        // An empty public_key inside a User that was populated is a statement, not
-        // a silence - so here, and only here, the key is dropped.
-        assertFalse(promoted.hasPublicKey)
+        val snapshot = directory.snapshot(emptySet())
+        val record = snapshot.node(GETAFE_ROUTER)!!
+        // Untouched: the database still says what the radio said it said.
+        assertEquals("gt2a", record.shortName)
+        assertEquals("CLIENT", record.role)
+        assertEquals(DB_AT_MILLIS, record.receivedAtMillis)
 
-        // And the protocol's own defaults are values rather than absences: CLIENT
-        // means CLIENT, the reading NodeRecord.fromProto already settled. Reading
-        // the sentinel as "unset" here would leave this node a ROUTER for ever.
-        directory.applyUser(GETAFE_ROUTER, User(short_name = "gt2a", public_key = PUBLIC_KEY))
-        val demoted = directory.snapshot(emptySet()).node(GETAFE_ROUTER)!!
-
-        assertEquals("CLIENT", demoted.role)
-        assertTrue(demoted.hasPublicKey)
+        // And the broadcast landed in the other store, with its own stamp.
+        val air = snapshot.airNodes[GETAFE_ROUTER]!!
+        assertEquals("gt2b", air.shortName)
+        assertEquals("ROUTER", air.role)
+        assertEquals(LIVE_AT_MILLIS, air.receivedAtMillis)
     }
 
     @Test
     fun `a user heard in traffic creates a record the database never mentioned`() {
-        // Nodes appear in traffic before they appear in the database.
-        directory.applyUser(PINTO, User(long_name = "Pinto Norte", short_name = "pnt1"))
+        // Nodes appear in traffic before they appear in the database. The record it
+        // creates is now an air record, not a bare database one - a relay candidate
+        // nobody's radio has listed is still a candidate.
+        directory.applyUser(PINTO, User(long_name = "Pinto Norte", short_name = "pnt1"), LIVE_AT_MILLIS)
 
         val snapshot = directory.snapshot(emptySet())
-        val record = snapshot.node(PINTO)!!
+        val record = snapshot.airNodes[PINTO]!!
 
-        assertEquals(1, snapshot.count)
         assertEquals(PINTO, record.num)
         assertEquals("pnt1", record.shortName)
         assertEquals("Pinto Norte", record.longName)
-        assertNull(record.dbPosition)
-        assertNull(record.lastHeardEpochSeconds)
+        assertEquals(LIVE_AT_MILLIS, record.receivedAtMillis)
+        // The radio's database says nothing about this node, and is not invented into.
+        assertEquals(0, snapshot.count)
+        assertNull(snapshot.node(PINTO))
     }
 
     @Test
@@ -603,10 +612,16 @@ class NodeDirectoryTest {
         // The snapshot crosses to the UI thread. If it shared the directory's maps,
         // the engine would be mutating live data underneath a running composition.
         directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
         val snapshot = directory.snapshot(emptySet())
 
         now = LIVE_AT_MILLIS
+        // A second refresh round. It carries both entries because a round replaces
+        // the store wholesale - re-sending the entry it still holds is exactly what
+        // the radio does, and omitting it here would be an eviction, not an addition.
+        directory.applyNodeInfo(getafeInDatabase())
         directory.applyNodeInfo(NodeInfo(num = TOLEDO_ESTACION, user = User(short_name = "to2a")))
+        directory.markLoaded(LIVE_AT_MILLIS)
         directory.applyPosition(GETAFE_ROUTER, position(TOLEDO_LAT_I, TOLEDO_LON_I, altitude = 529))
         directory.applyTelemetry(
             GETAFE_ROUTER,
@@ -657,6 +672,7 @@ class NodeDirectoryTest {
                 position = Position(latitude_i = 398628316, longitude_i = -40273231, altitude = 600),
             ),
         )
+        directory.markLoaded(DB_AT_MILLIS)
         assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
         // The comparison above passes vacuously if both sides are null - which is
         // exactly what would happen if applyNodeInfo stopped recording dbPosition.
@@ -672,5 +688,110 @@ class NodeDirectoryTest {
     @Test
     fun `with no local node number there is no local position`() {
         assertNull(NodeDirectory(TimeSource { 5_000L }).localPosition())
+    }
+
+    @Test
+    fun `a refresh replaces the store, dropping a node the radio no longer reports`() {
+        // The radio's database is capped by firmware and evicts entries. Mirroring it
+        // is the point: a high-water mark would keep showing nodes the radio has
+        // forgotten, and DB(n) would stop being a picture of the radio.
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(short_name = "pnt1")))
+        directory.markLoaded(DB_AT_MILLIS)
+        assertEquals(setOf(GETAFE_ROUTER, PINTO), directory.snapshot(emptySet()).nodes.keys)
+
+        // A second round in which the radio has evicted PINTO.
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(LIVE_AT_MILLIS)
+
+        assertEquals(setOf(GETAFE_ROUTER), directory.snapshot(emptySet()).nodes.keys)
+    }
+
+    @Test
+    fun `a completed round that carried no node info leaves the store alone`() {
+        // config_complete_id terminates ANY want_config round, and this package may
+        // not import transport to tell the nonces apart. Committing unconditionally
+        // would replace an eighty-entry database with an empty map every time a
+        // config-only round finished.
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
+
+        directory.markLoaded(LIVE_AT_MILLIS)
+
+        val snapshot = directory.snapshot(emptySet())
+        assertEquals(setOf(GETAFE_ROUTER), snapshot.nodes.keys)
+        // The load time is left alone too: it dates the store's contents, and nothing
+        // about the store changed.
+        assertEquals(DB_AT_MILLIS, snapshot.loadedAtMillis)
+        assertEquals(DB_AT_MILLIS, snapshot.nodes[GETAFE_ROUTER]!!.receivedAtMillis)
+    }
+
+    @Test
+    fun `every record of a refresh carries the completion stamp`() {
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(short_name = "pnt1")))
+        directory.markLoaded(LOADED_AT_MILLIS)
+
+        val nodes = directory.snapshot(emptySet()).nodes
+        // One value for the whole round, because that is the truth: the radio streams
+        // its database in a burst and never says when it learned any of it.
+        assertEquals(LOADED_AT_MILLIS, nodes[GETAFE_ROUTER]!!.receivedAtMillis)
+        assertEquals(LOADED_AT_MILLIS, nodes[PINTO]!!.receivedAtMillis)
+    }
+
+    @Test
+    fun `a node info frame is not visible before its round completes`() {
+        directory.applyNodeInfo(getafeInDatabase())
+
+        assertTrue(directory.snapshot(emptySet()).nodes.isEmpty())
+    }
+
+    @Test
+    fun `a refresh does not disturb the air store`() {
+        directory.applyUser(PINTO, User(long_name = "Pinto Norte"), LIVE_AT_MILLIS)
+
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
+
+        val snapshot = directory.snapshot(emptySet())
+        assertEquals("Pinto Norte", snapshot.airNodes[PINTO]!!.longName)
+        assertEquals(LIVE_AT_MILLIS, snapshot.airNodes[PINTO]!!.receivedAtMillis)
+    }
+
+    @Test
+    fun `Reset preserves both node stores`() {
+        // Requirement: the menu's Reset starts a fresh measurement. Forgetting who is
+        // out there is not part of that - a Reset that dropped every name would leave
+        // every relay unlabelled until each node next chose to announce itself.
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(long_name = "Pinto Norte"), LIVE_AT_MILLIS)
+
+        directory.clearRuntimeData()
+
+        val snapshot = directory.snapshot(emptySet())
+        assertEquals(setOf(GETAFE_ROUTER), snapshot.nodes.keys)
+        assertEquals(setOf(PINTO), snapshot.airNodes.keys)
+    }
+
+    @Test
+    fun `a different local node clears both stores and any round in flight`() {
+        directory.applyNodeInfo(getafeInDatabase())
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(long_name = "Pinto Norte"), LIVE_AT_MILLIS)
+        // A round left in flight when the connection went away.
+        directory.applyNodeInfo(NodeInfo(num = TOLEDO_ESTACION, user = User(short_name = "to2a")))
+
+        directory.clearAll()
+
+        val cleared = directory.snapshot(emptySet())
+        assertTrue(cleared.nodes.isEmpty())
+        assertTrue(cleared.airNodes.isEmpty())
+        assertNull(cleared.loadedAtMillis)
+
+        // The abandoned round must not commit onto the new node's database: its
+        // frames describe the mesh as the previous radio saw it.
+        directory.markLoaded(TELEMETRY_AT_MILLIS)
+        assertTrue(directory.snapshot(emptySet()).nodes.isEmpty())
     }
 }
