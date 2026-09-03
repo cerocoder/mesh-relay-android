@@ -307,8 +307,11 @@ git commit -m "feat(stats): add AirNodeRecord and the field-by-field merge rule"
 **Interfaces:**
 - Consumes: `AirNodeRecord.folding(existing, num, user, atMillis)`, `NodeRecord.receivedAtMillis`.
 - Produces: `NodeDirectory.applyUser(nodeNum: Int, user: User, atMillis: Long)` — **signature
-  changed**, third parameter added. `NodeDirectory.airNodes: Map<Int, AirNodeRecord>` for the
-  snapshot to copy.
+  changed**, third parameter added.
+- Produces: `NodeDirectorySnapshot.airNodes: Map<Int, AirNodeRecord>` — a new constructor
+  parameter on the snapshot, filled by `NodeDirectory.snapshot()` from its private
+  `nodesFromAir`. The map is private to the directory; only the copy on the snapshot is
+  visible outside it, exactly as `nodes` already works.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -802,9 +805,23 @@ fun NodeCard(
     ...
 ```
 
-Update its two callers (`MatchingNodesTab` and the neighbour detail tab — find them with
-`grep -rn 'NodeCard(' app/src`, reading the whole output) to pass
-`snapshot.directory.identity(record.num)`.
+It has **four** real callers and **five** `@Preview` call sites, all of which must pass the
+new argument:
+
+| File | Line | What it draws |
+|---|---|---|
+| `ui/detail/MatchingNodesTab.kt` | 123 | one card per candidate behind a relay byte |
+| `ui/detail/RemoteNodeScreen.kt` | 127 | a remote node seen under a relay |
+| `ui/MeshRelayNavHost.kt` | 515 | the neighbour detail tab |
+| `ui/mynode/MyNodeScreen.kt` | 112 | our own node |
+| `ui/detail/NodeCard.kt` | 320, 337, 354, 371, 388 | five previews |
+
+The four real callers pass `snapshot.directory.identity(record.num)`. Confirm the list with
+`grep -rn 'NodeCard(' app/src --include='*.kt'` and read the **whole** output — do not pipe
+it through `head`.
+
+`RemoteNodeScreen.kt:95` builds a synthetic `NodeRecord` for a node the directory does not
+hold. Pass `NodeIdentity.NONE` there rather than inventing a stamp.
 
 - [ ] **Step 3: Rebuild the card as three sections**
 
@@ -828,7 +845,7 @@ if (identityRows.isNotEmpty() || identity.source != IdentitySource.NONE) {
         icon = R.drawable.ic_field_public_key,
         value = stringResource(if (identity.hasPublicKey) R.string.common_yes else R.string.common_no),
     )
-    identity.receivedAtMillis?.let { stamp ->
+    identity.receivedAtMillis?.takeIf { it != 0L }?.let { stamp ->
         LabelValueRow(
             label = stringResource(
                 if (identity.source == IdentitySource.AIR) R.string.label_air_received
@@ -844,39 +861,89 @@ if (identityRows.isNotEmpty() || identity.source != IdentitySource.NONE) {
 }
 ```
 
-`StatsFormat.nodeDatabaseLastHeard` takes epoch **seconds** and already honours the 12/24
-hour setting — check its exact signature before calling it and match it; if it does not
-take a `timeFormat` parameter, pass whatever the existing `Last DB heard` call site passes.
+Its signature is
+`nodeDatabaseLastHeard(epochSeconds: Int, locale: Locale, timeFormat: TimeFormat, zone: ZoneId = ZoneId.systemDefault())`
+(`StatsFormat.kt:316`) — epoch **seconds**, and it already honours the 12/24-hour setting.
 
-Then the air section — Position, Uptime, Restarts, Telemetry, moved up from below:
+Note the `takeIf { it != 0L }`: a synthetic `NodeRecord` built outside the directory carries
+`receivedAtMillis = 0L`, and rendering that would date the row to January 1970.
+
+Then the air section. Position, Uptime, Restarts and Telemetry move up from below the
+database rows; their bodies are unchanged, only their position and the heading around them:
 
 ```kotlin
 // HEARD OVER THE AIR. None of these were ever in the node database: telemetry,
 // uptime and restarts are folded from TELEMETRY_APP packets and the position from
 // POSITION_APP. Position keeps its own Src: CUR|DB marker, which is finer-grained
 // than this heading and stays authoritative for that row.
+val hasTelemetryRows = telemetry != null && telemetry.lastUptimeSeconds != null
+val airRows = telemetryRows.isNotEmpty() || hasTelemetryRows || location != LocationInfo.EMPTY
+if (airRows) {
+    Text(stringResource(R.string.section_heard_over_air), style = MaterialTheme.typography.labelSmall)
+    PositionLine(info = location, nodeNum = record.num, meshviewUrl = meshviewUrl)
+    // ...the existing uptime, restarts and telemetry blocks, moved here verbatim
+}
 ```
 
-and last the database section — `Last DB SNR`, `Last DB heard`, and the record's own
+`telemetryRows` is the existing `val` computed further down the card; hoist its declaration
+above this block rather than computing it twice.
+
+And last the database section — `Last DB SNR`, `Last DB heard`, and the record's own
 `DB Received` stamp, **suppressed when the identity block already showed a DB stamp**:
 
 ```kotlin
-if (identity.source != IdentitySource.DB) {
-    // When identity resolved to DB, this is the same value from the same record and
-    // two identical lines on one panel read as a defect.
-    LabelValueRow(stringResource(R.string.label_db_received), /* record.receivedAtMillis rendered */)
+val dbStamp = record.receivedAtMillis
+    .takeIf { it != 0L && identity.source != IdentitySource.DB }
+if (record.dbSnr != null || record.lastHeardEpochSeconds != null || dbStamp != null) {
+    Text(stringResource(R.string.section_from_node_database), style = MaterialTheme.typography.labelSmall)
+    // ...the existing Last DB SNR and Last DB heard blocks, unchanged
+    dbStamp?.let { stamp ->
+        LabelValueRow(
+            label = stringResource(R.string.label_db_received),
+            value = StatsFormat.nodeDatabaseLastHeard(
+                epochSeconds = (stamp / 1000L).toInt(),
+                locale = locale,
+                timeFormat = LocalTimeFormat.current,
+            ),
+        )
+    }
 }
 ```
+
+The `identity.source != IdentitySource.DB` term is the duplicate suppression: when identity
+resolved to the database, this stamp and the identity block's are the same value from the
+same record, and two identical lines on one panel read as a defect.
 
 Leave the `Firmware` row where it is relative to its neighbours — its KDoc explains it is
 unconditionally null and kept in its ported position for a future task.
 
 - [ ] **Step 4: Update `SampleData` so the previews still build**
 
-`SampleData.kt` builds `NodeRecord`s for `@Preview`s. Add whatever `NodeIdentity` the new
-`NodeCard` parameter needs. Give at least one preview an `IdentitySource.AIR` identity with
-a blank `longName`, so the blank-field case is visible in the preview pane rather than only
-on hardware.
+`SampleData.kt` builds the `NodeRecord`s the five previews in `NodeCard.kt` draw. Add two
+identities beside them:
+
+```kotlin
+    /** A node resolved from the air, complete. */
+    val airIdentity = NodeIdentity(
+        source = IdentitySource.AIR,
+        longName = "PQPL1 Getafe",
+        shortName = "1ce5",
+        hwModel = "HELTEC_MESH_NODE_T114",
+        role = "ROUTER",
+        hasPublicKey = true,
+        receivedAtMillis = 1_756_890_761_000L,
+    )
+
+    /**
+     * A node that broadcast only a short name. Per-record precedence means the panel
+     * shows this whole, blanks included, so the preview pane is where that case is
+     * seen without waiting for such a node on the mesh.
+     */
+    val thinAirIdentity = airIdentity.copy(longName = null, hwModel = null, role = null)
+```
+
+Give at least one preview `thinAirIdentity`, and one a `NodeIdentity` with
+`source = IdentitySource.DB` so both labels are visible side by side in the pane.
 
 - [ ] **Step 5: Record the rulings**
 

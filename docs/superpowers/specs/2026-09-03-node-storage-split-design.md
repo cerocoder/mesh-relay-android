@@ -365,8 +365,7 @@ confirmed as such, and recorded here so the choice is traceable.
 
 ### 8.3 Strings
 
-New: `label_air_received`, `label_db_received`, `label_public_key`, and the three
-section headings `section_node_information`, `section_heard_over_air`,
+New: `label_air_received`, `label_db_received`, and the three section headings `section_node_information`, `section_heard_over_air`,
 `section_from_node_database`. Changed: `format_db_header` gains the second count.
 Both locales, as every string in this application already is.
 
