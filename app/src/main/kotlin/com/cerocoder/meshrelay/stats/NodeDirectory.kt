@@ -193,17 +193,22 @@ class NodeDirectory(private val time: TimeSource) {
      * specifically to prevent one, so a node the radio has since evicted would
      * reappear for a round.
      *
-     * **Known gap, not fixed here:** this covers a reconnect, which always redoes
-     * the handshake (`CONFIG_NONCE` then `NODE_INFO_NONCE`, both preceded by
-     * `my_info`), but not a node-database *reload* requested mid-session
-     * (`NODE_INFO_RELOAD_NONCE`,
-     * `RadioConnectionManager.reloadNodeDatabase`). That round does not carry a
-     * `my_info` frame at all - see `FakeRadioTransport.send`'s
+     * **Two independent callers reach this method, between them covering every
+     * round.** A fresh `my_info` covers every reconnect, because the handshake
+     * always redoes `CONFIG_NONCE` then `NODE_INFO_NONCE` and `my_info` precedes
+     * both - that is the caller wired at `MeshStatsEngine.handleFrame`. It does
+     * **not** cover a node-database *reload* requested mid-session
+     * (`NODE_INFO_RELOAD_NONCE`, `RadioConnectionManager.reloadNodeDatabase`):
+     * that round carries no `my_info` frame at all - see `FakeRadioTransport.send`'s
      * `NODE_INFO_RELOAD_NONCE` branch and `MeshScenario.nodeStageFrames`, which
-     * answer it with `node_info` frames straight into `config_complete_id`. An
-     * aborted reload followed by another reload request is therefore not covered
-     * by this function. Left alone rather than guessed at: fixing it needs a
-     * signal this class does not have grounds to invent.
+     * answer it with `node_info` frames straight into `config_complete_id`. That
+     * gap is closed by the second caller: `RadioConnectionManager` calls
+     * `MeshStatsEngine.beginNodeDbRound()` before it asks the radio for node data,
+     * at both sites - the handshake's node-info stage and the reload - and always
+     * before the corresponding request goes out, never after, so a reply frame
+     * can never be processed first. Calling this method twice for the same round,
+     * or on an already-empty buffer, is a no-op, so the two callers never need to
+     * coordinate with each other.
      */
     fun beginRound() {
         pendingNodes.clear()

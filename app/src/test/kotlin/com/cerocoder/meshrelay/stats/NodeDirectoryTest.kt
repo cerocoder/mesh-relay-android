@@ -822,4 +822,25 @@ class NodeDirectoryTest {
 
         assertEquals(setOf(PINTO), directory.snapshot(emptySet()).nodes.keys)
     }
+
+    @Test
+    fun `an aborted reload followed by a fresh one commits only the second round's entries`() {
+        // NodeDirectory has no idea what a nonce is, so this exercises the exact
+        // shape of the gap beginRound's KDoc names: a NODE_INFO_RELOAD_NONCE round
+        // carries no my_info, so RadioConnectionManager calls beginRound (via
+        // MeshStatsEngine.beginNodeDbRound) directly, before it re-asks the radio
+        // for node data - the connection drops mid-reload, and a second reload is
+        // requested. Without that second beginRound, GETAFE_ROUTER from the first,
+        // abandoned reload would still be sitting in the buffer when the second
+        // one's entry commits, and the result would be a union of both rounds
+        // rather than a replacement of the first by the second.
+        directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER, user = User(short_name = "gt2a")))
+        // The connection drops here: no config_complete_id, no markLoaded.
+
+        directory.beginRound()
+        directory.applyNodeInfo(NodeInfo(num = TOLEDO_ESTACION, user = User(short_name = "to2a")))
+        directory.markLoaded(DB_AT_MILLIS)
+
+        assertEquals(setOf(TOLEDO_ESTACION), directory.snapshot(emptySet()).nodes.keys)
+    }
 }

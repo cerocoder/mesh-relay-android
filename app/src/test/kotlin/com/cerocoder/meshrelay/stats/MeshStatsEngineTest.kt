@@ -496,6 +496,31 @@ class MeshStatsEngineTest {
     }
 
     @Test
+    fun `beginNodeDbRound reaches the directory and discards a stale partial round`() =
+        runTest(StandardTestDispatcher()) {
+            // Proves the public entry point RadioConnectionManager calls actually
+            // reaches NodeDirectory.beginRound through the command channel, not just
+            // that beginRound itself works - NodeDirectoryTest already covers that.
+            val subject = engine(backgroundScope)
+            val seen = collectSnapshots(subject)
+            // A round abandoned mid-flight, as a dropped reload would leave it: staged
+            // but never committed, so the directory does not see it yet either.
+            subject.attach(flowOf(nodeInfoFrame(SENDER, "stale")))
+            runCurrent()
+            assertEquals(0, seen.last().directory.count)
+
+            subject.beginNodeDbRound()
+            runCurrent()
+
+            subject.attach(flowOf(nodeInfoFrame(0x4242, "fresh"), configCompleteFrame()))
+            runCurrent()
+
+            val after = seen.last().directory
+            assertEquals(setOf(0x4242), after.nodes.keys)
+            assertEquals("fresh", after.node(0x4242)?.longName)
+        }
+
+    @Test
     fun `changing the sort mode reorders without losing anything`() = runTest(StandardTestDispatcher()) {
         val subject = engine(backgroundScope)
         collectSnapshots(subject)

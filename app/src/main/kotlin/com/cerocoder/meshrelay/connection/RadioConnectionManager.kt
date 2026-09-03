@@ -51,6 +51,14 @@ class RadioConnectionManager(
     private val heartbeatInterval: Duration = 30.seconds,
     private val silenceTimeout: Duration = 60.seconds,
     private val recoveryDelay: Duration = 5.seconds,
+    // Notifies the engine that a node-database round is starting, so it can
+    // discard a stale partial round left by an earlier one - see
+    // NodeDirectory.beginRound's KDoc. Called from two sites below, both times
+    // before the corresponding sendToRadio, never after - see the comment at each
+    // call site for why that ordering is the whole correctness argument. Defaults
+    // to a no-op so a test with no opinion about the node database does not need
+    // to build a MeshStatsEngine just to construct this class.
+    private val onBeginNodeDbRound: () -> Unit = {},
 ) : RadioTransportCallback {
 
     private val _connectionState = MutableStateFlow<ConnectionState>(ConnectionState.Disconnected())
@@ -225,6 +233,14 @@ class RadioConnectionManager(
             Log.w(TAG, "node did not acknowledge the database reload within $RELOAD_TIMEOUT")
             _nodeDbReloading.value = false
         }
+        // Signalled before the request goes out, not after. The command and the
+        // reply frames reach the engine's queue on the same channel but from
+        // different coroutines, so ordering them by wall-clock is a race that would
+        // usually work - "after" looks equally correct and is not. Queuing the
+        // command before the request even leaves makes it physically impossible
+        // for a node_info reply to be processed first: the round trip to the radio
+        // cannot complete before this line does.
+        onBeginNodeDbRound()
         sendToRadio(ToRadio(want_config_id = MeshProtocol.NODE_INFO_RELOAD_NONCE))
     }
 
@@ -312,6 +328,12 @@ class RadioConnectionManager(
         when (frame.config_complete_id) {
             MeshProtocol.CONFIG_NONCE -> {
                 Log.i(TAG, "stage 1 finished, requesting the node database")
+                // Same ordering rule as reloadNodeDatabase, and for the same reason -
+                // see the comment there. my_info, received earlier in this same
+                // stage, already clears the buffer for a reconnect, but this call
+                // does not depend on that: it covers this request on its own terms,
+                // exactly as the reload's does, and the two are idempotent together.
+                onBeginNodeDbRound()
                 sendToRadio(ToRadio(want_config_id = MeshProtocol.NODE_INFO_NONCE))
             }
 

@@ -65,7 +65,16 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
 
     private val factory: RadioTransportFactory = RadioTransportFactoryImpl(scope, isDebugBuild, context)
 
-    val connectionManager = RadioConnectionManager(factory, scope, SystemTimeSource)
+    // onBeginNodeDbRound is a lambda, not a bound reference to engine, because
+    // engine is declared below and constructed after this property: the lambda
+    // defers the property access to whenever the manager actually calls it, well
+    // after this constructor has finished running.
+    val connectionManager = RadioConnectionManager(
+        factory,
+        scope,
+        SystemTimeSource,
+        onBeginNodeDbRound = { engine.beginNodeDbRound() },
+    )
 
     /** Permission state for the phone's own position, for the activity's request. */
     val locationAvailability = LocationAvailability(context)

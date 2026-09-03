@@ -70,6 +70,17 @@ class MeshStatsEngine(
         data object ResetForNewNode : Command
 
         /**
+         * A node-database round is starting. Sent by `RadioConnectionManager` before
+         * it asks the radio for node data - at the handshake's node-info stage and at
+         * an explicit reload alike - so a round abandoned mid-flight cannot leak into
+         * the one that replaces it. `my_info` already clears the buffer for every
+         * reconnect (see `NodeDirectory.beginRound`'s KDoc); this command is what
+         * covers the reload, which carries no `my_info` frame at all. Both signals are
+         * idempotent, so either can fire on an already-empty buffer with no effect.
+         */
+        data object BeginNodeDbRound : Command
+
+        /**
          * Nothing to apply - the loop's own build step is the whole point. Sent when
          * a screen subscribes, so it sees the state the engine already holds rather
          * than the empty snapshot it was left at while nobody was watching.
@@ -214,6 +225,9 @@ class MeshStatsEngine(
     /** A different local node: see [Command.ResetForNewNode]. */
     fun resetForNewNode() { commands.trySend(Command.ResetForNewNode) }
 
+    /** A node-database round is starting: see [Command.BeginNodeDbRound]. */
+    fun beginNodeDbRound() { commands.trySend(Command.BeginNodeDbRound) }
+
     /** Open a chart on [key], or pass null when it closes. */
     fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
 
@@ -242,6 +256,7 @@ class MeshStatsEngine(
                 resetStatistics()
                 directory.clearAll()
             }
+            Command.BeginNodeDbRound -> directory.beginRound()
             Command.Refresh -> Unit
         }
     }
@@ -254,9 +269,11 @@ class MeshStatsEngine(
         val frame = timestamped.frame
 
         // my_info is where the firmware starts every want_config_id reply from the
-        // top (see NodeDirectory.beginRound's KDoc for the one round it does not
-        // open), so it also doubles as the signal that any round left over from
-        // before belongs to a connection that is gone.
+        // top, so it also doubles as the signal that any round left over from
+        // before belongs to a connection that is gone. It does not fire for a
+        // mid-session reload - beginNodeDbRound(), called by RadioConnectionManager
+        // before it asks the radio for node data, covers that round instead. See
+        // NodeDirectory.beginRound's KDoc for both signals.
         frame.my_info?.let {
             directory.beginRound()
             directory.setLocalNodeNum(it.my_node_num)
