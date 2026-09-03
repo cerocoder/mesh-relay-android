@@ -853,6 +853,13 @@ figure. If the node does send an altitude, it is shown, and it is that report's 
 **Pass looks like:** both are computed from the live position and change accordingly, rather than
 staying pinned to a database entry.
 
+**Expect the bearing to be able to vanish, and count that a pass.** A live report carries a
+precision, a database entry never did. If this node broadcasts at reduced precision - the Spain
+public channels do - its obfuscation radius is now known and, where that radius exceeds the
+distance, the direction letter is withheld and the distance reads `0.3 km ±2.9 km`. Before this
+change the card drew a confident arrow from a stale position by pretending the precision was
+unknown. A withheld direction here is the honest answer, not a regression.
+
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 

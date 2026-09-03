@@ -634,7 +634,9 @@ Ruling (mine, following the review that caught it): ADD androidx.lifecycle:lifec
 Ruling: the position a node card shows is the newest report carrying coordinates -
   `PositionHistory.newestWithCoordinates`, née `best` - altitude no longer required. This
   deliberately **overrides** the both-fields quirk carried over from the Python original and
-  documented in two places as preserved on purpose, at the owner's instruction: a `Position`
+  documented in four places as preserved on purpose - `PositionHistory`'s KDoc,
+  `NodeDirectorySnapshot.locationInfo`'s KDoc, a `PositionTest` comment and the design spec -
+  at the owner's instruction: a `Position`
   message carries its coordinates and its altitude as independently optional fields, so a node
   with a 2D fix, or a fixed node configured with a latitude and a longitude and nothing else,
   broadcasts positions with no altitude at all. Requiring both meant no report from such a node

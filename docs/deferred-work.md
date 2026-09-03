@@ -226,7 +226,7 @@ These are not follow-ups. They are the state of the branch.
   itself is left stale. Correct today only because the `key` term of the guard already fails on
   its own; a change to how `publishedKey` is reset on watch would make the stale epoch load-
   bearing and wrong.
-- **`positionForSample()` allocates on the node-fallback path**, via `PositionHistory.best`.
+- **`positionForSample()` allocates on the node-fallback path**, via `PositionHistory.newestWithCoordinates`.
   Every other path through it is allocation-free. Not measured as a problem at the sampling rates
   this app sees; noted for whoever next profiles the engine.
 - **The chart-geometry task's implementation report garbles its own inversion argument** (around
