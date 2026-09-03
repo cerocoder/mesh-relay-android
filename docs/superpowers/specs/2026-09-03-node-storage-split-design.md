@@ -285,29 +285,68 @@ value — so the migration is enumerated rather than left to a grep.
 `snr`, `last_heard`, `dbPosition` and `hopsAway`. Requirement 7 for the first two,
 and the air path carries none of the four in any case — `User` has no such fields.
 
-A node evicted from the radio's database but present in NodesFromAir therefore keeps
-its name and loses its stored SNR and last-heard. That follows from requirements 5
-and 7 together and is intended, but it is a visible change and belongs in the
-acceptance checklist.
+A node evicted from the radio's database but present in NodesFromAir therefore shows
+a filled **Node information** section and no **From the node database** section at
+all. Under the layout of §8.1 that is self-explaining rather than surprising: the
+panel is divided by source, so an absent section reads as "this source has nothing",
+which is exactly the truth.
 
 ## 8. Interface
 
-### 8.1 The label
+### 8.1 Three sections, divided by source
 
-On the node detail panel the five identity fields carry one label and one timestamp
-for the record as a whole:
+The panel is divided by where each row came from, and each section is headed. The
+owner's ruling, chosen over a conceptual split with no headings and over two sections
+in the current row order.
 
 ```
+!a4f0c1e5
+
+NODE INFORMATION
+Long name     PQPL1 Getafe
+Short name    1ce5
+Role          ROUTER
+hwModel       HELTEC_MESH_NODE_T114
+Public key    present
 Air Received  3 Sep 2026, 09:12:41
+
+HEARD OVER THE AIR
+Position      40.3057, -3.7534   Src: CUR   2.4 km/S
+Uptime        2d 04h 11m
+Restarts      3
+Telemetry     battery_level 84 %, voltage 4.01 V
+
+FROM THE NODE DATABASE
+Last DB SNR   6.5 dB
+Last DB heard Aug 26, 2026, 4:45:12 PM (local time)
+DB Received   3 Sep 2026, 09:40:02
 ```
 
-or `DB Received`, formatted through the existing 12/24-hour Time option, by the same
-`StatsFormat` path every other absolute time already uses. When `source` is `NONE`,
-no label and no timestamp.
+**Node information** — the five identity fields of §7.2, resolved per record, under
+one label and one timestamp: `Air Received` or `DB Received`.
 
-Spelled "Received". The owner's instruction wrote "Recieved"; this is taken as a
-typing slip rather than an intended spelling, and is flagged here so it can be
-overruled.
+**Heard over the air** — Position, Uptime, Restarts and the telemetry metrics. These
+move up from their current place below the database rows. They were never in the node
+database: telemetry, uptime and restarts are folded from `TELEMETRY_APP` packets and
+Position from `POSITION_APP`. Position keeps its own `Src: CUR|DB` marker, which is
+finer-grained than the section heading and stays authoritative for that row.
+
+**From the node database** — `Last DB SNR`, `Last DB heard`, and the database
+record's own `DB Received` stamp.
+
+`Public key` is added to the identity block. The panel does not render it today,
+although `NodeRecord.hasPublicKey` has been carried since the port; requirement 5
+names it, so it appears as a present/absent row.
+
+**An empty section is omitted entirely, heading included.** A heading with nothing
+under it reads as a missing row rather than an absent one — the reasoning already
+recorded for `PositionLine` in `NodeCard.kt`. An air-only node therefore shows no
+**From the node database** section at all.
+
+**The duplicate stamp is suppressed.** When the identity block resolves to `DB`, its
+timestamp and the section's `DB Received` are the same value from the same record;
+the section's copy is then omitted. Two identical lines on one panel read as a defect,
+and nothing is lost, because the identity block's label already names the source.
 
 ### 8.2 The header counter
 
@@ -315,10 +354,15 @@ overruled.
 at the radio's true count permanently, and `Air(m)` is the number that answers the
 observation in §1 by growing overnight.
 
+Spelled "Received". The owner's instruction wrote "Recieved"; taken as a typing slip,
+confirmed as such, and recorded here so the choice is traceable.
+
 ### 8.3 Strings
 
-New: `label_air_received`, `label_db_received`. Changed: `format_db_header` gains the
-second count. Both locales, as every string in this application already is.
+New: `label_air_received`, `label_db_received`, `label_public_key`, and the three
+section headings `section_node_information`, `section_heard_over_air`,
+`section_from_node_database`. Changed: `format_db_header` gains the second count.
+Both locales, as every string in this application already is.
 
 ## 9. Testing
 
@@ -335,6 +379,11 @@ Unit tests, `stats/`, no Android dependency:
    record that has one.
 7. `uniqueRelayName` finds a node present only in NodesFromAir.
 8. **Reset** preserves both stores; connecting to a different node clears both.
+
+The three-section layout of §8.1 is not unit-testable — there is no Compose test
+harness in this build — so it is verified on the phone instead: that an air-only node
+shows no database section, that a node resolved from the database shows its stamp once
+rather than twice, and that Position keeps its own `Src` marker inside the air section.
 
 ## 10. Out of scope
 
