@@ -1,6 +1,7 @@
 package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Direction
+import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.LatLon
 import com.cerocoder.meshrelay.stats.model.PositionSource
 import org.junit.Assert.assertEquals
@@ -842,5 +843,83 @@ class NodeDirectoryTest {
         directory.markLoaded(DB_AT_MILLIS)
 
         assertEquals(setOf(TOLEDO_ESTACION), directory.snapshot(emptySet()).nodes.keys)
+    }
+
+    @Test
+    fun `an air record wins whole, blanks included`() {
+        // The owner's ruling, made against a per-field alternative: if an air record
+        // exists, all five identity fields come from it. A node that broadcast only a
+        // short name shows only a short name, and the label says the data is from the air.
+        directory.applyNodeInfo(
+            NodeInfo(num = PINTO, user = User(long_name = "Pinto Norte", short_name = "pnt1")),
+        )
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(short_name = "pnt2"), LIVE_AT_MILLIS)
+
+        val identity = directory.snapshot(emptySet()).identity(PINTO)
+        assertEquals(IdentitySource.AIR, identity.source)
+        assertEquals("pnt2", identity.shortName)
+        assertNull(identity.longName)
+        assertEquals(LIVE_AT_MILLIS, identity.receivedAtMillis)
+    }
+
+    @Test
+    fun `the database record is used when the air store has nothing`() {
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(long_name = "Pinto Norte")))
+        directory.markLoaded(DB_AT_MILLIS)
+
+        val identity = directory.snapshot(emptySet()).identity(PINTO)
+        assertEquals(IdentitySource.DB, identity.source)
+        assertEquals("Pinto Norte", identity.longName)
+        assertEquals(DB_AT_MILLIS, identity.receivedAtMillis)
+    }
+
+    @Test
+    fun `a node in neither store has no identity`() {
+        val snapshot = directory.snapshot(emptySet())
+
+        assertEquals(IdentitySource.NONE, snapshot.identity(PINTO).source)
+        assertNull(snapshot.identity(PINTO).receivedAtMillis)
+    }
+
+    @Test
+    fun `a relay is named from a node known only over the air`() {
+        // Without the union, this feature would name FEWER relays after this change than
+        // before it: a node the radio has never listed would be invisible to the byte
+        // match, however often it announced itself.
+        directory.applyUser(PINTO, User(short_name = "pnt1"), LIVE_AT_MILLIS)
+
+        val snapshot = directory.snapshot(emptySet())
+        val relayByte = Geo.lastByteOfNodeNum(PINTO)
+        assertEquals(listOf(PINTO), snapshot.matchingNodeNums(relayByte))
+        assertEquals("pnt1", snapshot.uniqueRelayName(relayByte))
+    }
+
+    @Test
+    fun `a node in both stores is one candidate, not two`() {
+        directory.applyNodeInfo(NodeInfo(num = PINTO, user = User(short_name = "pnt1")))
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(short_name = "pnt1"), LIVE_AT_MILLIS)
+
+        val snapshot = directory.snapshot(emptySet())
+        assertEquals(listOf(PINTO), snapshot.matchingNodeNums(Geo.lastByteOfNodeNum(PINTO)))
+    }
+
+    @Test
+    fun `the skip list still applies to an air-only node`() {
+        directory.applyUser(PINTO, User(short_name = "pnt1"), LIVE_AT_MILLIS)
+
+        assertTrue(directory.snapshot(setOf(PINTO)).matchingNodeNums(Geo.lastByteOfNodeNum(PINTO)).isEmpty())
+    }
+
+    @Test
+    fun `the two counts are independent`() {
+        directory.applyNodeInfo(NodeInfo(num = GETAFE_ROUTER))
+        directory.markLoaded(DB_AT_MILLIS)
+        directory.applyUser(PINTO, User(short_name = "pnt1"), LIVE_AT_MILLIS)
+
+        val snapshot = directory.snapshot(emptySet())
+        assertEquals(1, snapshot.count)
+        assertEquals(1, snapshot.airCount)
     }
 }

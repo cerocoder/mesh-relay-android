@@ -32,10 +32,57 @@ class NodeDirectorySnapshot(
 
     val count: Int get() = nodes.size
 
+    /**
+     * How many nodes have identified themselves over the air. Independent of
+     * [count]: a node can be in either store, both, or neither, and this counts
+     * only the air store - the header labels it separately from `count`'s `DB`.
+     */
+    val airCount: Int get() = airNodes.size
+
     fun node(nodeNum: Int): NodeRecord? = nodes[nodeNum]
 
-    /** The node's short name, or `""` when the database has never named it. */
-    fun shortName(nodeNum: Int): String = nodes[nodeNum]?.shortName ?: ""
+    /** The node's short name, or `""` when neither store has named it. */
+    fun shortName(nodeNum: Int): String = identity(nodeNum).shortName ?: ""
+
+    /**
+     * [nodeNum]'s identity as the interface should show it, resolved across both
+     * stores.
+     *
+     * An air record, when there is one, wins **whole** - all five fields, blanks
+     * included - never field by field. That is the owner's explicit ruling,
+     * decided against a per-field fallback: mixing a name from one store with a
+     * role from the other would attribute a single identity to two different
+     * observations, and a caller could no longer show one label and one timestamp
+     * for the whole block. [AirNodeRecord.folding] is what makes this safe - it
+     * accumulates a broadcast onto what the air store already knew, so a thin
+     * NODEINFO_APP payload cannot blank a field that a fuller one already filled.
+     *
+     * Falls back to the database record only when the air store has nothing for
+     * this node, and to [NodeIdentity.NONE] when neither store does.
+     */
+    fun identity(nodeNum: Int): NodeIdentity {
+        airNodes[nodeNum]?.let { air ->
+            return NodeIdentity(
+                source = IdentitySource.AIR,
+                longName = air.longName,
+                shortName = air.shortName,
+                hwModel = air.hwModel,
+                role = air.role,
+                hasPublicKey = air.hasPublicKey,
+                receivedAtMillis = air.receivedAtMillis,
+            )
+        }
+        val db = nodes[nodeNum] ?: return NodeIdentity.NONE
+        return NodeIdentity(
+            source = IdentitySource.DB,
+            longName = db.longName,
+            shortName = db.shortName,
+            hwModel = db.hwModel,
+            role = db.role,
+            hasPublicKey = db.hasPublicKey,
+            receivedAtMillis = db.receivedAtMillis,
+        )
+    }
 
     fun telemetry(nodeNum: Int): TelemetryRecord? = telemetryByNode[nodeNum]
 
@@ -47,11 +94,19 @@ class NodeDirectorySnapshot(
      * [Geo.lastByteOfNodeNum] decides which, including the firmware's substitution
      * of `0xff` for a low byte of `0x00`.
      *
+     * Scans the **union** of both stores' node numbers, deliberately: a relay is
+     * named by matching this byte against known node numbers, and a node heard
+     * only over the air - never yet listed in the radio's own database - is a
+     * relay candidate like any other. Scanning [nodes] alone would name fewer
+     * relays than before this store split, silently, however often that node
+     * announced itself. `Set + Set` is a union, so a node present in both stores
+     * still appears once.
+     *
      * Sorted ascending, which the original had no reason to do: the detail screen
      * numbers the candidates `[1]`, `[2]`, and drawing them in a hash map's order
      * would let the numbering change between recompositions.
      */
-    fun matchingNodeNums(relayByte: Int): List<Int> = nodes.keys
+    fun matchingNodeNums(relayByte: Int): List<Int> = (nodes.keys + airNodes.keys)
         .filter { Geo.lastByteOfNodeNum(it) == relayByte && it !in skippedNodes }
         .sorted()
 
