@@ -202,11 +202,21 @@ should the same node number arrive twice, the later frame wins.
 
 ```
 if (!pendingReceivedAny) return          // a config-only round: change nothing
-nodes = pendingNodes                      // wholesale replace
-every record stamped receivedAtMillis = atMillis
+nodes.clear()
+nodes.putAll(pendingNodes.mapValues { it.value.copy(receivedAtMillis = atMillis) })
 loadedAtMillis = atMillis
 pendingNodes.clear(); pendingReceivedAny = false
 ```
+
+**Copy the contents; never assign the buffer.** `nodes = pendingNodes` would alias
+one map under two names, and the `pendingNodes.clear()` on the next line would then
+empty the store it had just filled. Written out because it is the kind of defect that
+passes review by looking like the obvious thing.
+
+`receivedAtMillis` is stamped here, not in `NodeRecord.fromProto`, which has no clock
+and must not acquire one. `fromProto` constructs the record with `receivedAtMillis =
+0L` and the commit copies the real value in; the field is never observable at zero
+because nothing outside the buffer can see a record before it is committed.
 
 A round that completes having carried no node_info leaves both the store and
 `loadedAtMillis` untouched. Today `loadedAtMillis` is updated by any completed round;
@@ -259,6 +269,16 @@ This is not a refinement. A relay is named by matching the low byte of its
 `relay_node` field against known node numbers; a node known only from the air would
 otherwise be invisible to that match, and the feature would name *fewer* relays after
 this change than before it.
+
+`node(nodeNum)` keeps returning a `NodeRecord`, because `snr`, `last_heard`,
+`dbPosition` and `hopsAway` legitimately come from it. But every interface site that
+reads `longName`, `shortName`, `hwModel`, `role` or `hasPublicKey` **from that record**
+is reading past the precedence rule and must move to `identity()`. There are nine such
+files today: `NeighbourListScreen`, `NeighbourCard`, `NodeCard`, `DetailScreen`,
+`RemoteNodesTab`, `RemoteNodeScreen`, `MyNodeScreen`, `MeshRelayNavHost` and
+`DeviceListScreen`, plus `SampleData` and `Scenarios` for previews and the emulator.
+A site missed here does not fail to compile — it silently keeps showing the database
+value — so the migration is enumerated rather than left to a grep.
 
 ### 7.4 What stays database-only
 
