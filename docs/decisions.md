@@ -757,7 +757,11 @@ Ruling: the relay-candidate comparison (`RelayCandidates.rank`, spec
   comparison is physics, not correlation.
   Cost if wrong: the two averages would not describe one link at all, and every verdict the selector
   colours - CONSISTENT, UNCERTAIN, INCONSISTENT alike - would be comparing unrelated numbers and
-  calling the coincidence a match.
+  calling the coincidence a match. One way this actually happens (final whole-branch review, finding
+  I-8, added to spec §3's confounders too): `RelayStats` keys by `relayByte` alone, and when two nodes
+  sharing that byte are both relaying at once, `relay.rssi.avg` blends two links and can match neither
+  candidate - every candidate then reads UNCERTAIN or INCONSISTENT and the ranking actively misleads,
+  rather than merely lacking evidence.
 
 ### 56
 
@@ -769,8 +773,12 @@ Ruling: the verdict (`RelayCandidates.verdictFor`) judges the gap between the tw
   unjudged and reward a chatty CLIENT that relays nothing instead. Physics does not need the count -
   nothing but distance explains a 40 dB gap, even measured from a single packet.
   Cost if wrong: a verdict formed from one packet - a candidate heard directly exactly once can rank
-  CONSISTENT or INCONSISTENT on that one reading alone, with nothing on screen distinguishing a
-  one-packet verdict from a hundred-packet one except reading `directPacketCount` for it directly.
+  CONSISTENT or INCONSISTENT on that one reading alone. The selector row does print
+  `directPacketCount` beside the verdict (final whole-branch review, finding M-5, which softened this
+  entry - it used to claim nothing on screen carried the count at all), so the difference is visible,
+  not hidden; but nothing about the verdict's own colour or its place in the ranking calls out how
+  thin that evidence is, so a reader who does not stop to read the count can still mistake one packet
+  for a hundred.
 
 ### 57
 
@@ -797,3 +805,20 @@ Ruling: `RelayCandidate.cannotForward` is set for exactly one role, `CLIENT_MUTE
   Cost if wrong: nothing is acted on automatically - the app only ranks and colours, never
   auto-skips - so a wrong `cannotForward` mark misleads the owner's own judgement rather than hiding
   a candidate outright.
+
+### 59
+
+Ruling: the 2026-09-04 relay-candidate-comparison spec's section 7 override of requirement 20 - Freeze
+  and Auto scale rendered side by side in one row rather than stacked, to buy the vertical space the
+  candidate selector needs below them - is recorded here as its own decision (final whole-branch
+  review, finding I-2), the same way decision 40 records requirement 11's override by the same earlier
+  Graph design. Decisions 55-58 already cover this feature's ranking rulings and say nothing about the
+  layout, so before this entry the override lived only in a source comment
+  (`SignalGraphScreen.kt`, above the toggle row) while
+  `docs/superpowers/specs/2026-09-01-signal-graph-design.md:68-69` still stated the stacked layout as
+  a requirement with nothing pointing away from it - consistent with how decision 40 itself is
+  recorded, the superseded spec's own text is left as the historical document it is rather than edited
+  in place.
+  Cost if wrong: none directly - the code already carries the correct layout and its own comment
+  already explains the override - but a reader trusting the requirement 20 text alone, with decisions.md
+  the one place that would have told them otherwise, would not find out about the override at all.

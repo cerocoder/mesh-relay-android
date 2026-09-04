@@ -183,6 +183,10 @@
     <string name="graph_candidate_db_snr">Last DB SNR: %1$s</string>
     <string name="graph_candidate_hops">Hops away: %1$d</string>
     <string name="graph_candidate_off_scale">%1$s (off-scale)</string>
+    <string name="graph_candidate_verdict_consistent">Consistent with the relay\'s signal</string>
+    <string name="graph_candidate_verdict_uncertain">Uncertain match with the relay\'s signal</string>
+    <string name="graph_candidate_verdict_inconsistent">Inconsistent with the relay\'s signal</string>
+    <string name="graph_candidate_verdict_unknown">Not yet compared with the relay\'s signal</string>
 
     <!-- Node card -->
     <string name="section_node_information">NODE INFORMATION</string>

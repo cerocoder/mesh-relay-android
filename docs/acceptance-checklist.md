@@ -465,13 +465,19 @@ no reviewer has seen a pixel of it, and this project has no Compose test harness
   Notes: PASS (relay side). `More` at [968,148][1036,216]; menu item "Graph" / "Gráfica". Neighbour side NOT yet run.
 
 ### H2. The chart matches the drawing
-**Do:** With a relay that has heard a few hundred packets, read the screen against `Pic1.pdf`.
-**Pass looks like:** title, two switches stacked and right-aligned under the app bar, the RSSI and
-SNR bars, a `Time` field above the plot, the scrollable plot, a `Time` field below it. Two lines,
-green for SNR and blue for RSSI — the same colours as the bars.
+**Do:** With a relay that has heard a few hundred packets, read the screen against `Pic1.pdf`. Note:
+`Pic1.pdf` predates the 2026-09-04 relay-candidate-comparison spec's section 7 layout change (decision
+59) and still shows the two switches stacked — read it for everything **except** that row's layout.
+**Pass looks like:** title, two switches side by side on one row and right-aligned under the app bar,
+the RSSI and SNR bars, a `Time` field above the plot, the scrollable plot, a `Time` field below it.
+Two lines, green for SNR and blue for RSSI — the same colours as the bars.
 
-- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
-  Notes: PASS. Title, both switches right-aligned, both bars, Time above and below. The plot itself: see F-7.
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: Cleared for re-run by the final whole-branch review (finding I-1): this item was PASS on
+  2026-09-02 for the two switches **stacked**, which N7 now correctly asserts is no longer the
+  layout - re-running against the old PASS text would have been a spurious FAIL. Prior run, for the
+  record: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16 - title, both switches
+  right-aligned, both bars, Time above and below; the plot itself: see F-7.
 
 ### H3. Newest at the top, and arriving data does not yank the view
 **Do:** Watch a live relay. Scroll down into the history and wait for new packets to arrive.
@@ -482,12 +488,20 @@ under your eye does not move as new ones arrive.
   Notes: ________________________________________________________________________________
 
 ### H4. Freeze holds the drawing; collection continues
-**Do:** Switch **Freeze** on over a busy relay. Wait a minute. Switch it off.
+**Do:** Switch **Freeze** on over a busy relay. Wait a minute. Switch it off. With a candidate
+selected (final whole-branch review, finding I-6), do the same and additionally watch the red
+comparison line and the selector row's own gap and verdict while frozen.
 **Pass looks like:** nothing on screen moves while frozen — not the plot, not the bars, not the
-scales. Switching off redraws complete, including everything collected while it was held.
+scales, and, with a candidate selected, not the red line or the selector's gap/verdict either.
+Switching off redraws complete, including everything collected while it was held.
 
 - [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
-  Notes: PASS. Held at count 79 for 12 s while the engine collected; unfreeze jumped to 87, redrawn complete. Confirms the bars are held too (ruling 36).
+  Notes: PASS for the plot/bars/scales, held before the candidate-comparison feature existed on this
+  branch. Held at count 79 for 12 s while the engine collected; unfreeze jumped to 87, redrawn
+  complete. Confirms the bars are held too (ruling 36). The candidate-line/selector clause above is
+  new (finding I-6's fix) and not covered by this run - re-run with a candidate selected before
+  relying on this item; C-1 means the zona-centro demo cannot exercise it either, so this needs
+  hardware the same way N1-N4 do.
 
 ### H5. Auto scale moves both the bars and the plot
 **Do:** Switch **Auto scale** on. It is off by default.
@@ -1038,50 +1052,73 @@ Nothing in this group has ever been run. CI proves `RelayCandidates.rank` and th
 clamping compile and pass their unit tests; the selector, the line and the Skip flow have no
 Compose test harness in this project and go here instead, per the design's own §11.
 
-### N1. The selector lists ranked candidates with a colour, average RSSI and sample count
+### N1. The selector lists ranked candidates with a colour, average RSSI and sample count — HARDWARE ONLY
 **Do:** Open the Graph for a relay byte with several matching candidates. Tap the selector.
 **Pass looks like:** every candidate is listed, grouped in ranked order (CONSISTENT, UNCERTAIN,
 UNKNOWN, INCONSISTENT, each group ascending by gap), each row showing a coloured dot for its
 verdict, its own average direct RSSI and its sample count.
+
+**Hardware only (final whole-branch review, ruling C-1):** in `zona-centro`, the only demo scenario
+that emits traffic, `directNodeInfoSenders` never includes any relay byte's candidate, so
+`directRssiAvg` stays null for every candidate all session - this item cannot be exercised off
+hardware. The fixture is deliberately not changed to fix this: all twelve of its traffic slots are
+already taken by other scenario coverage that giving a candidate a direct slot would displace,
+re-opening acceptance groups that have already passed on this branch.
 
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
 ---
 
-### N2. The red line follows Auto scale with the points, not off them
+### N2. The red line follows Auto scale with the points, not off them — HARDWARE ONLY
 **Do:** Select a candidate whose average direct RSSI falls inside the plotted range. Toggle **Auto
 scale** on, then off.
 **Pass looks like:** a red vertical line appears behind the blue points at that candidate's own
 average. Toggling Auto scale moves the line together with the point cloud it is being compared
 against - it never drifts to a position the points themselves have moved away from.
 
+**Hardware only, for the same reason as N1 (ruling C-1):** no candidate ever carries a direct RSSI
+average in the `zona-centro` demo, so `CandidateLineOverlay` always early-returns and no line is
+ever drawn to move.
+
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
 ---
 
-### N3. Off-scale is clamped with a marker and its value, never silently absent
-**Do:** Select a candidate whose average direct RSSI falls outside the current plotted range (the
-`CandidateLineLowOffScalePreview` / `CandidateLineHighOffScalePreview` previews show the shape if
-none is available live).
+### N3. Off-scale is clamped with a marker and its value, never silently absent — HARDWARE ONLY
+**Do:** With **Auto scale ON**, select a candidate whose average direct RSSI falls outside the
+current plotted range (the `CandidateLineLowOffScalePreview` / `CandidateLineHighOffScalePreview`
+previews show the shape if none is available live). With Auto scale **off** the fixed range is
+−130…−30 dBm, 100 dB wide, and essentially no real candidate's average falls outside it, so this
+item is unreachable in that mode.
 **Pass looks like:** the line still appears, clamped to the near edge, with a small triangle marker
 and the candidate's actual value printed beside it - not simply missing. **This is the item that
 proves Task 2 was worth its own task:** without the clamp-and-label, a far off-scale candidate would
 sit unmarked on the edge and look like an ordinary in-range value, showing nothing exactly when the
 evidence is strongest.
 
+**Hardware only, for the same reason as N1 (ruling C-1):** no candidate ever carries a direct RSSI
+average in the `zona-centro` demo, so there is no average to fall off-scale at all - the two
+`@Preview`s remain the only check possible off hardware.
+
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
 
 ---
 
-### N4. A candidate never heard directly draws no line and says so
+### N4. A candidate never heard directly draws no line and says so — HARDWARE ONLY
 **Do:** Select a candidate the selector already shows as not heard directly this session (its row
 names that and shows database SNR / hops away instead of a gap).
 **Pass looks like:** no line is drawn at all. The selector row is the explanation on its own -
 "not heard directly", plus whatever database SNR and hop count it has - rather than a line
 fabricated from nothing.
+
+**Hardware only, in spirit the same reason as N1 (ruling C-1):** every candidate happens to satisfy
+this item's precondition in the `zona-centro` demo (none is ever heard directly), but the run still
+needs a real node database entry with `Last DB SNR`/`hops away` behind that candidate for the
+"says so" half of this item to mean anything - the demo scenario is not built out for that either,
+so this is grouped with N1-N3 rather than treated as accidentally free.
 
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________
@@ -1126,12 +1163,99 @@ scale.
 
 ---
 
+### N8. The line is legible at arm's length inside the point cloud
+**Do:** On a busy relay with several candidates, select one whose verdict is **CONSISTENT**.
+**Pass looks like:** the red line is findable at arm's length among the blue RSSI points, not a
+hairline lost inside them. This is the final whole-branch review's C-2 item: the line is now drawn
+`POINT_SIZE_PX` wide (4 physical pixels, matching the point squares), not the 1 px hairline it used
+to be.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N9. Spanish, portrait and landscape: no clipped label, no two-line selector
+**Do:** Switch the app to Spanish. Open the Graph for a relay with candidates, in both portrait and
+landscape.
+**Pass looks like:** `Escala automática` reads in full beside its switch in both orientations,
+neither clipped nor wrapped (final whole-branch review, finding I-5); the Skip label does not push
+the candidate selector into a two-line field.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N10. Four or more candidates: the menu scrolls, and the order holds still
+**Do:** Open the selector for a relay byte with four or more candidates. Scroll the open menu.
+Watch it for a while as live packets keep arriving.
+**Pass looks like:** the menu scrolls, every row stays readable, and the ranked order does not churn
+between recompositions while packets arrive - only an actual change in a candidate's own gap moves
+it.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N11. A never-heard candidate, menu closed: the screen still explains the absent line
+**Do:** Select a candidate never heard directly this session (its dropdown row shows database SNR /
+hops away instead of a gap). Close the menu.
+**Pass looks like:** with the menu closed, a one-line caption under the selector row still says the
+candidate was not heard directly this session, and still shows whatever database SNR / hop count it
+has (final whole-branch review, finding I-4) - the explanation for the missing line does not
+disappear along with the dropdown.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N12. Cross-screen agreement: ranking, and the Skip dialog's name for a node
+**Do:** Compare the Matching nodes tab's `[1] [2] [3]` order against the Graph selector's order for
+the same relay byte. Then start a Skip from the Matching nodes tab, and separately from the Graph,
+for the same candidate.
+**Pass looks like:** the two orders agree. Both Skip confirmation dialogs name the candidate the
+same way (final whole-branch review, finding I-7) - short name and node id together, e.g.
+`"TOL1 (!a1b2c3d4)"`, not one screen's short name against the other's bare id.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N13. Two plausibly-live relays sharing one byte
+**Do:** Find or arrange a relay byte where two candidates both look like they could be actively
+relaying right now (both recently heard directly, both otherwise plausible).
+**Pass looks like:** record whether every candidate reads UNCERTAIN or INCONSISTENT rather than one
+reading CONSISTENT - the blended-average confounder decision 55's cost and spec §3 now name (final
+whole-branch review, finding I-8). This is the item that tells the owner when to distrust the
+ranking rather than act on it.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N14. Skip a selected candidate from the Matching nodes tab while its Graph is open
+**Do:** Open the Graph for a relay byte and select one of its candidates. Without closing the
+Graph, go to the Matching nodes tab and Skip that same candidate from there.
+**Pass looks like:** the Graph's selector drops the skipped candidate from its list and falls back
+to **None** cleanly - no stale selection, no crash, no line left drawn for a candidate that is no
+longer offered.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 85
+- **Total items run:** _____ / 92
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

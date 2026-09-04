@@ -314,7 +314,7 @@ fun NodeCard(
             AlertDialog(
                 onDismissRequest = { skipDialogVisible = false },
                 title = { Text(stringResource(R.string.action_skip_confirm_title)) },
-                text = { Text(stringResource(R.string.action_skip_confirm_body, NodeId.format(record.num))) },
+                text = { Text(stringResource(R.string.action_skip_confirm_body, skipConfirmationName(identity, record.num))) },
                 confirmButton = {
                     TextButton(
                         onClick = {
@@ -374,6 +374,27 @@ private fun LabelValueRow(
         }
         Text(text = value, style = MaterialTheme.typography.bodyMedium)
     }
+}
+
+/**
+ * [identity]'s short name and [nodeNum] together, e.g. `"TOL1 (!a1b2c3d4)"` -
+ * or the id alone when there is no short name to disambiguate. Used only for
+ * the Skip confirmation dialog above: this feature's whole reason to exist is
+ * that a relay byte's candidates are confusable, and a four-character short
+ * name is not unique (final-review finding I-7). That dialog used to name the
+ * node by id alone, while
+ * [SignalGraphScreen][com.cerocoder.meshrelay.ui.graph.SignalGraphScreen]'s
+ * own Skip dialog - confirming the identical
+ * `SettingsRepository.addSkippedRelayNode` write for the identical string -
+ * named it by short name alone; neither screen alone told the owner which
+ * physical node "TOL1" or `!a1b2c3d4` actually was, and now both screens name
+ * it the same way. A second, independent copy of that file's own version of
+ * this shape - see its own KDoc for why one shared function is not worth it
+ * here either.
+ */
+private fun skipConfirmationName(identity: NodeIdentity, nodeNum: Int): String {
+    val shortName = identity.shortName?.takeIf { it.isNotEmpty() } ?: return NodeId.format(nodeNum)
+    return "$shortName (${NodeId.format(nodeNum)})"
 }
 
 /** The configured display locale. A second, independent copy of the identical

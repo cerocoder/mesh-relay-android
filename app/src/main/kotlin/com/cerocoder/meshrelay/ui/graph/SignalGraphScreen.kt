@@ -74,10 +74,10 @@ import com.cerocoder.meshrelay.ui.common.MapLinks
 import com.cerocoder.meshrelay.ui.common.StatsFormat
 import com.cerocoder.meshrelay.ui.detail.SignalBlock
 import com.cerocoder.meshrelay.ui.preview.SampleData
+import com.cerocoder.meshrelay.ui.theme.CandidateLine
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 import com.cerocoder.meshrelay.ui.theme.RssiTrack
 import com.cerocoder.meshrelay.ui.theme.SnrTrack
-import com.cerocoder.meshrelay.ui.theme.VerdictInconsistent
 import java.util.Locale
 import kotlin.math.floor
 import kotlin.math.roundToInt
@@ -105,15 +105,26 @@ private val ToggleRowSpacing = 24.dp
  * in physical pixels on the same terms [SignalChart]'s own drawing constants
  * are (Canvas units there are already physical pixels).
  *
- * Drawn as a `drawRect` one physical pixel wide, not a `drawLine` with this
- * as its `strokeWidth`: a stroked line of an odd width centres on the
- * coordinate, covering `[x-0.5, x+0.5]` and antialiasing both edges - a soft
- * two-column smear beside this file's deliberately crisp, non-antialiased
- * 4 px point squares (decision 45, [POINT_SIZE_PX]). A rect whose `topLeft`
- * is the same floored integer `x` the points themselves floor covers exactly
- * one pixel column, no antialiasing needed.
+ * Drawn as a `drawRect`, not a `drawLine` with this as its `strokeWidth`: a
+ * stroked line centres on the coordinate rather than on the pixel columns a
+ * caller actually chooses, so a rect whose edges [CandidateLineOverlay] floors
+ * itself is what covers whole pixel columns with nothing for the rasteriser to
+ * antialias - the same discipline decision 45 documents for [POINT_SIZE_PX]'s
+ * point squares. **That argument bears on the width being a whole number of
+ * physical pixels; it says nothing about which whole number** - a mistake this
+ * constant itself made until the final whole-branch review caught it (ruling
+ * C-2), leaving a crispness argument sitting beside a value the argument never
+ * actually justified.
+ *
+ * **Set to 4f, matching [POINT_SIZE_PX].** At 1f the line was a quarter the
+ * width of marks the owner had already twice judged too small on the phone
+ * (decision 45's 2x2, ruling 46's 4x4), and thinner than the crosshair rule
+ * beside it ([CrosshairStroke], about 3 physical pixels). The line is drawn
+ * *behind* the points ([CandidateLineOverlay]'s own KDoc), so a 4 px line
+ * cannot obscure them - it is exactly the width of a single point column,
+ * proportionate for the one mark this whole screen exists to compare against.
  */
-private const val CANDIDATE_LINE_WIDTH_PX = 1f
+private const val CANDIDATE_LINE_WIDTH_PX = 4f
 
 /** The off-scale triangle marker's side length, [CandidateLineOverlay] draws. */
 private val CandidateMarkerSize = 10.dp
@@ -145,15 +156,27 @@ private const val POINT_SIZE_PX = 4f
  * It exists so Freeze can capture the whole drawing atomically. The bars and the
  * plot are one picture - with Auto scale on they share a range derived from these
  * statistics - so capturing the series without them would freeze the trace while
- * still letting it slide sideways under a widening scale. Holding the four
- * together makes "what is frozen" one thing rather than four that a later edit
- * could let drift apart.
+ * still letting it slide sideways under a widening scale.
+ *
+ * [candidates] belongs here for the identical reason (final-review finding
+ * I-6), and it was the one field missing until that review: it arrives as a
+ * plain parameter, recomputed by `MeshRelayNavHost` on every snapshot, so
+ * without it in the frame Freeze would hold the points and bars while the red
+ * comparison line, and the selector's gap, sample count and verdict colour,
+ * kept drifting underneath - two different time windows presented as one, the
+ * exact failure this type exists to rule out for everything else. Reading the
+ * selection through `frame.candidates` below, never through the bare
+ * parameter, is what makes the capture actually hold.
+ *
+ * Holding all five together makes "what is frozen" one thing rather than five
+ * that a later edit could let drift apart.
  */
 private data class GraphFrame(
     val series: SignalSeries,
     val rssiStats: SignalStats,
     val snrStats: SignalStats,
     val lastPacketAtMillis: Long,
+    val candidates: List<RelayCandidate>,
 )
 
 /**
@@ -221,6 +244,7 @@ fun SignalGraphScreen(
         rssiStats = rssiStats,
         snrStats = snrStats,
         lastPacketAtMillis = lastPacketAtMillis,
+        candidates = candidates,
     )
 
     // Freeze holds the drawing, not the collection: the engine keeps folding
@@ -236,6 +260,14 @@ fun SignalGraphScreen(
     // bars' flash marker does not fire for packets this screen is not showing.
     // The consequence is intended: **while Freeze is on the bars stop updating
     // too.** That is requirement 4, not an oversight to be repaired later.
+    //
+    // `candidates` rides in the same frame for the same reason (final-review
+    // finding I-6): it is a plain parameter this composable is handed afresh on
+    // every snapshot, and holding the series without it would still let the red
+    // comparison line, and the selector's gap, sample count and verdict colour,
+    // drift underneath a frozen point cloud - exactly the "one picture" this
+    // type exists to keep whole. `selectedCandidate` below reads `frame.candidates`,
+    // never the bare `candidates` parameter, which is what makes that hold.
     //
     // Captured by `remember(freeze)` rather than by an effect, and that matters:
     // an effect runs *after* the composition that turned freeze on, leaving one
@@ -385,14 +417,12 @@ fun SignalGraphScreen(
                     checked = freeze,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { freeze = it },
-                    modifier = Modifier.weight(1f),
                 )
                 LabelledSwitch(
                     label = stringResource(R.string.graph_auto_scale),
                     checked = autoScale,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { autoScale = it },
-                    modifier = Modifier.weight(1f),
                 )
             }
 
@@ -402,24 +432,30 @@ fun SignalGraphScreen(
             // selection, and a lookup this file already treats as cheap
             // (MeshRelayNavHost's own linear scans) still has no reason to run
             // three times.
-            val selectedCandidate = candidates.firstOrNull { it.nodeNum == selected }
+            //
+            // Read from `frame.candidates`, never from the bare `candidates`
+            // parameter (final-review finding I-6) - see [GraphFrame]'s own
+            // KDoc for why the parameter alone cannot be trusted once Freeze
+            // is on.
+            val selectedCandidate = frame.candidates.firstOrNull { it.nodeNum == selected }
 
             // Spec section 7: "below this row, above the gauges", the selector
             // and Skip sharing one row (spec section 9's own "at the right
-            // from the selector"). Gated on `candidates.isNotEmpty()` here,
-            // explicitly, rather than leaning on CandidateSelector's own early
-            // return to carry the Skip button's visibility too - the Task 3
-            // reviewer flagged that risk by name: a Skip button declared
-            // *inside* that early return vanishes along with the dropdown
-            // whenever the list is empty, and that happens to be what this
-            // screen wants (a Neighbour and a relay byte nobody currently
-            // answers to both arrive here as the same empty list, and neither
-            // gets a Skip button - this composable cannot tell the two apart,
-            // so it cannot render them differently). Wanting the same outcome
-            // is not a reason to reach it by accident: deciding it here, once,
-            // keeps it correct even if CandidateSelector's own guard is ever
-            // rewritten for an unrelated reason.
-            if (candidates.isNotEmpty()) {
+            // from the selector"). Gated on `frame.candidates.isNotEmpty()`
+            // here, explicitly, rather than leaning on CandidateSelector's own
+            // early return to carry the Skip button's visibility too - the
+            // Task 3 reviewer flagged that risk by name: a Skip button
+            // declared *inside* that early return vanishes along with the
+            // dropdown whenever the list is empty, and that happens to be
+            // what this screen wants (a Neighbour and a relay byte nobody
+            // currently answers to both arrive here as the same empty list,
+            // and neither gets a Skip button - this composable cannot tell
+            // the two apart, so it cannot render them differently). Wanting
+            // the same outcome is not a reason to reach it by accident:
+            // deciding it here, once, keeps it correct even if
+            // CandidateSelector's own guard is ever rewritten for an
+            // unrelated reason.
+            if (frame.candidates.isNotEmpty()) {
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -428,7 +464,7 @@ fun SignalGraphScreen(
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
                     CandidateSelector(
-                        candidates = candidates,
+                        candidates = frame.candidates,
                         selected = selected,
                         onSelect = { selected = it },
                         modifier = Modifier.weight(1f),
@@ -439,6 +475,28 @@ fun SignalGraphScreen(
                             onSkipCandidate(nodeNum)
                             selected = null
                         },
+                    )
+                }
+
+                // Spec section 8's "the selector already says why" a candidate
+                // draws no line is only true while the dropdown is open
+                // (final-review finding I-4) - closed, the field shows only a
+                // name and a coloured dot, and the "not heard directly / Last
+                // DB SNR / hops away" text that explains a silent ROUTER, the
+                // spec's own likeliest-relay case, disappears with the menu.
+                // Repeating `CandidateSelector`'s own stats line here, one
+                // line, keeps that explanation on screen whenever a candidate
+                // is selected. Nothing renders for **None** - there is nothing
+                // to explain about comparing against nothing.
+                selectedCandidate?.let { candidate ->
+                    Text(
+                        text = candidateStatsLine(candidate, locale),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = ScreenPadding),
                     )
                 }
             }
@@ -627,7 +685,7 @@ private fun SkipCandidateButton(
                 onDismissRequest = { dialogVisible = false },
                 title = { Text(stringResource(R.string.action_skip_confirm_title)) },
                 text = {
-                    Text(stringResource(R.string.action_skip_confirm_body, candidateDisplayName(target)))
+                    Text(stringResource(R.string.action_skip_confirm_body, skipConfirmationName(target)))
                 },
                 confirmButton = {
                     TextButton(
@@ -649,14 +707,25 @@ private fun SkipCandidateButton(
     }
 }
 
-/** The short name if there is one, the node id otherwise - a copy of
- *  [CandidateSelector][com.cerocoder.meshrelay.ui.graph.CandidateSelector]'s own
- *  private `candidateDisplayName`, on the same terms this file's `displayLocale`
- *  is already a fourth copy of one shared elsewhere: the dialog above needs the
- *  same name the selector's dropdown just showed the owner, and a function this
- *  small is not worth widening either file's visibility for. */
-private fun candidateDisplayName(candidate: RelayCandidate): String =
-    candidate.shortName.ifEmpty { NodeId.format(candidate.nodeNum) }
+/**
+ * [candidate]'s short name and node id together, e.g. `"TOL1 (!a1b2c3d4)"` -
+ * or the id alone when there is no short name to disambiguate. This feature's
+ * whole reason to exist is that a relay byte's candidates are confusable, and
+ * a four-character short name is not unique (final-review finding I-7): this
+ * dialog used to name the node by short name alone, falling back to the id
+ * only when that name was blank - the one attribute an owner comparing two
+ * candidates is most likely to mix up.
+ *
+ * [NodeCard][com.cerocoder.meshrelay.ui.detail.NodeCard]'s own Skip dialog
+ * confirms the identical `SettingsRepository.addSkippedRelayNode` write and
+ * now names the node the same way, through its own private copy of this same
+ * shape - see that file's own version for why one shared function is not
+ * worth it here either.
+ */
+private fun skipConfirmationName(candidate: RelayCandidate): String {
+    val shortName = candidate.shortName.ifEmpty { null } ?: return NodeId.format(candidate.nodeNum)
+    return "$shortName (${NodeId.format(candidate.nodeNum)})"
+}
 
 /**
  * The horizontal rule, the timestamp above it, the two values below it and the
@@ -848,13 +917,19 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
     val avg = candidate?.directRssiAvg ?: return
     val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
 
-    // The app's one red (ui/theme/Color.kt), reused here as the fixed colour
-    // for a candidate's own signal - unconditionally, regardless of that
-    // candidate's own verdict. The verdict CandidateSelector colours its dot
-    // with is a judgement about this candidate; this line only says "this is
-    // where its signal sits", which is why it never changes colour with the
-    // verdict.
-    val lineColor = VerdictInconsistent
+    // This app's own [CandidateLine] (ui/theme/Color.kt) - not a reuse of
+    // VerdictInconsistent (final-review finding I-3), even though the two
+    // happen to share a numeric value today. That constant's own comment
+    // already warns against tying unrelated meanings to one colour by
+    // accident: this line is drawn unconditionally, regardless of the
+    // selected candidate's own verdict, while VerdictInconsistent is
+    // specifically the colour of one verdict among four. The verdict
+    // CandidateSelector colours its dot with is a judgement about this
+    // candidate; this line only says "this is where its signal sits", which
+    // is why it never changes colour with the verdict - and why retuning
+    // that verdict's red for dot legibility must not silently recolour this
+    // line too.
+    val lineColor = CandidateLine
     val markerSizePx = with(LocalDensity.current) { CandidateMarkerSize.toPx() }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -863,9 +938,28 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
         // exact integer pixel boundaries covers whole pixels only, with
         // nothing for the rasteriser to antialias.
         val x = floor(line.fraction * size.width)
+        // Centred on `x` the same way SignalChart.drawMetric centres a point
+        // on its own row (final-review finding M-1): `topLeft = x` alone drew
+        // the line's rect *beside* a point at the same value rather than
+        // through its middle, since a point there spans
+        // `[x - POINT_SIZE_PX / 2, x + POINT_SIZE_PX / 2)`.
+        //
+        // Clamped on the high side only. `x` itself already comes out of
+        // `candidateLine` coerced into `[0, size.width]`, so the half-width
+        // offset is the only thing that can push an edge outside the canvas,
+        // and it can only do that on the high side: at `x == size.width`
+        // (HIGH off-scale) an uncentred rect would start entirely past the
+        // canvas and vanish, so the far edge is pulled back to `size.width`
+        // exactly. At `x == 0f` (LOW off-scale) the near edge lands at `-2f`
+        // instead - a couple of physical pixels into this Box's own
+        // `ScreenPadding`, not off the screen - which draws the same way the
+        // uncentred rect already drew flush against `x == 0f` before this fix,
+        // so there is nothing new here for the low edge to clamp against.
+        val halfLineWidthPx = CANDIDATE_LINE_WIDTH_PX / 2f
+        val lineLeft = (x - halfLineWidthPx).coerceAtMost(size.width - CANDIDATE_LINE_WIDTH_PX)
         drawRect(
             color = lineColor,
-            topLeft = Offset(x, 0f),
+            topLeft = Offset(lineLeft, 0f),
             size = Size(CANDIDATE_LINE_WIDTH_PX, size.height),
         )
         if (line.offScale != ChartGeometry.OffScale.NONE) {
@@ -910,7 +1004,11 @@ private fun BoxScope.CandidateOffScaleLabel(candidate: RelayCandidate?, rssiRang
             R.string.graph_candidate_off_scale,
             stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale)),
         ),
-        color = VerdictInconsistent,
+        // CandidateLine, not VerdictInconsistent - see CandidateLineOverlay's
+        // own comment (final-review finding I-3): this label reads the value
+        // of the line it sits beside, not a verdict, and must stay in step
+        // with that line's colour rather than a verdict's.
+        color = CandidateLine,
         style = MaterialTheme.typography.labelSmall,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
@@ -1015,20 +1113,32 @@ private fun ChartScrollbar(
 
 /**
  * One switch and its label, the label on the left - requirement 20. The
- * caller right-aligns the pair; since the 2026-09-04 relay-candidate spec put
- * Freeze and Auto scale side by side in one row (that call site's own
- * comment explains why), each instance here gets roughly half the width it
- * had stacked, not the whole row.
+ * caller no longer passes a `modifier` (final-review finding I-5): each
+ * instance sizes to its own natural content - the label at its real
+ * single-line width plus the switch beside it - and the outer Row's own
+ * `Arrangement.spacedBy(ToggleRowSpacing, Alignment.End)` is what right-aligns
+ * the pair as a block, exactly as its own comment already claims.
  *
- * The label is weighted rather than left to its natural width, on the same
- * reasoning as before - `Escala automática` is seventeen characters against
- * `Auto scale`'s ten - but **single-line now, where it used to wrap.** Stacked
- * full-width, a wrap was the safe outcome the KDoc above used to describe.
- * Side by side at half the width, a wrap makes only the *taller* switch's
- * row grow, so the two switches - each vertically centred within its own
- * row - land at different heights instead of level with each other. Ellipsis
- * trades a very long translation being clipped for the two switches always
- * lining up, which at this width neither of today's two labels needs anyway.
+ * **A previous fix round gave each instance `Modifier.weight(1f)` instead**,
+ * splitting the row exactly in half regardless of what either label actually
+ * needed, and this file's own `Row` below chained a `.fillMaxWidth()` onto
+ * that - harmless under a weighted parent, but load-bearing: without the
+ * weight, two `fillMaxWidth()` siblings in a plain `Row` each claim the
+ * *whole* row (Compose gives every non-weighted child the same incoming max
+ * width), so removing the weight without also removing this `fillMaxWidth()`
+ * would have pushed the second switch off past the right edge rather than
+ * beside the first. `Escala automática` (seventeen characters) needs about
+ * 119 dp of `bodyMedium`; an even half of the shared row is roughly 104 dp -
+ * never measured before that round shipped - so `maxLines = 1` (added that
+ * same round to stop a wrap) silently turned the wrap into a **clip**
+ * instead, and a fixed 50/50 split left no free space for `Alignment.End` to
+ * act on, which is why Freeze floated mid-screen rather than sitting at the
+ * right edge.
+ *
+ * `maxLines = 1`/`Ellipsis` on the label stays in place regardless - not
+ * because either of today's two labels needs it at its own natural width, but
+ * as the guard against whatever a future, longer translation turns out to
+ * need.
  */
 @Composable
 private fun LabelledSwitch(
@@ -1039,7 +1149,7 @@ private fun LabelledSwitch(
     modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(SwitchLabelSpacing, Alignment.End),
         verticalAlignment = Alignment.CenterVertically,
     ) {

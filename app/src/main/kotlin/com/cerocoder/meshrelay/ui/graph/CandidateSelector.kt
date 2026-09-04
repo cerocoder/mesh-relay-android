@@ -26,6 +26,8 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -96,7 +98,7 @@ fun CandidateSelector(
             onValueChange = {},
             label = { Text(stringResource(R.string.graph_candidate_label)) },
             leadingIcon = if (selectedCandidate != null) {
-                { VerdictDot(color = verdictColor(selectedCandidate.verdict)) }
+                { VerdictDot(verdict = selectedCandidate.verdict) }
             } else {
                 null
             },
@@ -116,7 +118,7 @@ fun CandidateSelector(
             )
             candidates.forEach { candidate ->
                 DropdownMenuItem(
-                    leadingIcon = { VerdictDot(color = verdictColor(candidate.verdict)) },
+                    leadingIcon = { VerdictDot(verdict = candidate.verdict) },
                     text = { CandidateMenuItemText(candidate = candidate, locale = locale) },
                     onClick = {
                         onSelect(candidate.nodeNum)
@@ -135,7 +137,7 @@ private fun candidateDisplayName(candidate: RelayCandidate): String =
     candidate.shortName.ifEmpty { NodeId.format(candidate.nodeNum) }
 
 /**
- * The colour the coloured dot names in spec section 7. [CandidateVerdict.UNKNOWN]
+ * The colour [VerdictDot] names in spec section 7. [CandidateVerdict.UNKNOWN]
  * gets a neutral theme colour rather than a fourth verdict constant in
  * `ui/theme/Color.kt` - it is not a judgement about the signal at all, only an
  * absence of one to judge, and colouring it green/amber/red the way the other
@@ -149,10 +151,42 @@ private fun verdictColor(verdict: CandidateVerdict): Color = when (verdict) {
     CandidateVerdict.UNKNOWN -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
-/** The coloured dot itself - a filled circle, nothing more. */
+/**
+ * The words [VerdictDot] speaks for `TalkBack` in place of the colour it
+ * cannot see - final-review finding M-2. Named for the verdict, the same way
+ * [verdictColor] is, so the two stay in step by construction rather than by
+ * two `when`s someone has to remember to keep in sync.
+ */
 @Composable
-private fun VerdictDot(color: Color, modifier: Modifier = Modifier) {
-    Box(modifier = modifier.size(CandidateDotSize).background(color = color, shape = CircleShape))
+private fun verdictDescription(verdict: CandidateVerdict): String = stringResource(
+    when (verdict) {
+        CandidateVerdict.CONSISTENT -> R.string.graph_candidate_verdict_consistent
+        CandidateVerdict.UNCERTAIN -> R.string.graph_candidate_verdict_uncertain
+        CandidateVerdict.INCONSISTENT -> R.string.graph_candidate_verdict_inconsistent
+        CandidateVerdict.UNKNOWN -> R.string.graph_candidate_verdict_unknown
+    },
+)
+
+/**
+ * The coloured dot itself - a filled circle, nothing more, plus [verdict] as
+ * its `contentDescription` (final-review finding M-2). Colour is the only
+ * carrier of the verdict in the collapsed field - the stats line beside it in
+ * the open menu speaks the gap and sample count, never the verdict word
+ * itself - so without this a screen reader announced nothing at all here.
+ */
+@Composable
+private fun VerdictDot(verdict: CandidateVerdict, modifier: Modifier = Modifier) {
+    // Resolved here, in composable context, and only captured by the
+    // `semantics` lambda below - that lambda is a plain `SemanticsPropertyReceiver`
+    // block, not `@Composable`, so `stringResource` cannot be called from
+    // inside it directly.
+    val description = verdictDescription(verdict)
+    Box(
+        modifier = modifier
+            .size(CandidateDotSize)
+            .semantics { contentDescription = description }
+            .background(color = verdictColor(verdict), shape = CircleShape),
+    )
 }
 
 /**
@@ -206,9 +240,14 @@ private fun CandidateMenuItemText(candidate: RelayCandidate, locale: Locale) {
  * [CandidateVerdict.UNKNOWN]) still gets its own average and sample count
  * here - only the gap segment is dropped, since there is nothing dishonest
  * about "we heard this node, we just cannot compare it to the relay yet".
+ *
+ * `internal`, not `private`, so [SignalGraphScreen] can repeat the same line
+ * as a one-line caption under the closed selector (final-review finding I-4) -
+ * this text is the only explanation a never-heard candidate has, and it used
+ * to live only inside the open dropdown this function itself renders.
  */
 @Composable
-private fun candidateStatsLine(candidate: RelayCandidate, locale: Locale): String {
+internal fun candidateStatsLine(candidate: RelayCandidate, locale: Locale): String {
     val avg = candidate.directRssiAvg
     if (avg == null) {
         // graph_candidate_db_snr/graph_candidate_hops carry their own label

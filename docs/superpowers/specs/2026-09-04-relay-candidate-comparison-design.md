@@ -27,13 +27,20 @@ on a relayed packet measures the relay's own link to us — the same transmitter
 the same path as when we hear that node's own packets directly. If candidate A is the relay, its
 direct RSSI and the relay byte's RSSI are two measurements of one thing and must agree.
 
-Three confounders, all of which the design has to respect rather than hide:
+Four confounders, all of which the design has to respect rather than hide:
 
 1. **Time.** Conditions drift. A candidate heard this morning against a relay busy now is a
    weaker comparison than the numbers suggest.
 2. **Sample count.** An average of two packets is a poor estimate of a link — but see §4, this
    must not become a gate.
 3. **Movement.** A mobile node's direct RSSI is a distribution over positions, not a link.
+4. **Two candidates relaying at once.** `RelayStats` (`stats/model/RelayStats.kt`) keys by
+   `relayByte` alone, one byte wide, on the working assumption that one physical node answers to
+   it. When two nodes sharing a byte are *both* relaying during the same session, the relay's own
+   RSSI average blends two links and can match neither candidate's own direct average — every
+   candidate then reads `UNCERTAIN`/`INCONSISTENT` and the ranking actively misleads rather than
+   merely lacking evidence, the opposite of confounders 1–3, which only weaken a comparison. Added
+   by the final whole-branch review (finding I-8); see decision 55's cost and acceptance item N13.
 
 ## 3. What the app can and cannot know
 

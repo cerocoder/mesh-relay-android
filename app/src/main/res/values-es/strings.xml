@@ -183,6 +183,10 @@
     <string name="graph_candidate_db_snr">Último SNR de la DB: %1$s</string>
     <string name="graph_candidate_hops">Saltos de distancia: %1$d</string>
     <string name="graph_candidate_off_scale">%1$s (fuera de escala)</string>
+    <string name="graph_candidate_verdict_consistent">Coincide con la señal del repetidor</string>
+    <string name="graph_candidate_verdict_uncertain">Coincidencia incierta con la señal del repetidor</string>
+    <string name="graph_candidate_verdict_inconsistent">No coincide con la señal del repetidor</string>
+    <string name="graph_candidate_verdict_unknown">Aún sin comparar con la señal del repetidor</string>
 
     <!-- Node card -->
     <string name="section_node_information">INFORMACIÓN DEL NODO</string>
