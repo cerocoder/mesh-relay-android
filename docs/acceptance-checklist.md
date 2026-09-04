@@ -886,7 +886,7 @@ complaint this whole change answers — an overnight run whose header never move
 though the mesh kept talking — so a rising `Air(m)` beside a steady `DB(n)` is the proof it is
 fixed.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -918,7 +918,7 @@ both would be the same value off the same record.
 **Pass looks like:** every **DB Received** stamp on screen becomes the reload time. No **Air
 Received** stamp changes — a reload replaces the radio's database, not what nodes have broadcast.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -928,7 +928,7 @@ Received** stamp changes — a reload replaces the radio's database, not what no
 **Pass looks like:** node names survive, and the header's two counts — **DB(n)** and **Air(m)** —
 do not drop. Reset clears the session's measurements, not the mesh's identity.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -939,7 +939,7 @@ do not drop. Reset clears the session's measurements, not the mesh's identity.
 mesh, and no name from the previous node survives anywhere on screen — a different radio describes
 a different mesh, and carrying a stale name over would be worse than showing none.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -1027,7 +1027,7 @@ does not sit at 0 or flicker partway there. Real firmware replays everything for
 the count no longer rises incrementally the way it might have before the split. Several seconds of
 `DB(0)` followed by a jump straight to the true count is expected, not a bug.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
