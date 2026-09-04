@@ -961,7 +961,7 @@ a node heard only over the air is as valid a candidate as one the database lists
 This is C1's acceptance item: before the fix, the tab gated on the database store alone and hid a
 full card's worth of data for exactly the nodes most likely to have just broadcast.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
