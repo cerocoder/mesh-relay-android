@@ -175,6 +175,12 @@
     <string name="graph_open_map">Open this measurement on a map</string>
     <string name="graph_position_from_node">Open on a map — position from the node</string>
     <string name="graph_position_from_phone">Open on a map — position from the phone</string>
+    <string name="graph_candidate_label">Compare with</string>
+    <string name="graph_candidate_none">None</string>
+    <string name="graph_candidate_gap">Gap: %1$s dB</string>
+    <string name="graph_candidate_cannot_forward">Cannot forward (%1$s)</string>
+    <string name="graph_candidate_not_heard">Not heard directly this session</string>
+    <string name="graph_candidate_off_scale">%1$s (off-scale)</string>
 
     <!-- Node card -->
     <string name="section_node_information">NODE INFORMATION</string>
@@ -310,6 +316,10 @@
     <plurals name="plural_skipped_nodes">
         <item quantity="one">%d skipped node</item>
         <item quantity="other">%d skipped nodes</item>
+    </plurals>
+    <plurals name="graph_candidate_samples">
+        <item quantity="one">%d sample</item>
+        <item quantity="other">%d samples</item>
     </plurals>
 
     <!-- My node -->

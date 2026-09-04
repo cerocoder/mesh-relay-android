@@ -44,6 +44,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Path
+import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalDensity
@@ -58,6 +61,7 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SignalScales
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
+import com.cerocoder.meshrelay.stats.model.RelayCandidate
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.ui.common.LocalMapProvider
@@ -69,7 +73,9 @@ import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 import com.cerocoder.meshrelay.ui.theme.RssiTrack
 import com.cerocoder.meshrelay.ui.theme.SnrTrack
+import com.cerocoder.meshrelay.ui.theme.VerdictInconsistent
 import java.util.Locale
+import kotlin.math.floor
 import kotlin.math.roundToInt
 
 private val CrosshairStroke = 1.dp
@@ -80,6 +86,19 @@ private val ScreenPadding = 16.dp
 private val CrosshairLabelPadding = 8.dp
 private val LabelSpacing = 12.dp
 private val SwitchLabelSpacing = 8.dp
+
+/** Between the two [LabelledSwitch]es now that they share one row (spec
+ *  2026-09-04 section 7) rather than stacking - see the comment above that
+ *  row for why they no longer stack. */
+private val ToggleRowSpacing = 24.dp
+
+/** The selected candidate's own signal line - [CandidateLineOverlay]'s stroke
+ *  width, in physical pixels on the same terms [SignalChart]'s own drawing
+ *  constants are (Canvas units there are already physical pixels). */
+private const val CANDIDATE_LINE_STROKE_PX = 1f
+
+/** The off-scale triangle marker's side length, [CandidateLineOverlay] draws. */
+private val CandidateMarkerSize = 10.dp
 
 /**
  * The side length of one measurement's mark, in physical pixels - decision 45,
@@ -152,6 +171,7 @@ fun SignalGraphScreen(
     snrStats: SignalStats,
     gaugeMode: GaugeMode,
     lastPacketAtMillis: Long,
+    candidates: List<RelayCandidate>,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -159,6 +179,12 @@ fun SignalGraphScreen(
     // resume a chart the reader deliberately stopped.
     var freeze by rememberSaveable { mutableStateOf(false) }
     var autoScale by rememberSaveable { mutableStateOf(false) }
+
+    // Which candidate's own signal is drawn as a line, by node number - null
+    // is "None", the selector's own first entry. Survives a rotation for the
+    // same reason Freeze does: a rotation must not silently drop the reader
+    // back to comparing nothing.
+    var selected by rememberSaveable { mutableStateOf<Int?>(null) }
 
     var scrollPx by remember { mutableFloatStateOf(0f) }
     var viewportPx by remember { mutableFloatStateOf(0f) }
@@ -313,29 +339,50 @@ fun SignalGraphScreen(
                 .padding(innerPadding)
                 .fillMaxSize(),
         ) {
-            // Requirement 20: label left, switch right, stacked and right-aligned
-            // under the app bar. Disabled only in the fully empty state - no
-            // statistics and no measurements - where there is nothing to freeze
-            // and nothing to scale.
-            Column(
+            // Requirement 20 (the earlier Graph spec) asked for these two
+            // stacked, label left, switch right. The owner has since
+            // overridden that in the 2026-09-04 relay-candidate-comparison
+            // spec (section 7): Freeze and Auto scale now share one row, to
+            // buy the vertical space the candidate selector below needs. This
+            // comment used to cite requirement 20 for the stacked layout the
+            // code no longer has - updated so it does not mislead the next
+            // reader. Still right-aligned, and still disabled only in the
+            // fully empty state - no statistics and no measurements - where
+            // there is nothing to freeze and nothing to scale.
+            Row(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding),
-                horizontalAlignment = Alignment.End,
+                horizontalArrangement = Arrangement.spacedBy(ToggleRowSpacing, Alignment.End),
             ) {
                 LabelledSwitch(
                     label = stringResource(R.string.graph_freeze),
                     checked = freeze,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { freeze = it },
+                    modifier = Modifier.weight(1f),
                 )
                 LabelledSwitch(
                     label = stringResource(R.string.graph_auto_scale),
                     checked = autoScale,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { autoScale = it },
+                    modifier = Modifier.weight(1f),
                 )
             }
+
+            // Spec section 7: "below this row, above the gauges". Renders
+            // nothing itself when there are no candidates - absent for a
+            // Neighbour and for a relay byte nobody currently answers to,
+            // rather than an empty dropdown.
+            CandidateSelector(
+                candidates = candidates,
+                selected = selected,
+                onSelect = { selected = it },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = ScreenPadding),
+            )
 
             if (!frame.snrStats.hasData && !frame.rssiStats.hasData) {
                 // Spec section 8.8's empty state, exactly: the message once, the
@@ -396,6 +443,14 @@ fun SignalGraphScreen(
                         .padding(end = ScrollbarWidth)
                         .scrollable(state = wheelScroll, orientation = Orientation.Vertical),
                 ) {
+                    // Drawn first, so declaration order puts it behind
+                    // SignalChart's points - spec section 8's "never hides
+                    // data". Renders nothing when no candidate is selected or
+                    // the selected one has no direct RSSI average.
+                    CandidateLineOverlay(
+                        candidate = candidates.firstOrNull { it.nodeNum == selected },
+                        rssiRange = rssiRange,
+                    )
                     SignalChart(
                         series = shown,
                         scrollPx = effectiveScroll,
@@ -612,6 +667,101 @@ private fun BoxScope.Crosshair(
 }
 
 /**
+ * The selected candidate's own average RSSI, as a single vertical rule behind
+ * [SignalChart]'s points - the 2026-09-04 relay-candidate-comparison spec,
+ * section 8. A sibling inside the same [Box] [SignalChart] and [Crosshair]
+ * already share, drawn first purely by call order: Compose paints a [Box]'s
+ * children in the order they are declared, the same ordering this file
+ * already relies on to keep [Crosshair] drawn over the chart rather than
+ * under it - this overlay is declared before [SignalChart] for the same
+ * reason, so it lands underneath instead.
+ *
+ * [rssiRange] must be the same range [SignalChart] plots its points against -
+ * this function's own caller passes the `rssiRange` built by
+ * [ChartGeometry.scaleRange] further up this composable, never `snrRange`.
+ * That is what keeps this line following Auto scale together with the blue
+ * points instead of drifting off them the moment the two ranges diverge.
+ *
+ * **Off-scale is clamped, not dropped** - [ChartGeometry.candidateLine]'s own
+ * KDoc. When the candidate's average falls outside the plotted range the line
+ * still lands on the nearest edge, and a small triangle plus the value itself
+ * are drawn beside it, so an edge line is never mistaken for a value that
+ * genuinely sits there.
+ *
+ * Renders nothing when [candidate] is null (nothing selected) or has no
+ * direct RSSI average at all (never heard directly this session) - the
+ * selector already says why in either case.
+ */
+@Composable
+private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange: ScaleRange) {
+    val avg = candidate?.directRssiAvg ?: return
+    val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
+    val locale = displayLocale()
+
+    // The app's one red (ui/theme/Color.kt), reused here as the fixed colour
+    // for a candidate's own signal - unconditionally, regardless of that
+    // candidate's own verdict. The verdict CandidateSelector colours its dot
+    // with is a judgement about this candidate; this line only says "this is
+    // where its signal sits", which is why it never changes colour with the
+    // verdict.
+    val lineColor = VerdictInconsistent
+    val markerSizePx = with(LocalDensity.current) { CandidateMarkerSize.toPx() }
+
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val x = floor(line.fraction * size.width)
+        drawLine(
+            color = lineColor,
+            start = Offset(x, 0f),
+            end = Offset(x, size.height),
+            strokeWidth = CANDIDATE_LINE_STROKE_PX,
+        )
+        if (line.offScale != ChartGeometry.OffScale.NONE) {
+            drawCandidateOffScaleMarker(line.offScale, x, size.height / 2f, markerSizePx, lineColor)
+        }
+    }
+
+    if (line.offScale != ChartGeometry.OffScale.NONE) {
+        Text(
+            text = stringResource(
+                R.string.graph_candidate_off_scale,
+                stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale)),
+            ),
+            color = lineColor,
+            style = MaterialTheme.typography.labelSmall,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier
+                .align(if (line.offScale == ChartGeometry.OffScale.LOW) Alignment.CenterStart else Alignment.CenterEnd)
+                .padding(horizontal = CrosshairLabelPadding),
+        )
+    }
+}
+
+/**
+ * A small filled triangle at [x], apex against the edge and base pointing
+ * back into the plot - the "off-scale, and this is which way" marker
+ * [CandidateLineOverlay]'s own KDoc promises. Centred at [centerY] rather
+ * than anchored to the top of the plot, so it stays clear of the `Time` row
+ * above the chart regardless of scroll position.
+ */
+private fun DrawScope.drawCandidateOffScaleMarker(
+    offScale: ChartGeometry.OffScale,
+    x: Float,
+    centerY: Float,
+    sizePx: Float,
+    color: Color,
+) {
+    val baseX = if (offScale == ChartGeometry.OffScale.LOW) x + sizePx else x - sizePx
+    val path = Path().apply {
+        moveTo(x, centerY)
+        lineTo(baseX, centerY - sizePx / 2f)
+        lineTo(baseX, centerY + sizePx / 2f)
+        close()
+    }
+    drawPath(path, color = color)
+}
+
+/**
  * The chart's own scrollbar: a track, and a thumb as tall a share of it as the
  * viewport is of the whole series, sitting as far down it as the chart is
  * scrolled.
@@ -788,6 +938,7 @@ private fun SignalGraphPopulatedPreview() {
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
+            candidates = emptyList(),
             onBack = {},
         )
     }
@@ -808,6 +959,7 @@ private fun SignalGraphSingleMeasurementPreview() {
             snrStats = SampleData.graphSingleSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphSeriesSingle.atMillis(0),
+            candidates = emptyList(),
             onBack = {},
         )
     }
@@ -827,6 +979,7 @@ private fun SignalGraphEmptyPreview() {
             snrStats = SignalStats.EMPTY,
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = 0L,
+            candidates = emptyList(),
             onBack = {},
         )
     }
@@ -845,6 +998,7 @@ private fun SignalGraphAutoScalePreview() {
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.SIMPLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
+            candidates = emptyList(),
             onBack = {},
         )
     }
@@ -864,6 +1018,7 @@ private fun SignalGraphFrozenPreview() {
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
+            candidates = emptyList(),
             onBack = {},
         )
     }
@@ -881,6 +1036,7 @@ private fun SignalGraphDarkPreview() {
             snrStats = SampleData.graphSnrStats,
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
+            candidates = emptyList(),
             onBack = {},
         )
     }

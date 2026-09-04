@@ -60,6 +60,21 @@ object StatsFormat {
      *  `.avgHopsLeft`), not a [SignalStats] average. */
     private const val HOP_AVERAGE_PATTERN = "%.1f"
 
+    /** A relay candidate's own average direct RSSI
+     *  ([com.cerocoder.meshrelay.stats.model.RelayCandidate.directRssiAvg]) -
+     *  numerically [AVG_PATTERN], kept as its own named constant because,
+     *  unlike [signalAvg], it formats a bare `Float` rather than a live
+     *  [SignalStats]: `RelayCandidate` keeps only the derived average, not the
+     *  statistics object it was taken from. */
+    private const val CANDIDATE_RSSI_AVG_PATTERN = "%.1f"
+
+    /** The gap between a candidate's own average and the relay's
+     *  ([com.cerocoder.meshrelay.stats.model.RelayCandidate.gapDb]) -
+     *  numerically [AVG_PATTERN] as well, since it is a difference of two such
+     *  averages, but its own named constant for the same reason every other
+     *  "%.1f" figure in this file gets one: it formats a distinct quantity. */
+    private const val CANDIDATE_GAP_PATTERN = "%.1f"
+
     /**
      * One measurement's own SNR, as the Graph screen's crosshair prints it.
      *
@@ -334,4 +349,13 @@ object StatsFormat {
      * already uses for [signalTriple]/[signalLast].
      */
     fun remoteNodeHopAverage(value: Float, locale: Locale): String = String.format(locale, HOP_AVERAGE_PATTERN, value)
+
+    /** See [CANDIDATE_RSSI_AVG_PATTERN]. No `hasData` guard and no nullable
+     *  return, on the same terms as [sampleRssi]/[sampleSnr]: the caller
+     *  already knows [com.cerocoder.meshrelay.stats.model.RelayCandidate.directRssiAvg]
+     *  is non-null before it calls this. */
+    fun candidateRssiAvg(value: Float, locale: Locale): String = String.format(locale, CANDIDATE_RSSI_AVG_PATTERN, value)
+
+    /** See [CANDIDATE_GAP_PATTERN]. */
+    fun candidateGapDb(value: Float, locale: Locale): String = String.format(locale, CANDIDATE_GAP_PATTERN, value)
 }

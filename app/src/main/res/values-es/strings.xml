@@ -175,6 +175,12 @@
     <string name="graph_open_map">Abrir esta medición en un mapa</string>
     <string name="graph_position_from_node">Abrir en un mapa: posición del nodo</string>
     <string name="graph_position_from_phone">Abrir en un mapa: posición del teléfono</string>
+    <string name="graph_candidate_label">Comparar con</string>
+    <string name="graph_candidate_none">Ninguno</string>
+    <string name="graph_candidate_gap">Diferencia: %1$s dB</string>
+    <string name="graph_candidate_cannot_forward">No puede reenviar (%1$s)</string>
+    <string name="graph_candidate_not_heard">No se ha escuchado directamente en esta sesión</string>
+    <string name="graph_candidate_off_scale">%1$s (fuera de escala)</string>
 
     <!-- Node card -->
     <string name="section_node_information">INFORMACIÓN DEL NODO</string>
@@ -310,6 +316,10 @@
     <plurals name="plural_skipped_nodes">
         <item quantity="one">%d nodo descartado</item>
         <item quantity="other">%d nodos descartados</item>
+    </plurals>
+    <plurals name="graph_candidate_samples">
+        <item quantity="one">%d muestra</item>
+        <item quantity="other">%d muestras</item>
     </plurals>
 
     <!-- My node -->

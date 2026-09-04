@@ -23,6 +23,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -40,10 +41,13 @@ import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
 import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.SeriesKey
+import com.cerocoder.meshrelay.stats.model.CandidateSource
 import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
+import com.cerocoder.meshrelay.stats.model.RelayCandidates
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.SignalSeries
+import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.detail.candidateRecord
@@ -448,6 +452,31 @@ private fun GraphDestination(
         is DetailSubject.Relay -> {
             val relay = snapshot.relays.find { it.relayByte == subject.relayByte }
                 ?: RelayStats(relayByte = subject.relayByte)
+            // The relay-candidate-comparison spec's ranking, gathered from the
+            // snapshot: every node the relay byte could be, judged against the
+            // relay's own average - 2026-09-04-relay-candidate-comparison-design.md
+            // section 6. `snapshot.neighbours` is a `List<NeighbourStats>`, not a
+            // map keyed by node number - the Neighbour branch just below (and
+            // `DetailScreen`'s own header resolution) already look it up the
+            // same way, by a linear `find`, so this is the real shape of the
+            // data rather than a shortcut around a lookup that exists.
+            val candidates = remember(snapshot, relay.relayByte, relay.rssi) {
+                RelayCandidates.rank(
+                    relayRssiAvg = relay.rssi.avg.takeIf { relay.rssi.hasData },
+                    sources = snapshot.directory.matchingNodeNums(relay.relayByte).map { nodeNum ->
+                        val identity = snapshot.directory.identity(nodeNum)
+                        CandidateSource(
+                            nodeNum = nodeNum,
+                            shortName = identity.shortName ?: "",
+                            role = identity.role,
+                            directRssi = snapshot.neighbours.find { it.nodeNum == nodeNum }?.rssi
+                                ?: SignalStats.EMPTY,
+                            dbSnr = snapshot.directory.node(nodeNum)?.dbSnr,
+                            hopsAway = snapshot.directory.node(nodeNum)?.hopsAway,
+                        )
+                    },
+                )
+            }
             SignalGraphScreen(
                 title = stringResource(R.string.graph_title_relay, relay.hexId),
                 // A name beside an ambiguous byte would present a guess as a fact -
@@ -458,6 +487,7 @@ private fun GraphDestination(
                 snrStats = relay.snr,
                 gaugeMode = gaugeMode,
                 lastPacketAtMillis = relay.lastPacketAtMillis,
+                candidates = candidates,
                 onBack = onBack,
                 modifier = modifier,
             )
@@ -474,6 +504,9 @@ private fun GraphDestination(
                 snrStats = neighbour.snr,
                 gaugeMode = gaugeMode,
                 lastPacketAtMillis = neighbour.lastPacketAtMillis,
+                // Spec section 7: a neighbour has no relay byte, so the control
+                // is absent for it, not merely empty of a selection.
+                candidates = emptyList(),
                 onBack = onBack,
                 modifier = modifier,
             )
