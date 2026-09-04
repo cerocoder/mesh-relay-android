@@ -1032,12 +1032,106 @@ the count no longer rises incrementally the way it might have before the split. 
 
 ---
 
+## Group N — Relay-candidate comparison and Skip (2026-09-04)
+
+Nothing in this group has ever been run. CI proves `RelayCandidates.rank` and the off-scale
+clamping compile and pass their unit tests; the selector, the line and the Skip flow have no
+Compose test harness in this project and go here instead, per the design's own §11.
+
+### N1. The selector lists ranked candidates with a colour, average RSSI and sample count
+**Do:** Open the Graph for a relay byte with several matching candidates. Tap the selector.
+**Pass looks like:** every candidate is listed, grouped in ranked order (CONSISTENT, UNCERTAIN,
+UNKNOWN, INCONSISTENT, each group ascending by gap), each row showing a coloured dot for its
+verdict, its own average direct RSSI and its sample count.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N2. The red line follows Auto scale with the points, not off them
+**Do:** Select a candidate whose average direct RSSI falls inside the plotted range. Toggle **Auto
+scale** on, then off.
+**Pass looks like:** a red vertical line appears behind the blue points at that candidate's own
+average. Toggling Auto scale moves the line together with the point cloud it is being compared
+against - it never drifts to a position the points themselves have moved away from.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N3. Off-scale is clamped with a marker and its value, never silently absent
+**Do:** Select a candidate whose average direct RSSI falls outside the current plotted range (the
+`CandidateLineLowOffScalePreview` / `CandidateLineHighOffScalePreview` previews show the shape if
+none is available live).
+**Pass looks like:** the line still appears, clamped to the near edge, with a small triangle marker
+and the candidate's actual value printed beside it - not simply missing. **This is the item that
+proves Task 2 was worth its own task:** without the clamp-and-label, a far off-scale candidate would
+sit unmarked on the edge and look like an ordinary in-range value, showing nothing exactly when the
+evidence is strongest.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N4. A candidate never heard directly draws no line and says so
+**Do:** Select a candidate the selector already shows as not heard directly this session (its row
+names that and shows database SNR / hops away instead of a gap).
+**Pass looks like:** no line is drawn at all. The selector row is the explanation on its own -
+"not heard directly", plus whatever database SNR and hop count it has - rather than a line
+fabricated from nothing.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N5. Skip is disabled on None, and reversible from Settings once confirmed
+**Do:** With the selector reading **None**, note the Skip button. Select a candidate and press
+Skip; read the confirmation dialog, then confirm it. Open Settings' skipped-nodes list afterward.
+**Pass looks like:** Skip is disabled while the selection is **None**, enabled the moment a
+candidate is chosen. The dialog names the candidate and says the action is reversible. Confirming
+removes that candidate from the selector's list immediately and the selection returns to **None**;
+Settings then lists the node among skipped nodes with a way to remove it, which restores it as a
+candidate again.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N6. A neighbour's Graph has no selector and no Skip
+**Do:** Open the Graph for a neighbour, not a relay.
+**Pass looks like:** neither the candidate selector nor the Skip button appears anywhere on screen -
+a neighbour has no relay byte, so there is nothing for either control to act on.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### N7. Freeze and Auto scale share one row and still work, including together disabled
+**Do:** On a relay showing live data, confirm Freeze and Auto scale sit side by side on one row and
+toggle each independently. Then find (or arrange) a relay with no statistics and no measurements
+retained at all.
+**Pass looks like:** both switches sit on a single right-aligned row, each still doing its own job
+(Freeze holds the whole drawing; Auto scale moves both the bars and the plot together). In the
+fully empty state, both switches go disabled together - there is nothing to freeze and nothing to
+scale.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 78
+- **Total items run:** _____ / 85
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT

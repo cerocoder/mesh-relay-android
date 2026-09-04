@@ -488,6 +488,12 @@ private fun GraphDestination(
                 gaugeMode = gaugeMode,
                 lastPacketAtMillis = relay.lastPacketAtMillis,
                 candidates = candidates,
+                // Spec section 9: the same skip action the Matching nodes tab
+                // already offers for this relay byte (DetailDestination's own
+                // onSkipNode above), reached from a second screen. One node,
+                // one skip list either screen writes to; `container.skipRelayNode`
+                // is that one write path, not a second one for this screen.
+                onSkipCandidate = { nodeNum -> container.skipRelayNode(nodeNum) },
                 onBack = onBack,
                 modifier = modifier,
             )
@@ -507,6 +513,11 @@ private fun GraphDestination(
                 // Spec section 7: a neighbour has no relay byte, so the control
                 // is absent for it, not merely empty of a selection.
                 candidates = emptyList(),
+                // Never called: an empty candidates list keeps the whole
+                // selector-and-Skip row from rendering at all (see
+                // SignalGraphScreen's own comment on that guard), so there is
+                // never a Skip button here to press.
+                onSkipCandidate = {},
                 onBack = onBack,
                 modifier = modifier,
             )

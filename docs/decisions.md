@@ -745,3 +745,55 @@ Ruling: an explicit, narrow exception to decision 51 - `NodeDirectorySnapshot.id
   is not itself replaced by a reload that drops the key. That is the accepted cost, weighed against the
   alternative of a security-relevant field reading "No" for a node the application already knows has a
   key.
+
+### 55
+
+Ruling: the relay-candidate comparison (`RelayCandidates.rank`, spec
+  `2026-09-04-relay-candidate-comparison-design.md` §2) is valid, not a heuristic, because a relayed
+  packet reaches this device over the air from the relay itself - `rx_rssi` on a relayed packet
+  measures the relay's own link to us, the same transmitter, the same antenna, the same path as when
+  that node's own packets are heard directly. If a candidate is in fact the relay, its direct RSSI
+  average and the relay byte's own RSSI average are two measurements of one link and must agree; the
+  comparison is physics, not correlation.
+  Cost if wrong: the two averages would not describe one link at all, and every verdict the selector
+  colours - CONSISTENT, UNCERTAIN, INCONSISTENT alike - would be comparing unrelated numbers and
+  calling the coincidence a match.
+
+### 56
+
+Ruling: the verdict (`RelayCandidates.verdictFor`) judges the gap between the two averages alone,
+  with **no minimum sample-count gate** - the owner's own correction, overriding an earlier draft
+  that would have required some floor of direct packets before trusting a gap. A router's job is
+  forwarding, not talking: a silent ROUTER can relay constantly while sending its own NodeInfo once
+  in three hours, so a sample-count gate would leave the mesh's likeliest candidate permanently
+  unjudged and reward a chatty CLIENT that relays nothing instead. Physics does not need the count -
+  nothing but distance explains a 40 dB gap, even measured from a single packet.
+  Cost if wrong: a verdict formed from one packet - a candidate heard directly exactly once can rank
+  CONSISTENT or INCONSISTENT on that one reading alone, with nothing on screen distinguishing a
+  one-packet verdict from a hundred-packet one except reading `directPacketCount` for it directly.
+
+### 57
+
+Ruling: `CandidateVerdict.UNKNOWN` (no direct packets this session, or the relay itself has no RSSI
+  average yet) ranks **ahead of** `INCONSISTENT`, not merely ahead of nothing - the same correction
+  as decision 56. An earlier draft of the design treated "never heard directly" as a strong
+  exclusion, and that was wrong: a silent ROUTER in range may simply not have broadcast during a
+  short session, so absence of evidence outranks evidence of absence.
+  Cost if wrong: a node we have never heard is offered before one measured far away - a candidate
+  this session has already measured and ruled out with real data would be offered ahead of one it
+  has said nothing about at all, which is the wrong way round for a router whose job is forwarding
+  rather than talking.
+
+### 58
+
+Ruling: `RelayCandidate.cannotForward` is set for exactly one role, `CLIENT_MUTE`, cited from
+  `FloodingRouter::isRebroadcaster()`, `firmware/src/mesh/FloodingRouter.cpp:129-133` - verified
+  against this workspace's own firmware clone rather than recollection, after an earlier design
+  draft named `CLIENT_HIDDEN` instead and the firmware said otherwise. That same function also
+  gates forwarding on `rebroadcast_mode != NONE`, but `rebroadcast_mode` is local device
+  configuration that never travels in `NodeInfo` - it is invisible to this application, so a node
+  configured never to rebroadcast still looks like any other candidate and still appears in the
+  list with `cannotForward == false`.
+  Cost if wrong: nothing is acted on automatically - the app only ranks and colours, never
+  auto-skips - so a wrong `cannotForward` mark misleads the owner's own judgement rather than hiding
+  a candidate outright.

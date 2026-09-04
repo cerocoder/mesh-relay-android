@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.wrapContentSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -28,6 +29,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -59,6 +61,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
+import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.SignalScales
 import com.cerocoder.meshrelay.stats.model.CandidateVerdict
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
@@ -87,6 +90,10 @@ private val ScreenPadding = 16.dp
 private val CrosshairLabelPadding = 8.dp
 private val LabelSpacing = 12.dp
 private val SwitchLabelSpacing = 8.dp
+
+/** Between [CandidateSelector] and the Skip button beside it - spec section 9,
+ *  "at the right from the selector". */
+private val SelectorRowSpacing = 8.dp
 
 /** Between the two [LabelledSwitch]es now that they share one row (spec
  *  2026-09-04 section 7) rather than stacking - see the comment above that
@@ -171,6 +178,12 @@ private data class GraphFrame(
  * A `Modifier.scrollable` stays on the plot all the same, so a mouse wheel or a
  * hardware scroll still moves the chart - it simply never sees a touch drag the
  * crosshair has already taken.
+ *
+ * **Skip (spec section 9).** [onSkipCandidate] is called with a node number only
+ * after the owner confirms [SkipCandidateButton]'s dialog, never from the button
+ * press itself - the same discipline [StatsTopBar][com.cerocoder.meshrelay.ui.common.StatsTopBar]
+ * already holds for Reset and Exit. This screen resets its own selection to
+ * `null` on confirmation; the caller's job ends at recording the skip.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -183,6 +196,7 @@ fun SignalGraphScreen(
     gaugeMode: GaugeMode,
     lastPacketAtMillis: Long,
     candidates: List<RelayCandidate>,
+    onSkipCandidate: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -382,18 +396,52 @@ fun SignalGraphScreen(
                 )
             }
 
-            // Spec section 7: "below this row, above the gauges". Renders
-            // nothing itself when there are no candidates - absent for a
-            // Neighbour and for a relay byte nobody currently answers to,
-            // rather than an empty dropdown.
-            CandidateSelector(
-                candidates = candidates,
-                selected = selected,
-                onSelect = { selected = it },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = ScreenPadding),
-            )
+            // Read once, ahead of everything below that needs it: the Skip
+            // button just below and the two overlays further down
+            // (CandidateLineOverlay, CandidateOffScaleLabel) all read the same
+            // selection, and a lookup this file already treats as cheap
+            // (MeshRelayNavHost's own linear scans) still has no reason to run
+            // three times.
+            val selectedCandidate = candidates.firstOrNull { it.nodeNum == selected }
+
+            // Spec section 7: "below this row, above the gauges", the selector
+            // and Skip sharing one row (spec section 9's own "at the right
+            // from the selector"). Gated on `candidates.isNotEmpty()` here,
+            // explicitly, rather than leaning on CandidateSelector's own early
+            // return to carry the Skip button's visibility too - the Task 3
+            // reviewer flagged that risk by name: a Skip button declared
+            // *inside* that early return vanishes along with the dropdown
+            // whenever the list is empty, and that happens to be what this
+            // screen wants (a Neighbour and a relay byte nobody currently
+            // answers to both arrive here as the same empty list, and neither
+            // gets a Skip button - this composable cannot tell the two apart,
+            // so it cannot render them differently). Wanting the same outcome
+            // is not a reason to reach it by accident: deciding it here, once,
+            // keeps it correct even if CandidateSelector's own guard is ever
+            // rewritten for an unrelated reason.
+            if (candidates.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = ScreenPadding),
+                    horizontalArrangement = Arrangement.spacedBy(SelectorRowSpacing),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CandidateSelector(
+                        candidates = candidates,
+                        selected = selected,
+                        onSelect = { selected = it },
+                        modifier = Modifier.weight(1f),
+                    )
+                    SkipCandidateButton(
+                        candidate = selectedCandidate,
+                        onConfirmSkip = { nodeNum ->
+                            onSkipCandidate(nodeNum)
+                            selected = null
+                        },
+                    )
+                }
+            }
 
             if (!frame.snrStats.hasData && !frame.rssiStats.hasData) {
                 // Spec section 8.8's empty state, exactly: the message once, the
@@ -454,12 +502,9 @@ fun SignalGraphScreen(
                         .padding(end = ScrollbarWidth)
                         .scrollable(state = wheelScroll, orientation = Orientation.Vertical),
                 ) {
-                    // Looked up once, not per overlay: both read the same
-                    // selection, and a lookup this file already treats as
-                    // cheap (MeshRelayNavHost's own linear scans) still has
-                    // no reason to run twice.
-                    val selectedCandidate = candidates.firstOrNull { it.nodeNum == selected }
-
+                    // selectedCandidate is looked up once, above, alongside the
+                    // Skip button - see that lookup's own comment.
+                    //
                     // Drawn first, so declaration order puts it behind
                     // SignalChart's points - spec section 8's "never hides
                     // data". Renders nothing when no candidate is selected or
@@ -535,6 +580,83 @@ fun SignalGraphScreen(
         }
     }
 }
+
+/**
+ * Rules a candidate out - spec section 9. Enabled only while [candidate] is
+ * non-null, exactly "enabled unless None is selected": the caller passes the
+ * selection looked up against `null` for None, so there is nothing else this
+ * function needs to know about the selector's state.
+ *
+ * The confirmation dialog is the same shape
+ * [StatsTopBar][com.cerocoder.meshrelay.ui.common.StatsTopBar] already uses for Reset and
+ * Exit - an [AlertDialog] with a confirm [TextButton] and a Cancel
+ * [TextButton] - rather than a second shape for this screen to invent. It
+ * reuses that family's own existing strings, not new ones:
+ * `action_skip_node`/`action_skip_confirm_title`/`action_skip_confirm_body`
+ * already name a node and already say the action is reversible ("stays in the
+ * node database and can be restored from Settings") - [NodeCard][com.cerocoder.meshrelay.ui.detail.NodeCard]'s
+ * own Skip button on the Matching nodes tab confirms the very same
+ * `SettingsRepository.addSkippedRelayNode` action this button does, so the
+ * two screens sharing one set of strings is the honest description of what is
+ * happening, not a coincidence to route around.
+ *
+ * [onConfirmSkip] fires only after that confirmation, carrying the node
+ * number to skip - never from the button press itself, on the same discipline
+ * `onReset`/`onExit` already hold in `StatsTopBar`.
+ */
+@Composable
+private fun SkipCandidateButton(
+    candidate: RelayCandidate?,
+    onConfirmSkip: (Int) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var dialogVisible by remember { mutableStateOf(false) }
+
+    TextButton(onClick = { dialogVisible = true }, enabled = candidate != null, modifier = modifier) {
+        Text(stringResource(R.string.action_skip_node))
+    }
+
+    // candidate?.let, not an outer `candidate != null` check: the dialog's
+    // buttons are lambdas AlertDialog stores and invokes later, and `target`
+    // below is a fresh, statically non-null binding those lambdas close over -
+    // the same shape NodeCard's own onSkip?.let already uses for the identical
+    // reason.
+    if (dialogVisible) {
+        candidate?.let { target ->
+            AlertDialog(
+                onDismissRequest = { dialogVisible = false },
+                title = { Text(stringResource(R.string.action_skip_confirm_title)) },
+                text = {
+                    Text(stringResource(R.string.action_skip_confirm_body, candidateDisplayName(target)))
+                },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            dialogVisible = false
+                            onConfirmSkip(target.nodeNum)
+                        },
+                    ) {
+                        Text(stringResource(R.string.action_skip_node))
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { dialogVisible = false }) {
+                        Text(stringResource(R.string.common_cancel))
+                    }
+                },
+            )
+        }
+    }
+}
+
+/** The short name if there is one, the node id otherwise - a copy of
+ *  [CandidateSelector][com.cerocoder.meshrelay.ui.graph.CandidateSelector]'s own
+ *  private `candidateDisplayName`, on the same terms this file's `displayLocale`
+ *  is already a fourth copy of one shared elsewhere: the dialog above needs the
+ *  same name the selector's dropdown just showed the owner, and a function this
+ *  small is not worth widening either file's visibility for. */
+private fun candidateDisplayName(candidate: RelayCandidate): String =
+    candidate.shortName.ifEmpty { NodeId.format(candidate.nodeNum) }
 
 /**
  * The horizontal rule, the timestamp above it, the two values below it and the
@@ -1010,6 +1132,7 @@ private fun SignalGraphPopulatedPreview() {
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
@@ -1031,6 +1154,7 @@ private fun SignalGraphSingleMeasurementPreview() {
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphSeriesSingle.atMillis(0),
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
@@ -1051,6 +1175,7 @@ private fun SignalGraphEmptyPreview() {
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = 0L,
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
@@ -1070,6 +1195,7 @@ private fun SignalGraphAutoScalePreview() {
             gaugeMode = GaugeMode.SIMPLE,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
@@ -1090,6 +1216,7 @@ private fun SignalGraphFrozenPreview() {
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
@@ -1108,6 +1235,7 @@ private fun SignalGraphDarkPreview() {
             gaugeMode = GaugeMode.COMPLEX,
             lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
             candidates = emptyList(),
+            onSkipCandidate = {},
             onBack = {},
         )
     }
