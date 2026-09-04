@@ -503,9 +503,19 @@ each candidate as: coloured dot, short name, average direct RSSI, sample count, 
 with `cannotForward` gets a second line naming the role; one with a null `gapDb` shows its `dbSnr`
 and `hopsAway` instead of a gap.
 
-Colours come from the theme, not from literals: consistent uses the same green the SNR gauge uses,
-inconsistent the same red as the flash, uncertain the amber already defined for the gauges. Find
-them in the theme rather than introducing a fourth palette.
+**The theme has no verdict colours today** — `ui/theme/Color.kt` holds five, and they are
+track/marker pairs for the gauges (`SnrTrack`, `SnrMarker`, `RssiTrack`, `RssiMarker`,
+`FlashMarker`). There is no red at all. So add three named ones to that file, beside the others:
+
+```kotlin
+val VerdictConsistent = Color(0xFF81C784)    // the SNR marker's green, already this app's "good"
+val VerdictUncertain = Color(0xFFFFC107)     // the same amber FlashMarker uses
+val VerdictInconsistent = Color(0xFFE57373)  // new: a red muted to match the others' weight
+```
+
+Name them for the verdict, not for the colour, so a later palette change does not have to hunt for
+call sites. Do **not** reuse `FlashMarker` by that name — the packet flash and an uncertain verdict
+mean unrelated things, and a shared constant would tie them together by accident.
 
 Selection lives in the screen as `var selected by rememberSaveable { mutableStateOf<Int?>(null) }`
 — it must survive a rotation, for the same reason Freeze does.
@@ -519,6 +529,8 @@ In the chart `Canvas`, **before** the point loop so the line sits behind the dat
 ```kotlin
 val candidate = candidates.firstOrNull { it.nodeNum == selected }
 candidate?.directRssiAvg?.let { avg ->
+    // rssiRange is the val at SignalGraphScreen.kt:270, a ScaleRange(min, max) -
+    // the same range the blue points use, so the line follows Auto scale with them.
     val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
     val x = floor(line.fraction * widthPx)
     drawLine(

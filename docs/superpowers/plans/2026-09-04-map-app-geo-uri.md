@@ -107,18 +107,16 @@ fun `a geo uri is formatted under Locale ROOT even in Spain`() {
     try {
         Locale.setDefault(Locale.forLanguageTag("es-ES"))
         val uri = MapLinks.geoUri(40.305734, -3.732541, "1ce5")
-        assertFalse("a decimal comma reached the URI: $uri", uri.contains(","))
-        assertTrue(uri.startsWith("geo:40.3057340,-3.7325410?"))
+        // Not `!uri.contains(",")` - the URI legitimately separates latitude from
+        // longitude with a comma. The bug is a comma inside a *number*, so assert
+        // on the shape of the numbers themselves.
+        val numbers = Regex("-?\\d+\\.\\d{7}").findAll(uri).map { it.value }.toList()
+        assertEquals(listOf("40.3057340", "-3.7325410", "40.3057340", "-3.7325410"), numbers)
     } finally {
         Locale.setDefault(previous)
     }
 }
 ```
-
-The second test's `assertFalse(uri.contains(","))` is wrong as written — the URI legitimately
-contains commas between latitude and longitude. Assert on the *decimal separator* instead: split
-off the coordinate pairs and check each number matches `-?\d+\.\d{7}`. Write it that way; the
-sketch above is deliberately shown broken so the point is not missed.
 
 ```kotlin
 @Test
@@ -135,10 +133,27 @@ fun `a label is encoded, because parentheses are structural here`() {
 }
 ```
 
-`Uri.encode` is `android.net.Uri`, which a JVM unit test cannot call. Either use `java.net.URLEncoder`
-with its space handling corrected, or hand-roll the small escape for `(`, `)` and `%`. Decide, and
-say in the KDoc which and why — a unit-testable pure function is worth more here than the platform
-helper.
+**Do not use `Uri.encode`.** It is `android.net.Uri`, which returns -1 or throws under a plain JVM
+unit test, so the whole function would become untestable here — and this file's value is that it is
+pure. `java.net.URLEncoder` is also wrong: it encodes a space as `+`, which is form encoding, not
+URI encoding.
+
+Hand-roll the escape instead. Only three characters need it, and `%` must be first or it would
+double-escape the others:
+
+```kotlin
+/**
+ * The three characters that are structural inside `q=...(label)`. Hand-rolled
+ * rather than `Uri.encode`, which is `android.net.Uri` and unavailable to a JVM
+ * unit test, and rather than `URLEncoder`, which encodes a space as `+` - form
+ * encoding, not URI encoding. `%` is replaced first, or it would escape the
+ * escapes that follow it.
+ */
+private fun encodeLabel(label: String): String = label
+    .replace("%", "%25")
+    .replace("(", "%28")
+    .replace(")", "%29")
+```
 
 - [ ] **Step 2: Run them and watch them fail** — "unresolved reference: geoUri".
 
