@@ -495,7 +495,8 @@ comparison line and the selector row's own gap and verdict while frozen.
 scales, and, with a candidate selected, not the red line or the selector's gap/verdict either.
 Switching off redraws complete, including everything collected while it was held.
 
-- [x] Ran on: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Previously: 2026-09-02, SM-S721B / Android 16 (API 36), build 436cb16
   Notes: PASS for the plot/bars/scales, held before the candidate-comparison feature existed on this
   branch. Held at count 79 for 12 s while the engine collected; unfreeze jumped to 87, redrawn
   complete. Confirms the bars are held too (ruling 36). The candidate-line/selector clause above is

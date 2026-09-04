@@ -489,11 +489,16 @@ fun SignalGraphScreen(
                 // is selected. Nothing renders for **None** - there is nothing
                 // to explain about comparing against nothing.
                 selectedCandidate?.let { candidate ->
+                    // Deliberately uncapped, for the reason CandidateSelector's own
+                    // stats line records two hundred lines away: at one line the
+                    // Spanish never-heard string - "No se ha escuchado directamente
+                    // en esta sesion" plus the DB SNR plus the hop count, about 630 dp
+                    // of labelSmall - ellipsises away exactly the session-independent
+                    // evidence this caption exists to show. Capping it here would
+                    // reintroduce a defect this feature has already fixed once.
                     Text(
                         text = candidateStatsLine(candidate, locale),
                         style = MaterialTheme.typography.labelSmall,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
                         modifier = Modifier
                             .fillMaxWidth()
                             .padding(horizontal = ScreenPadding),
@@ -1228,6 +1233,48 @@ private fun displayLocale(): Locale {
 // still lay out beside the plot, which is exactly the thing that does not depend
 // on the state behind them.
 // ----------------------------------------------------------------------------
+
+@Preview(showBackground = true, name = "Candidate never heard directly", locale = "es")
+@Composable
+private fun SignalGraphNeverHeardCandidatePreview() {
+    // The one case the caption under the selector exists for, in the locale that
+    // breaks it: a silent ROUTER, which spec section 4 calls the likeliest relay of
+    // all, has no direct packets to compare, so no line is drawn and the caption
+    // carries the session-independent evidence instead.
+    //
+    // Seeded because none of the other previews passes a candidate at all, and the
+    // demo scenario cannot produce one that was heard directly (ruling C-1) - so
+    // without this, the selector's collapsed state has no coverage anywhere short of
+    // the radio. A one-line cap on that caption shipped and was caught in review;
+    // this preview is what would have shown it for free.
+    MeshRelayTheme {
+        SignalGraphScreen(
+            title = stringResource(R.string.graph_title_relay, "0x2a"),
+            subtitle = "",
+            series = SampleData.graphSeries,
+            rssiStats = SampleData.graphRssiStats,
+            snrStats = SampleData.graphSnrStats,
+            gaugeMode = GaugeMode.COMPLEX,
+            lastPacketAtMillis = SampleData.graphLastPacketAtMillis,
+            candidates = listOf(
+                RelayCandidate(
+                    nodeNum = SampleData.NUM_GETAFE_ROUTER,
+                    shortName = "gt2a",
+                    role = "ROUTER",
+                    directRssiAvg = null,
+                    directPacketCount = 0,
+                    gapDb = null,
+                    verdict = CandidateVerdict.UNKNOWN,
+                    dbSnr = -12.5f,
+                    hopsAway = 3,
+                    cannotForward = false,
+                ),
+            ),
+            onSkipCandidate = {},
+            onBack = {},
+        )
+    }
+}
 
 @Preview(showBackground = true, name = "Populated")
 @Composable
