@@ -22,6 +22,7 @@ object MapLinks {
     private const val GOOGLE_MAPS_TEMPLATE = "https://maps.google.com/?q=%s,%s"
     private const val OPEN_STREET_MAP_TEMPLATE = "https://www.openstreetmap.org/?mlat=%s&mlon=%s&zoom=15"
     private const val MESHVIEW_NODE_TEMPLATE = "%s/node/%d"
+    private const val GEO_TEMPLATE = "geo:%.7f,%.7f?q=%.7f,%.7f(%s)"
 
     fun googleMaps(lat: Double, lon: Double): String =
         String.format(Locale.ROOT, GOOGLE_MAPS_TEMPLATE, lat, lon)
@@ -75,6 +76,34 @@ object MapLinks {
         val unsignedNodeNum = nodeNum.toLong() and 0xFFFF_FFFFL
         return String.format(Locale.ROOT, MESHVIEW_NODE_TEMPLATE, withScheme, unsignedNodeNum)
     }
+
+    /**
+     * A coordinate for whatever map application the device has, with a named pin.
+     *
+     * The coordinate appears twice deliberately: an application that ignores `q=`
+     * still centres on the bare `geo:` part, and one that honours it drops a pin
+     * labelled with the node's name rather than an anonymous dot.
+     *
+     * `%.7f` is the protobuf's own resolution - `Position.latitude_i` is degrees
+     * scaled by 1e7 - so this neither invents precision the mesh never carried nor
+     * discards any it did. [Locale.ROOT] for the reason recorded on every other
+     * builder in this file: a Spanish locale emits `40,3057`, which is not a
+     * coordinate, and the map opens somewhere else rather than failing.
+     */
+    fun geoUri(lat: Double, lon: Double, label: String): String =
+        String.format(Locale.ROOT, GEO_TEMPLATE, lat, lon, lat, lon, encodeLabel(label))
+
+    /**
+     * The three characters that are structural inside `q=...(label)`. Hand-rolled
+     * rather than `Uri.encode`, which is `android.net.Uri` and unavailable to a JVM
+     * unit test, and rather than `URLEncoder`, which encodes a space as `+` - form
+     * encoding, not URI encoding. `%` is replaced first, or it would escape the
+     * escapes that follow it.
+     */
+    private fun encodeLabel(label: String): String = label
+        .replace("%", "%25")
+        .replace("(", "%28")
+        .replace(")", "%29")
 
     // A scheme plus "://" at the very start, e.g. "https://", "http://" - deliberately
     // narrow rather than a full URI-scheme grammar, since the only two values this

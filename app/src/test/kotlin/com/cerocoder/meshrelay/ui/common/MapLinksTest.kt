@@ -2,7 +2,9 @@ package com.cerocoder.meshrelay.ui.common
 
 import com.cerocoder.meshrelay.settings.MapProvider
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
+import java.util.Locale
 
 class MapLinksTest {
 
@@ -129,5 +131,48 @@ class MapLinksTest {
             "https://meshview.meshtastic.es/node/1588414911",
             MapLinks.meshview("https://meshview.meshtastic.es", nodeNum = 0x5EAD49BF),
         )
+    }
+
+    @Test
+    fun `a geo uri carries the coordinate twice and a labelled pin`() {
+        // Twice on purpose: an app that ignores q= still centres on the bare geo:
+        // part, and one that honours it drops a named pin.
+        assertEquals(
+            "geo:40.3057340,-3.7325410?q=40.3057340,-3.7325410(1ce5)",
+            MapLinks.geoUri(40.305734, -3.732541, "1ce5"),
+        )
+    }
+
+    @Test
+    fun `a geo uri is formatted under Locale ROOT even in Spain`() {
+        // This mesh is in Spain and the app ships a Spanish locale, so this is the
+        // locale that would have shipped the bug: %f emits "40,3057" under es-ES,
+        // which is not a coordinate - and the map opens somewhere else rather than
+        // failing, which is why only a test catches it.
+        val previous = Locale.getDefault()
+        try {
+            Locale.setDefault(Locale.forLanguageTag("es-ES"))
+            val uri = MapLinks.geoUri(40.305734, -3.732541, "1ce5")
+            // Not `!uri.contains(",")` - the URI legitimately separates latitude from
+            // longitude with a comma. The bug is a comma inside a *number*, so assert
+            // on the shape of the numbers themselves.
+            val numbers = Regex("-?\\d+\\.\\d{7}").findAll(uri).map { it.value }.toList()
+            assertEquals(listOf("40.3057340", "-3.7325410", "40.3057340", "-3.7325410"), numbers)
+        } finally {
+            Locale.setDefault(previous)
+        }
+    }
+
+    @Test
+    fun `seven decimal places, the protobufs own resolution`() {
+        // 1e-7 degrees is exactly Position.latitude_i's scale, so the format neither
+        // invents precision the mesh never carried nor discards any it did.
+        assertEquals("geo:0.0000001,0.0000000?q=0.0000001,0.0000000(x)", MapLinks.geoUri(1e-7, 0.0, "x"))
+    }
+
+    @Test
+    fun `a label is encoded, because parentheses are structural here`() {
+        val uri = MapLinks.geoUri(40.0, -3.0, "a(b)c")
+        assertTrue(uri.endsWith("(a%28b%29c)"))
     }
 }
