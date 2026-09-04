@@ -180,6 +180,8 @@
     <string name="graph_candidate_gap">Gap: %1$s dB</string>
     <string name="graph_candidate_cannot_forward">Cannot forward (%1$s)</string>
     <string name="graph_candidate_not_heard">Not heard directly this session</string>
+    <string name="graph_candidate_db_snr">Last DB SNR: %1$s</string>
+    <string name="graph_candidate_hops">Hops away: %1$d</string>
     <string name="graph_candidate_off_scale">%1$s (off-scale)</string>
 
     <!-- Node card -->

@@ -60,6 +60,7 @@ import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SignalScales
+import com.cerocoder.meshrelay.stats.model.CandidateVerdict
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayCandidate
 import com.cerocoder.meshrelay.stats.model.SignalSeries
@@ -92,10 +93,20 @@ private val SwitchLabelSpacing = 8.dp
  *  row for why they no longer stack. */
 private val ToggleRowSpacing = 24.dp
 
-/** The selected candidate's own signal line - [CandidateLineOverlay]'s stroke
- *  width, in physical pixels on the same terms [SignalChart]'s own drawing
- *  constants are (Canvas units there are already physical pixels). */
-private const val CANDIDATE_LINE_STROKE_PX = 1f
+/**
+ * The selected candidate's own signal line - [CandidateLineOverlay]'s width,
+ * in physical pixels on the same terms [SignalChart]'s own drawing constants
+ * are (Canvas units there are already physical pixels).
+ *
+ * Drawn as a `drawRect` one physical pixel wide, not a `drawLine` with this
+ * as its `strokeWidth`: a stroked line of an odd width centres on the
+ * coordinate, covering `[x-0.5, x+0.5]` and antialiasing both edges - a soft
+ * two-column smear beside this file's deliberately crisp, non-antialiased
+ * 4 px point squares (decision 45, [POINT_SIZE_PX]). A rect whose `topLeft`
+ * is the same floored integer `x` the points themselves floor covers exactly
+ * one pixel column, no antialiasing needed.
+ */
+private const val CANDIDATE_LINE_WIDTH_PX = 1f
 
 /** The off-scale triangle marker's side length, [CandidateLineOverlay] draws. */
 private val CandidateMarkerSize = 10.dp
@@ -443,12 +454,18 @@ fun SignalGraphScreen(
                         .padding(end = ScrollbarWidth)
                         .scrollable(state = wheelScroll, orientation = Orientation.Vertical),
                 ) {
+                    // Looked up once, not per overlay: both read the same
+                    // selection, and a lookup this file already treats as
+                    // cheap (MeshRelayNavHost's own linear scans) still has
+                    // no reason to run twice.
+                    val selectedCandidate = candidates.firstOrNull { it.nodeNum == selected }
+
                     // Drawn first, so declaration order puts it behind
                     // SignalChart's points - spec section 8's "never hides
                     // data". Renders nothing when no candidate is selected or
                     // the selected one has no direct RSSI average.
                     CandidateLineOverlay(
-                        candidate = candidates.firstOrNull { it.nodeNum == selected },
+                        candidate = selectedCandidate,
                         rssiRange = rssiRange,
                     )
                     SignalChart(
@@ -464,6 +481,16 @@ fun SignalGraphScreen(
                         onCrosshairAt = { crosshairY = it },
                         onCrosshairCleared = { crosshairY = null },
                         modifier = Modifier.fillMaxSize(),
+                    )
+                    // Declared after SignalChart, unlike the line above -
+                    // this is an annotation the reader must read, not a
+                    // background the points draw over. Declaration order is
+                    // paint order in this Box (CandidateLineOverlay's own
+                    // KDoc), so painting it here puts it over the point
+                    // cloud instead of under it.
+                    CandidateOffScaleLabel(
+                        candidate = selectedCandidate,
+                        rssiRange = rssiRange,
                     )
                     crosshairY?.let { touchY ->
                         Crosshair(
@@ -684,9 +711,11 @@ private fun BoxScope.Crosshair(
  *
  * **Off-scale is clamped, not dropped** - [ChartGeometry.candidateLine]'s own
  * KDoc. When the candidate's average falls outside the plotted range the line
- * still lands on the nearest edge, and a small triangle plus the value itself
- * are drawn beside it, so an edge line is never mistaken for a value that
- * genuinely sits there.
+ * still lands on the nearest edge, and a small triangle marks which one.
+ * [CandidateOffScaleLabel] is the value itself, deliberately a *separate*
+ * overlay declared after [SignalChart] rather than folded in here: this
+ * function draws behind the points on purpose, and the value has to be read,
+ * not buried under them.
  *
  * Renders nothing when [candidate] is null (nothing selected) or has no
  * direct RSSI average at all (never heard directly this session) - the
@@ -696,7 +725,6 @@ private fun BoxScope.Crosshair(
 private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange: ScaleRange) {
     val avg = candidate?.directRssiAvg ?: return
     val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
-    val locale = displayLocale()
 
     // The app's one red (ui/theme/Color.kt), reused here as the fixed colour
     // for a candidate's own signal - unconditionally, regardless of that
@@ -708,33 +736,66 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
     val markerSizePx = with(LocalDensity.current) { CandidateMarkerSize.toPx() }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
+        // floor()'d before anything else touches it, the same discipline
+        // decision 45 documents for POINT_SIZE_PX: a rect whose edges sit on
+        // exact integer pixel boundaries covers whole pixels only, with
+        // nothing for the rasteriser to antialias.
         val x = floor(line.fraction * size.width)
-        drawLine(
+        drawRect(
             color = lineColor,
-            start = Offset(x, 0f),
-            end = Offset(x, size.height),
-            strokeWidth = CANDIDATE_LINE_STROKE_PX,
+            topLeft = Offset(x, 0f),
+            size = Size(CANDIDATE_LINE_WIDTH_PX, size.height),
         )
         if (line.offScale != ChartGeometry.OffScale.NONE) {
             drawCandidateOffScaleMarker(line.offScale, x, size.height / 2f, markerSizePx, lineColor)
         }
     }
+}
 
-    if (line.offScale != ChartGeometry.OffScale.NONE) {
-        Text(
-            text = stringResource(
-                R.string.graph_candidate_off_scale,
-                stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale)),
-            ),
-            color = lineColor,
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-            modifier = Modifier
-                .align(if (line.offScale == ChartGeometry.OffScale.LOW) Alignment.CenterStart else Alignment.CenterEnd)
-                .padding(horizontal = CrosshairLabelPadding),
-        )
-    }
+/**
+ * The selected candidate's off-scale value, labelled beside the edge
+ * [CandidateLineOverlay] pinned its line to - spec section 8's "an arrow and
+ * its value", the reason [ChartGeometry.OffScale] exists at all (Task 2).
+ *
+ * **A second overlay, not folded into [CandidateLineOverlay], and declared
+ * after [SignalChart] rather than before it.** That function draws behind
+ * the points on purpose, so the line never hides a measurement; this is the
+ * opposite case, an annotation the reader has to read, and behind the points
+ * is exactly where a value drawn at the vertical centre of a fully-populated
+ * plot would be unreadable - a stipple of 4 px squares through every glyph.
+ * Paint order is declaration order in this [Box] ([CandidateLineOverlay]'s
+ * own KDoc), so this being declared after [SignalChart] is what puts it above
+ * the point cloud instead of under it.
+ *
+ * Padded past [CandidateMarkerSize] as well as [CrosshairLabelPadding]: the
+ * triangle [CandidateLineOverlay] draws at this same edge already occupies
+ * the first [CandidateMarkerSize] of horizontal space, and starting the
+ * label's own padding there alone would print its first glyph over the
+ * triangle's base.
+ *
+ * Renders nothing under every condition [CandidateLineOverlay] does, plus
+ * one: the value is inside the plotted range, so there is no edge to label.
+ */
+@Composable
+private fun BoxScope.CandidateOffScaleLabel(candidate: RelayCandidate?, rssiRange: ScaleRange) {
+    val avg = candidate?.directRssiAvg ?: return
+    val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
+    if (line.offScale == ChartGeometry.OffScale.NONE) return
+    val locale = displayLocale()
+
+    Text(
+        text = stringResource(
+            R.string.graph_candidate_off_scale,
+            stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale)),
+        ),
+        color = VerdictInconsistent,
+        style = MaterialTheme.typography.labelSmall,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = Modifier
+            .align(if (line.offScale == ChartGeometry.OffScale.LOW) Alignment.CenterStart else Alignment.CenterEnd)
+            .padding(horizontal = CandidateMarkerSize + CrosshairLabelPadding),
+    )
 }
 
 /**
@@ -831,13 +892,21 @@ private fun ChartScrollbar(
 }
 
 /**
- * One switch and its label, the label on the left - requirement 20. The parent
- * stack is what right-aligns it.
+ * One switch and its label, the label on the left - requirement 20. The
+ * caller right-aligns the pair; since the 2026-09-04 relay-candidate spec put
+ * Freeze and Auto scale side by side in one row (that call site's own
+ * comment explains why), each instance here gets roughly half the width it
+ * had stacked, not the whole row.
  *
- * The label is weighted rather than left to its natural width so that a long
- * translation wraps instead of pushing the switch off the right edge: `Escala
- * automática` is seventeen characters against `Auto scale`'s ten, and this is the
- * first place in the screen a layout defect would show.
+ * The label is weighted rather than left to its natural width, on the same
+ * reasoning as before - `Escala automática` is seventeen characters against
+ * `Auto scale`'s ten - but **single-line now, where it used to wrap.** Stacked
+ * full-width, a wrap was the safe outcome the KDoc above used to describe.
+ * Side by side at half the width, a wrap makes only the *taller* switch's
+ * row grow, so the two switches - each vertically centred within its own
+ * row - land at different heights instead of level with each other. Ellipsis
+ * trades a very long translation being clipped for the two switches always
+ * lining up, which at this width neither of today's two labels needs anyway.
  */
 @Composable
 private fun LabelledSwitch(
@@ -855,6 +924,8 @@ private fun LabelledSwitch(
         Text(
             text = label,
             style = MaterialTheme.typography.bodyMedium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f, fill = false),
         )
         Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
@@ -1039,5 +1110,69 @@ private fun SignalGraphDarkPreview() {
             candidates = emptyList(),
             onBack = {},
         )
+    }
+}
+
+/**
+ * [CandidateLineOverlay] and [CandidateOffScaleLabel], exercised directly
+ * rather than through [SignalGraphScreen] - `selected` is `rememberSaveable`
+ * state the screen owns and never exposes, the same reason the block comment
+ * above these previews gives for why `freeze`/`autoScale` cannot be seeded
+ * from the outside either. Both overlays take a candidate as a plain
+ * parameter, though, so the drawing itself - the only genuinely new drawing
+ * this task adds - can be previewed without going through that state at all.
+ *
+ * Each candidate's `directRssiAvg` sits outside [SignalScales.RSSI_MIN]`..`
+ * [SignalScales.RSSI_MAX] on purpose: with Auto scale off (every preview in
+ * this file renders that way) the plot uses that fixed range, and a value
+ * inside it would report [ChartGeometry.OffScale.NONE] and exercise neither
+ * the triangle marker nor the label - the two fixes (M3-M5) this preview
+ * exists to catch before the phone does.
+ */
+@Preview(showBackground = true, name = "Candidate line, low off-scale")
+@Composable
+private fun CandidateLineLowOffScalePreview() {
+    val candidate = RelayCandidate(
+        nodeNum = 0x1a2b3c05,
+        shortName = "OFS1",
+        role = "ROUTER",
+        directRssiAvg = SignalScales.RSSI_MIN - 20f,
+        directPacketCount = 7,
+        gapDb = null,
+        verdict = CandidateVerdict.UNKNOWN,
+        dbSnr = null,
+        hopsAway = null,
+        cannotForward = false,
+    )
+    val rssiRange = ScaleRange(SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
+    MeshRelayTheme {
+        Box(modifier = Modifier.size(320.dp, 200.dp)) {
+            CandidateLineOverlay(candidate = candidate, rssiRange = rssiRange)
+            CandidateOffScaleLabel(candidate = candidate, rssiRange = rssiRange)
+        }
+    }
+}
+
+@Preview(showBackground = true, name = "Candidate line, high off-scale")
+@Composable
+private fun CandidateLineHighOffScalePreview() {
+    val candidate = RelayCandidate(
+        nodeNum = 0x1a2b3c06,
+        shortName = "OFS2",
+        role = "ROUTER",
+        directRssiAvg = SignalScales.RSSI_MAX + 15f,
+        directPacketCount = 3,
+        gapDb = null,
+        verdict = CandidateVerdict.UNKNOWN,
+        dbSnr = null,
+        hopsAway = null,
+        cannotForward = false,
+    )
+    val rssiRange = ScaleRange(SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
+    MeshRelayTheme {
+        Box(modifier = Modifier.size(320.dp, 200.dp)) {
+            CandidateLineOverlay(candidate = candidate, rssiRange = rssiRange)
+            CandidateOffScaleLabel(candidate = candidate, rssiRange = rssiRange)
+        }
     }
 }

@@ -180,6 +180,8 @@
     <string name="graph_candidate_gap">Diferencia: %1$s dB</string>
     <string name="graph_candidate_cannot_forward">No puede reenviar (%1$s)</string>
     <string name="graph_candidate_not_heard">No se ha escuchado directamente en esta sesión</string>
+    <string name="graph_candidate_db_snr">Último SNR de la DB: %1$s</string>
+    <string name="graph_candidate_hops">Saltos de distancia: %1$d</string>
     <string name="graph_candidate_off_scale">%1$s (fuera de escala)</string>
 
     <!-- Node card -->

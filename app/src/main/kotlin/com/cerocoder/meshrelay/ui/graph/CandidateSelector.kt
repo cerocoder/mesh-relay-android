@@ -174,11 +174,16 @@ private fun CandidateMenuItemText(candidate: RelayCandidate, locale: Locale) {
                 )
             }
         }
+        // Deliberately no `maxLines`/`overflow`, unlike the shortName Text
+        // above: this is the corroboration line spec section 7 exists to
+        // show for a candidate never heard directly - a silent ROUTER, the
+        // spec's own "likeliest relay of all" case. `ExposedDropdownMenu`
+        // cannot exceed its anchor's width, so a one-line cap ellipsised the
+        // DB SNR and hop count away entirely in Spanish; wrapping to as many
+        // lines as the content needs is what keeps them on screen.
         Text(
             text = candidateStatsLine(candidate, locale),
             style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
         )
         if (candidate.cannotForward) {
             Text(
@@ -206,12 +211,24 @@ private fun CandidateMenuItemText(candidate: RelayCandidate, locale: Locale) {
 private fun candidateStatsLine(candidate: RelayCandidate, locale: Locale): String {
     val avg = candidate.directRssiAvg
     if (avg == null) {
+        // graph_candidate_db_snr/graph_candidate_hops carry their own label
+        // and separator, on the same terms format_snr_db and graph_time do -
+        // composing "label" + ": " + value in Kotlin was a literal, visible
+        // punctuation mark this project's strings all live in a resource,
+        // and hopsAway went through plain string interpolation rather than
+        // StatsFormat, which is un-localised for a locale that ever spells
+        // digits differently. stringResource's own vararg formatting already
+        // threads the device locale through a %1$d placeholder, so no new
+        // StatsFormat helper is needed for the count itself.
         val snrPart = candidate.dbSnr?.let {
-            "${stringResource(R.string.node_last_snr_db)}: ${stringResource(R.string.format_snr_db, StatsFormat.nodeDatabaseSnr(it, locale))}"
+            stringResource(
+                R.string.graph_candidate_db_snr,
+                stringResource(R.string.format_snr_db, StatsFormat.nodeDatabaseSnr(it, locale)),
+            )
         }
-        val hopsPart = candidate.hopsAway?.let { "${stringResource(R.string.node_hops_away)}: $it" }
+        val hopsPart = candidate.hopsAway?.let { stringResource(R.string.graph_candidate_hops, it) }
         return listOfNotNull(stringResource(R.string.graph_candidate_not_heard), snrPart, hopsPart)
-            .joinToString(" · ")
+            .joinToString(STATS_LINE_SEPARATOR)
     }
 
     val avgPart = stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale))
@@ -223,8 +240,17 @@ private fun candidateStatsLine(candidate: RelayCandidate, locale: Locale): Strin
     val gapPart = candidate.gapDb?.let {
         stringResource(R.string.graph_candidate_gap, StatsFormat.candidateGapDb(it, locale))
     }
-    return listOfNotNull(avgPart, samplesPart, gapPart).joinToString(" · ")
+    return listOfNotNull(avgPart, samplesPart, gapPart).joinToString(STATS_LINE_SEPARATOR)
 }
+
+/**
+ * Structural glue between this line's segments, not translatable prose - the
+ * same treatment [StatsFormat]'s own `TRIPLE_SEPARATOR` and `candidateIndex`
+ * get (see either's KDoc): pure punctuation carries no word order for a
+ * translator to get right, so a resource for it would gain both locale files
+ * an entry neither translation would ever change.
+ */
+private const val STATS_LINE_SEPARATOR = " · "
 
 /** The configured display locale. A copy of the same private helper
  *  [SignalGraphScreen] and others already carry - see that file's own copy
