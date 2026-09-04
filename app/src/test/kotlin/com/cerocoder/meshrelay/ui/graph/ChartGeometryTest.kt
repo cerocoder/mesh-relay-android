@@ -363,9 +363,11 @@ class ChartGeometryTest {
 
     @Test
     fun `a degenerate range is not off-scale in either direction`() {
-        // SignalScales.fraction returns 0f when the span is not positive; the line
-        // must not then claim the value was off-scale.
-        val line = ChartGeometry.candidateLine(value = -71f, min = -71f, max = -71f)
-        assertEquals(ChartGeometry.OffScale.NONE, line.offScale)
+        // The value must sit far from the collapsed range, or this test passes with
+        // the guard deleted: at value == min == max both comparisons fail anyway and
+        // the else branch returns NONE on its own. With 100f against a range collapsed
+        // at -71f, only the `max - min <= 0f` guard can keep this out of HIGH.
+        assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(100f, -71f, -71f).offScale)
+        assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(-1000f, -71f, -71f).offScale)
     }
 }
