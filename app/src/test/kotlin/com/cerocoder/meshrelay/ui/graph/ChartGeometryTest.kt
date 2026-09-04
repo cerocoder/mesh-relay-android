@@ -329,4 +329,43 @@ class ChartGeometryTest {
         assertEquals(0f, ChartGeometry.overlayTopPx(0f, 20f, 60f, viewportPx = 0f), 0.0001f)
         assertEquals(0f, ChartGeometry.overlayTopPx(30f, 20f, 900f, viewportPx = 800f), 0.0001f)
     }
+
+    @Test
+    fun `a value inside the range is not off-scale`() {
+        val line = ChartGeometry.candidateLine(value = -71f, min = -120f, max = -40f)
+        assertEquals(ChartGeometry.OffScale.NONE, line.offScale)
+        assertEquals(0.6125f, line.fraction, 1e-4f)
+    }
+
+    @Test
+    fun `a value below the range is reported low and pinned to the left edge`() {
+        // xOf alone cannot express this: SignalScales.fraction ends in coerceIn(0,1),
+        // so an off-scale value returns the same 0f a genuine minimum does. Drawing
+        // that with nothing to mark it would hide the most decisive answer this
+        // screen can give.
+        val line = ChartGeometry.candidateLine(value = -140f, min = -120f, max = -40f)
+        assertEquals(ChartGeometry.OffScale.LOW, line.offScale)
+        assertEquals(0f, line.fraction, 1e-6f)
+    }
+
+    @Test
+    fun `a value above the range is reported high and pinned to the right edge`() {
+        val line = ChartGeometry.candidateLine(value = -20f, min = -120f, max = -40f)
+        assertEquals(ChartGeometry.OffScale.HIGH, line.offScale)
+        assertEquals(1f, line.fraction, 1e-6f)
+    }
+
+    @Test
+    fun `a value exactly on an edge is in range, not off-scale`() {
+        assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(-120f, -120f, -40f).offScale)
+        assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(-40f, -120f, -40f).offScale)
+    }
+
+    @Test
+    fun `a degenerate range is not off-scale in either direction`() {
+        // SignalScales.fraction returns 0f when the span is not positive; the line
+        // must not then claim the value was off-scale.
+        val line = ChartGeometry.candidateLine(value = -71f, min = -71f, max = -71f)
+        assertEquals(ChartGeometry.OffScale.NONE, line.offScale)
+    }
 }

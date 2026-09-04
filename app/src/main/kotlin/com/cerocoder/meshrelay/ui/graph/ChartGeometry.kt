@@ -205,6 +205,12 @@ object ChartGeometry {
     fun rowAtClamped(y: Float, scrollPx: Float, pxPerSample: Float, size: Int): Int =
         if (size <= 0) 0 else rowAt(y, scrollPx, pxPerSample).coerceIn(0, size - 1)
 
+    /** Which side of the plotted range a value fell outside, if any. */
+    enum class OffScale { NONE, LOW, HIGH }
+
+    /** Where a candidate's line is drawn, and whether the value fits on screen. */
+    data class CandidateLine(val fraction: Float, val offScale: OffScale)
+
     /**
      * Where a value sits along the track, as a fraction in `0f..1f`.
      *
@@ -212,6 +218,32 @@ object ChartGeometry {
      * the bars above it cannot drift apart.
      */
     fun xOf(value: Float, min: Float, max: Float): Float = SignalScales.fraction(value, min, max)
+
+    /**
+     * The candidate line's horizontal position.
+     *
+     * [xOf] cannot answer this on its own. It delegates to
+     * [com.cerocoder.meshrelay.stats.SignalScales.fraction], which ends in
+     * `coerceIn(0f, 1f)`, so a value far below the range returns exactly the `0f`
+     * a genuine minimum returns. Drawn that way the line would sit on the edge
+     * with nothing saying it does not belong there - and "far off-scale" is the
+     * most decisive verdict this screen can offer, so hiding it is the one outcome
+     * worth designing against.
+     *
+     * A range with no span reports [OffScale.NONE]: `fraction` gives up and
+     * returns `0f` there, and claiming the value was off-scale would be inventing
+     * information the empty range does not carry.
+     */
+    fun candidateLine(value: Float, min: Float, max: Float): CandidateLine {
+        val fraction = xOf(value, min, max)
+        val offScale = when {
+            max - min <= 0f -> OffScale.NONE
+            value < min -> OffScale.LOW
+            value > max -> OffScale.HIGH
+            else -> OffScale.NONE
+        }
+        return CandidateLine(fraction = fraction, offScale = offScale)
+    }
 
     /**
      * The horizontal range for one metric.
