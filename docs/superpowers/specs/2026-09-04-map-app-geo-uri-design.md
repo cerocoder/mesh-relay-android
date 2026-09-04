@@ -84,9 +84,10 @@ returns the system resolver rather than an application, and naming one would be 
 
 ## 6. Where it fires
 
-Three call sites, all through one helper: the position line on the node panel, the same line on
-the neighbour list, and the Graph crosshair's globe. The helper tries the `geo:` URI, catches, and
-falls back to `MapLinks.forProvider(...)`.
+**Two** code sites, through one helper: `PositionLine.kt:128`, which the node panel and the
+neighbour list both use, and `SignalGraphScreen.kt:577`, the Graph crosshair's globe. Three places
+on screen, two places in the source — the difference matters when the work is estimated. The
+helper tries the `geo:` URI, catches, and falls back to `MapLinks.forProvider(...)`.
 
 The Meshview link is untouched. It is a website about a node, not a coordinate.
 

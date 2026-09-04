@@ -99,9 +99,27 @@ data class RelayCandidate(
 
 ## 6. The rule
 
+`RelayCandidate` carries `gapDb` and `verdict`, which are **results**, so they cannot also be
+inputs. The raw ingredients go in separately:
+
 ```kotlin
-fun rank(relayRssiAvg: Float?, candidates: List<RelayCandidate>): List<RelayCandidate>
+/** What the caller can gather about one candidate, before any judgement. */
+data class CandidateSource(
+    val nodeNum: Int,
+    val shortName: String,
+    val role: String?,
+    /** This node's direct reception this session; EMPTY when never heard. */
+    val directRssi: SignalStats,
+    val dbSnr: Float?,
+    val hopsAway: Int?,
+)
+
+fun rank(relayRssiAvg: Float?, sources: List<CandidateSource>): List<RelayCandidate>
 ```
+
+`rank` computes `gapDb`, `verdict` and `cannotForward` for each source and returns them sorted.
+Taking `SignalStats` rather than a bare average is deliberate: `hasData` is what distinguishes
+"never heard directly" from "heard, and the average happens to be zero".
 
 | Verdict | Condition | Why this number |
 | :--- | :--- | :--- |
