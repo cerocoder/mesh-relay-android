@@ -896,7 +896,7 @@ fixed.
 **Pass looks like:** the card is divided into headed sections; **NODE INFORMATION** ends with
 **Air Received** and a recent time, rather than an unlabelled stamp or none at all.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -908,7 +908,7 @@ NODEINFO_APP packet this session.
 section further down does **not** repeat that same stamp — the duplicate is suppressed because
 both would be the same value off the same record.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -950,7 +950,7 @@ radio's own database.
 **Pass looks like:** its short name is still shown. Relay naming scans the union of both stores, so
 a node heard only over the air is as valid a candidate as one the database lists.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -988,7 +988,7 @@ for it to broadcast a NODEINFO_APP that carries no `public_key` of its own.
 still says the node has a key, and I1's exception means `hasPublicKey` consults both stores rather
 than the newest broadcast alone.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
@@ -1001,7 +1001,7 @@ Check the name specifically: I4 is a recorded way a name can silently disappear 
 stores whose newest broadcast happened to omit `short_name`), so a count staying steady is not
 proof the name held too.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
+- [x] Ran on: 2026-09-04, hardware   Result: PASS (owner)
   Notes: ________________________________________________________________________________
 
 ---
