@@ -137,7 +137,9 @@ then by node number so the order cannot change between recompositions. `UNKNOWN`
 
 ## 7. The selector
 
-Below **Auto scale**, above the gauges. A dropdown whose first entry is **None** and whose
+Refactor, put both "Freeze" and "Auto scale" into one row. 
+
+The selector is below this row, above the gauges. A dropdown whose first entry is **None** and whose
 remaining entries are the ranked candidates, each showing short name, average direct RSSI, sample
 count, gap, and a coloured dot. A candidate that cannot forward carries a reason line naming the
 role. A candidate never heard directly shows its database SNR and hop count instead of a gap.
@@ -158,7 +160,7 @@ A candidate with no direct RSSI draws no line; the selector already says why.
 
 ## 9. Skip
 
-Below the selector, enabled unless **None** is selected. It reuses the confirmation dialog shape
+At the right from the selector, enabled unless **None** is selected. It reuses the confirmation dialog shape
 `StatsTopBar` already uses for Reset and Exit rather than inventing a second, writes through the
 existing `SettingsRepository.addSkippedRelayNode`, and resets the selection to None.
 
