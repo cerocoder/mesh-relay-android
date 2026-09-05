@@ -48,6 +48,16 @@
          connection is alive and cannot return to the app from the shade. -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
 
+    <!-- Without this, resolveActivity returns null on API 30 and above even when
+         a map application is installed, so the switch would permanently claim
+         there is nothing to switch to. This looks removable; it is not. -->
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:scheme="geo" />
+        </intent>
+    </queries>
+
     <application
         android:allowBackup="true"
         android:label="@string/app_name"

@@ -12,6 +12,15 @@ data class AppSettings(
      * silently move existing users to a different service.
      */
     val mapProvider: MapProvider = MapProvider.GOOGLE,
+    /**
+     * Whether a tap on a node's coordinate opens the phone's own installed map
+     * application (see [com.cerocoder.meshrelay.ui.common.MapLinks.geoUri] and
+     * [com.cerocoder.meshrelay.ui.common.MapAppAvailability]) instead of the
+     * website [mapProvider] names. Default **off**: an existing installation
+     * already has today's website-opening behaviour, and a setting that
+     * changes where taps go should be chosen rather than inherited.
+     */
+    val preferInstalledMapApp: Boolean = false,
     /** The Spanish community instance, used throughout this mesh. */
     val meshviewUrl: String = "https://meshview.meshtastic.es",
     /**

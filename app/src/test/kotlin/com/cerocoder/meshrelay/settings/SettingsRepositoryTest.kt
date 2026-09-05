@@ -38,6 +38,10 @@ class SettingsRepositoryTest {
         assertEquals(GaugeMode.SIMPLE, settings.gaugeMode)
         assertEquals(SortMode.PACKETS, settings.defaultSortMode)
         assertEquals(MapProvider.GOOGLE, settings.mapProvider)
+        // Off by default: an existing installation already has today's
+        // website-opening behaviour, and this setting must be chosen, not
+        // inherited - so an absent stored value must read as false.
+        assertEquals(false, settings.preferInstalledMapApp)
         assertEquals("https://meshview.meshtastic.es", settings.meshviewUrl)
         // 24 hour by default: this mesh is based in Spain, where the 24-hour
         // clock is standard.
@@ -73,6 +77,33 @@ class SettingsRepositoryTest {
 
         repo(store).update { it.copy(mapProvider = MapProvider.GOOGLE) }
         assertEquals(MapProvider.GOOGLE, repo(store).settings.value.mapProvider)
+    }
+
+    @Test
+    fun `prefer installed map app persists both ways`() {
+        // Both directions, for the same reason the map-provider test above gives:
+        // the default is false, so a store that dropped the write would still
+        // read back false and pass a one-directional test.
+        val store = FakeStore()
+        repo(store).update { it.copy(preferInstalledMapApp = true) }
+        assertEquals(true, repo(store).settings.value.preferInstalledMapApp)
+
+        repo(store).update { it.copy(preferInstalledMapApp = false) }
+        assertEquals(false, repo(store).settings.value.preferInstalledMapApp)
+    }
+
+    @Test
+    fun `the named setter for preferring an installed map app persists like the generic update`() {
+        // setPreferInstalledMapApp is a second, named entry point to the same
+        // field - a caller outside the settings screen should not need to
+        // build an (AppSettings) -> AppSettings transform just to flip one
+        // preference. It must reach the flow immediately and survive a reopen,
+        // exactly as update itself does.
+        val store = FakeStore()
+        val subject = repo(store)
+        subject.setPreferInstalledMapApp(true)
+        assertEquals(true, subject.settings.value.preferInstalledMapApp)
+        assertEquals(true, repo(store).settings.value.preferInstalledMapApp)
     }
 
     @Test

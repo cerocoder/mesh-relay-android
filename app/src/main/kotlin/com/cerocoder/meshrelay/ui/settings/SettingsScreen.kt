@@ -1,6 +1,7 @@
 package com.cerocoder.meshrelay.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -33,6 +34,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.tooling.preview.Preview
@@ -44,6 +46,8 @@ import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.settings.MapProvider
 import com.cerocoder.meshrelay.settings.TimeFormat
 import com.cerocoder.meshrelay.stats.SortMode
+import com.cerocoder.meshrelay.ui.common.MapAppAvailability
+import com.cerocoder.meshrelay.ui.common.MapAppState
 import com.cerocoder.meshrelay.ui.common.MapProviderLabels
 import com.cerocoder.meshrelay.ui.common.NodeIdText
 import com.cerocoder.meshrelay.ui.preview.SampleData
@@ -78,6 +82,10 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  * showing the `!xxxxxxxx` form here is that it is exactly what the terminal
  * tool's own `--skip-relay` flag accepts, so a value read off this list can be
  * typed into that flag unchanged.
+ *
+ * [MapAppAvailability.of] is read once, through [remember] with no keys: it
+ * changes only when applications are installed or uninstalled, which does not
+ * happen while this screen is on screen.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -92,6 +100,14 @@ fun SettingsScreen(
     modifier: Modifier = Modifier,
 ) {
     var clearAllDialogVisible by remember { mutableStateOf(false) }
+
+    val packageManager = LocalContext.current.packageManager
+    val mapAppState = remember { MapAppAvailability.of(packageManager) }
+    val mapAppSubtitle = when (mapAppState) {
+        is MapAppState.None -> stringResource(R.string.settings_map_app_none)
+        is MapAppState.One -> stringResource(R.string.settings_map_app_one, mapAppState.name)
+        is MapAppState.Several -> stringResource(R.string.settings_map_app_several)
+    }
 
     // Set<Int> has no defined iteration order; sorted() gives every
     // recomposition (and every itemsIndexed-free `items(..., key = ...)` call
@@ -153,6 +169,17 @@ fun SettingsScreen(
                     onClick = { onUpdate { current -> current.copy(mapProvider = provider) } },
                 )
             }
+            item(key = "prefer-installed-map-app") {
+                SwitchRow(
+                    label = stringResource(R.string.settings_prefer_installed_map_app),
+                    subtitle = mapAppSubtitle,
+                    checked = settings.preferInstalledMapApp,
+                    enabled = mapAppState !is MapAppState.None,
+                    onCheckedChange = { checked ->
+                        onUpdate { current -> current.copy(preferInstalledMapApp = checked) }
+                    },
+                )
+            }
 
             item(key = "time-format-header") {
                 SectionHeader(stringResource(R.string.settings_time_format))
@@ -200,40 +227,22 @@ fun SettingsScreen(
             item(key = "background-collection") {
                 SwitchRow(
                     label = stringResource(R.string.settings_background_collection),
+                    subtitle = stringResource(R.string.settings_background_collection_summary),
                     checked = settings.backgroundCollection,
                     onCheckedChange = { checked ->
                         onUpdate { current -> current.copy(backgroundCollection = checked) }
                     },
                 )
             }
-            item(key = "background-collection-summary") {
-                Text(
-                    text = stringResource(R.string.settings_background_collection_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
-                )
-            }
 
             item(key = "use-phone-location") {
                 SwitchRow(
                     label = stringResource(R.string.settings_use_phone_location),
+                    subtitle = stringResource(R.string.settings_use_phone_location_summary),
                     checked = settings.usePhoneLocation,
                     onCheckedChange = { checked ->
                         onUpdate { current -> current.copy(usePhoneLocation = checked) }
                     },
-                )
-            }
-            item(key = "use-phone-location-summary") {
-                Text(
-                    text = stringResource(R.string.settings_use_phone_location_summary),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 16.dp, vertical = 4.dp),
                 )
             }
 
@@ -371,13 +380,25 @@ private fun RadioOptionRow(
 
 /** A label and a trailing `Switch` sharing a row, for the plain on/off settings
  *  ([AppSettings.keepScreenOn], [AppSettings.backgroundCollection],
- *  [AppSettings.usePhoneLocation]). */
+ *  [AppSettings.usePhoneLocation], [AppSettings.preferInstalledMapApp]).
+ *
+ *  [subtitle], when given, renders beneath the label in the same muted
+ *  [MaterialTheme.colorScheme.onSurfaceVariant] tone every explanatory line on
+ *  this screen already uses - one row idiom for a switch with an explanation,
+ *  rather than this row followed by a separate text item that carries no
+ *  guarantee of staying next to it.
+ *
+ *  [enabled] reaches only the `Switch` itself: a setting that cannot be
+ *  toggled right now (no map application installed) is still shown, with its
+ *  stored value, rather than hidden or silently forced off. */
 @Composable
 private fun SwitchRow(
     label: String,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
     modifier: Modifier = Modifier,
+    subtitle: String? = null,
+    enabled: Boolean = true,
 ) {
     Row(
         modifier = modifier
@@ -386,8 +407,17 @@ private fun SwitchRow(
         horizontalArrangement = Arrangement.SpaceBetween,
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, style = MaterialTheme.typography.bodyLarge, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Column(modifier = Modifier.weight(1f)) {
+            Text(text = label, style = MaterialTheme.typography.bodyLarge)
+            if (subtitle != null) {
+                Text(
+                    text = subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+        }
+        Switch(checked = checked, onCheckedChange = onCheckedChange, enabled = enabled)
     }
 }
 

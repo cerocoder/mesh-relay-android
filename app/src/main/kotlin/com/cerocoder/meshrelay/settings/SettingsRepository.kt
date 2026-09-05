@@ -13,6 +13,7 @@ private const val KEY_LANGUAGE = "language"
 private const val KEY_GAUGE_MODE = "gauge_mode"
 private const val KEY_DEFAULT_SORT_MODE = "default_sort_mode"
 private const val KEY_MAP_PROVIDER = "map_provider"
+private const val KEY_PREFER_INSTALLED_MAP_APP = "prefer_installed_map_app"
 private const val KEY_MESHVIEW_URL = "meshview_url"
 private const val KEY_TIME_FORMAT = "time_format"
 private const val KEY_KEEP_SCREEN_ON = "keep_screen_on"
@@ -74,6 +75,18 @@ class SettingsRepository(private val store: SettingsStore) {
     fun update(transform: (AppSettings) -> AppSettings) {
         _settings.value = transform(_settings.value)
         persist()
+    }
+
+    /**
+     * A named setter for [AppSettings.preferInstalledMapApp], alongside the
+     * generic [update] every field on the settings screen itself goes
+     * through. Given a name of its own so a caller outside that screen - the
+     * code that actually opens a node's coordinate - can flip this
+     * preference without building an `(AppSettings) -> AppSettings`
+     * transform just to change the one field it cares about.
+     */
+    fun setPreferInstalledMapApp(value: Boolean) {
+        update { it.copy(preferInstalledMapApp = value) }
     }
 
     fun addSkippedRelayNode(nodeNum: Int) {
@@ -141,6 +154,7 @@ class SettingsRepository(private val store: SettingsStore) {
                 KEY_TIME_FORMAT to settingsSnapshot.timeFormat.name,
             ),
             bools = mapOf(
+                KEY_PREFER_INSTALLED_MAP_APP to settingsSnapshot.preferInstalledMapApp,
                 KEY_KEEP_SCREEN_ON to settingsSnapshot.keepScreenOn,
                 KEY_BACKGROUND_COLLECTION to settingsSnapshot.backgroundCollection,
                 KEY_USE_PHONE_LOCATION to settingsSnapshot.usePhoneLocation,
@@ -158,6 +172,7 @@ class SettingsRepository(private val store: SettingsStore) {
             gaugeMode = readEnum(KEY_GAUGE_MODE, defaults.gaugeMode),
             defaultSortMode = readEnum(KEY_DEFAULT_SORT_MODE, defaults.defaultSortMode),
             mapProvider = readEnum(KEY_MAP_PROVIDER, defaults.mapProvider),
+            preferInstalledMapApp = store.getBoolean(KEY_PREFER_INSTALLED_MAP_APP, defaults.preferInstalledMapApp),
             meshviewUrl = store.getString(KEY_MESHVIEW_URL, defaults.meshviewUrl),
             timeFormat = readEnum(KEY_TIME_FORMAT, defaults.timeFormat),
             keepScreenOn = store.getBoolean(KEY_KEEP_SCREEN_ON, defaults.keepScreenOn),
