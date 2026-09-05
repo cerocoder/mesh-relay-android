@@ -74,7 +74,17 @@ object MapAppAvailability {
         return default?.let { MapAppState.One(it.label(packageManager)) } ?: MapAppState.Several
     }
 
-    private fun ResolveInfo.isSameActivityAs(other: ResolveInfo): Boolean =
+    /**
+     * `internal`, not `private`: this is the one piece of [of] that touches no
+     * `PackageManager` and needs none - both sides are plain field reads - so it
+     * is the one piece a JVM unit test can exercise directly, the same way
+     * [com.cerocoder.meshrelay.location.LocationAvailability.REQUIRED_PERMISSIONS]
+     * is a plain constant precisely so it can be. Package name alone is not
+     * enough: two activities in the same application (an in-app chooser between
+     * a "car mode" and a normal map activity, say) would otherwise be reported
+     * as the same handler when [of]'s several-with-a-default branch asks.
+     */
+    internal fun ResolveInfo.isSameActivityAs(other: ResolveInfo): Boolean =
         activityInfo.packageName == other.activityInfo.packageName && activityInfo.name == other.activityInfo.name
 
     private fun ResolveInfo.label(packageManager: PackageManager): String =
