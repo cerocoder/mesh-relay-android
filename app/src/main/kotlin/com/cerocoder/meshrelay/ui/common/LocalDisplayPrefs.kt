@@ -13,7 +13,18 @@ import com.cerocoder.meshrelay.settings.TimeFormat
  * previews, and threading a preference through all of them would put a parameter
  * on every screen between the settings and the one card that reads it.
  *
- * Both carry a default, so a preview renders without providing anything.
+ * All three carry a default, so a preview renders without providing anything.
  */
 val LocalTimeFormat: ProvidableCompositionLocal<TimeFormat> = compositionLocalOf { TimeFormat.TWENTY_FOUR_HOUR }
 val LocalMapProvider: ProvidableCompositionLocal<MapProvider> = compositionLocalOf { MapProvider.GOOGLE }
+
+/**
+ * [com.cerocoder.meshrelay.settings.AppSettings.preferInstalledMapApp], carried the
+ * same route as [LocalMapProvider] rather than a parameter threaded through
+ * `PositionLine` and the Graph crosshair's own call sites - see either one's own
+ * comment on why it reads [LocalMapProvider] locally instead of taking it as an
+ * argument; this follows it for the same reason. Default `false`, matching the
+ * setting's own default: a preview must not silently prefer an installed app that
+ * setting itself does not.
+ */
+val LocalPreferInstalledMapApp: ProvidableCompositionLocal<Boolean> = compositionLocalOf { false }

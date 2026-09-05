@@ -822,3 +822,38 @@ Ruling: the 2026-09-04 relay-candidate-comparison spec's section 7 override of r
   Cost if wrong: none directly - the code already carries the correct layout and its own comment
   already explains the override - but a reader trusting the requirement 20 text alone, with decisions.md
   the one place that would have told them otherwise, would not find out about the override at all.
+
+### 60
+
+Ruling: a separate switch, "Prefer an installed map app", rather than a third `MapProvider` value -
+  the owner's ruling, recorded in `docs/superpowers/specs/2026-09-04-map-app-geo-uri-design.md` §2.
+  `MapProvider` answers one question, which website; the switch answers an independent one, try a
+  local application before either website. Folding both into one three-valued enum would make
+  "prefer the installed app" mean "and give up my chosen website entirely", when the point of the
+  feature is that the website stays the answer on every phone with nothing else installed - the two
+  axes stay two settings so the fallback can name both a preference and a chosen alternative at once.
+  Cost if wrong: little on its own - a later merge of the two into one enum is a mechanical rewrite
+  of `MapLinks.forProvider`'s callers, not a data-loss risk, since both values already persist
+  separately.
+
+### 61
+
+Ruling: with no map application installed, `MapAppAvailability` detects it and the settings screen
+  disables the switch and says so, rather than leaving it on to fail silently at the point of a tap -
+  the owner's ruling. A switch that is on and does nothing is indistinguishable from a defect: the
+  owner taps a coordinate, nothing installed answers it, and without the disabled state there is no
+  way to tell "this setting does not apply to this phone" from "this feature is broken".
+  Cost if wrong: a `<queries>` block in the manifest and one `PackageManager` read on a settings
+  screen open - paid once per visit to Settings, not per tap.
+
+### 62
+
+Ruling: `openPosition`'s `catch` stays even though `MapAppAvailability` already detected a handler
+  when the settings screen was drawn. The two do not answer the same question at the same time: an
+  application can be uninstalled at any point between that screen being drawn and this call running,
+  and an uncaught `ActivityNotFoundException` - or the `IllegalStateException` Compose's own
+  `AndroidUriHandler` wraps it in, which one surfaces has changed between Compose versions, which is
+  why the catch is `Exception` rather than either specific type - does not degrade, it takes the
+  whole screen down.
+  Cost if wrong: nothing - the fallback is a website `MapLinks.forProvider` always resolves, so a
+  catch that never fires on a given phone costs that phone nothing either.

@@ -18,6 +18,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.AgeBucket
+import com.cerocoder.meshrelay.stats.NodeId
 import com.cerocoder.meshrelay.stats.model.Direction
 import com.cerocoder.meshrelay.stats.model.LocationInfo
 import com.cerocoder.meshrelay.stats.model.PositionSource
@@ -36,6 +37,12 @@ import java.util.Locale
  * decides which one, and [MapProviderLabels] is what names it, so this and the
  * settings screen's own radio group can never disagree on the label.
  *
+ * [shortName] is `""`, not `null`, when the mesh has never announced one - the same
+ * convention [NodeDirectorySnapshot][com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot.shortName]
+ * already returns to. That empty case falls back to [NodeId.format]`(nodeNum)`
+ * for the `geo:` pin's label, so a node the mesh has only ever named by number still
+ * opens somewhere labelled `!a4f0c1e5` rather than an anonymous dot.
+ *
  * Nothing here computes an age, a distance or a URL: [PositionLineText]
  * does the display formatting and [MapLinks] builds the link targets. This
  * function only resolves resources, decides what to show, and lays it out.
@@ -44,6 +51,7 @@ import java.util.Locale
 fun PositionLine(
     info: LocationInfo,
     nodeNum: Int,
+    shortName: String,
     meshviewUrl: String?,
     modifier: Modifier = Modifier,
 ) {
@@ -120,12 +128,28 @@ fun PositionLine(
             // call.
             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 if (lat != null && lon != null) {
-                    // One link, not two: the Map provider setting decides which.
-                    // MapLinks.forProvider formats under Locale.ROOT - a Spanish
-                    // decimal comma would break the query string, which is why
+                    // One link, not two: the Map provider setting decides which
+                    // website opens, and Prefer an installed map app - the same
+                    // route, LocalPreferInstalledMapApp - decides whether openPosition
+                    // tries a local application first. MapLinks.forProvider and
+                    // MapLinks.geoUri both format under Locale.ROOT - a Spanish
+                    // decimal comma would break either query string, which is why
                     // coordinates never go through a display formatter.
                     val mapProvider = LocalMapProvider.current
-                    TextButton(onClick = { uriHandler.openUri(MapLinks.forProvider(mapProvider, lat, lon)) }) {
+                    val preferInstalledApp = LocalPreferInstalledMapApp.current
+                    val label = shortName.ifEmpty { NodeId.format(nodeNum) }
+                    TextButton(
+                        onClick = {
+                            openPosition(
+                                uriHandler = uriHandler,
+                                preferInstalledApp = preferInstalledApp,
+                                provider = mapProvider,
+                                lat = lat,
+                                lon = lon,
+                                label = label,
+                            )
+                        },
+                    ) {
                         Text(stringResource(MapProviderLabels.labelOf(mapProvider)))
                     }
                 }

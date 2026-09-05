@@ -36,6 +36,7 @@ import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.MeshRelayNavHost
 import com.cerocoder.meshrelay.ui.common.LocalAppResumed
 import com.cerocoder.meshrelay.ui.common.LocalMapProvider
+import com.cerocoder.meshrelay.ui.common.LocalPreferInstalledMapApp
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
@@ -154,6 +155,7 @@ class MainActivity : ComponentActivity() {
                     LocalAppResumed provides resumed,
                     LocalTimeFormat provides settings.timeFormat,
                     LocalMapProvider provides settings.mapProvider,
+                    LocalPreferInstalledMapApp provides settings.preferInstalledMapApp,
                 ) {
                     ProvideRelativeClock(SystemTimeSource) {
                         MeshRelayContent(

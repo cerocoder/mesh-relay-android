@@ -69,9 +69,10 @@ import com.cerocoder.meshrelay.stats.model.RelayCandidate
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.ui.common.LocalMapProvider
+import com.cerocoder.meshrelay.ui.common.LocalPreferInstalledMapApp
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
-import com.cerocoder.meshrelay.ui.common.MapLinks
 import com.cerocoder.meshrelay.ui.common.StatsFormat
+import com.cerocoder.meshrelay.ui.common.openPosition
 import com.cerocoder.meshrelay.ui.detail.SignalBlock
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.CandidateLine
@@ -186,8 +187,14 @@ private data class GraphFrame(
  * says this is implemented once and shared by both subjects; a component that
  * cannot see which subject it is drawing cannot diverge per subject, so the rule
  * is enforced by the type signature rather than by discipline. Everything
- * subject-shaped - the title, the subtitle, the statistics - is resolved by
- * `MeshRelayNavHost` and arrives here already decided.
+ * subject-shaped - the title, the subtitle, the statistics, [positionLabel] - is
+ * resolved by `MeshRelayNavHost` and arrives here already decided.
+ *
+ * [positionLabel] names the crosshair's own map pin (2026-09-04 map-app-geo-uri
+ * design) the same way [subtitle] names the app bar: the subject's short name
+ * where the mesh has announced one, else its formatted id, decided once by the
+ * caller rather than by this screen reaching for a node directory of its own -
+ * a plain `String` carries that decision without reopening the rule above.
  *
  * [series] is null when nothing is being watched yet, and
  * [SignalSeries.EMPTY]-shaped when the subject has no measurements; both render
@@ -213,6 +220,7 @@ private data class GraphFrame(
 fun SignalGraphScreen(
     title: String,
     subtitle: String,
+    positionLabel: String,
     series: SignalSeries?,
     rssiStats: SignalStats,
     snrStats: SignalStats,
@@ -608,6 +616,7 @@ fun SignalGraphScreen(
                             pxPerSample = pxPerSample,
                             viewportPx = viewportPx,
                             locale = locale,
+                            positionLabel = positionLabel,
                         )
                     }
                 }
@@ -754,6 +763,9 @@ private fun skipConfirmationName(candidate: RelayCandidate): String {
  * `dp` would drift the moment the reader turns their system font size up, and
  * this is the one place in the screen where two pieces of text have to meet a
  * line drawn at an exact pixel.
+ *
+ * [positionLabel] is the globe's own pin name, forwarded from [SignalGraphScreen]'s
+ * own parameter of the same name - see that function's KDoc for how it is resolved.
  */
 @Composable
 private fun BoxScope.Crosshair(
@@ -763,16 +775,18 @@ private fun BoxScope.Crosshair(
     pxPerSample: Float,
     viewportPx: Float,
     locale: Locale,
+    positionLabel: String,
 ) {
     val row = ChartGeometry.rowAtClamped(touchY, scrollPx, pxPerSample, series.size)
     val index = ChartGeometry.indexOfRow(row, series.size)
     val y = ChartGeometry.yOf(row, scrollPx, pxPerSample)
     val position = series.positionOf(index)
     val uriHandler = LocalUriHandler.current
-    // The one delivery mechanism for this preference, not a second one: PositionLine
-    // reads the same LocalMapProvider, rather than this composable taking a
-    // mapProvider parameter threaded down from SignalGraphScreen.
+    // The one delivery mechanism for either preference, not a second route: PositionLine
+    // reads the same LocalMapProvider and LocalPreferInstalledMapApp, rather than this
+    // composable taking them as parameters threaded down from SignalGraphScreen.
     val mapProvider = LocalMapProvider.current
+    val preferInstalledApp = LocalPreferInstalledMapApp.current
 
     // onSurface rather than a new entry in Color.kt: it reads in both themes, and
     // the two metric colours are the ones that carry meaning here.
@@ -844,15 +858,23 @@ private fun BoxScope.Crosshair(
     var globeHeightPx by remember { mutableIntStateOf(0) }
     IconButton(
         onClick = {
-            // MapLinks.forProvider takes degrees and formats them under
-            // Locale.ROOT; StampedPosition multiplies its scaled integers in
-            // Double. Neither side ever touches a display formatter, whose
-            // Spanish decimal comma would break the query string. Which service
-            // it opens is AppSettings.mapProvider (decision 43); this globe is
-            // one tap target with no room to offer both, unlike PositionLine's
-            // own map button.
+            // openPosition takes degrees and formats them under Locale.ROOT;
+            // StampedPosition multiplies its scaled integers in Double. Neither
+            // side ever touches a display formatter, whose Spanish decimal comma
+            // would break either query string. Which website opens is
+            // AppSettings.mapProvider (decision 43); whether a local application
+            // is tried first is AppSettings.preferInstalledMapApp (map-app-geo-uri
+            // decision). This globe is one tap target with no room to offer more
+            // than one destination, unlike PositionLine's own map button.
             position?.let {
-                uriHandler.openUri(MapLinks.forProvider(mapProvider, it.latitude, it.longitude))
+                openPosition(
+                    uriHandler = uriHandler,
+                    preferInstalledApp = preferInstalledApp,
+                    provider = mapProvider,
+                    lat = it.latitude,
+                    lon = it.longitude,
+                    label = positionLabel,
+                )
             }
         },
         enabled = position != null,
@@ -1251,6 +1273,7 @@ private fun SignalGraphNeverHeardCandidatePreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_relay, "0x2a"),
             subtitle = "",
+            positionLabel = "0x2a",
             series = SampleData.graphSeries,
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
@@ -1283,6 +1306,7 @@ private fun SignalGraphPopulatedPreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_relay, "0xcd"),
             subtitle = "PQPL1",
+            positionLabel = "PQPL1",
             series = SampleData.graphSeries,
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
@@ -1305,6 +1329,7 @@ private fun SignalGraphSingleMeasurementPreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_neighbour, "!b1a2c3d4"),
             subtitle = "GTF",
+            positionLabel = "GTF",
             series = SampleData.graphSeriesSingle,
             rssiStats = SampleData.graphSingleRssiStats,
             snrStats = SampleData.graphSingleSnrStats,
@@ -1326,6 +1351,7 @@ private fun SignalGraphEmptyPreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_relay, "0x99"),
             subtitle = "",
+            positionLabel = "0x99",
             series = null,
             rssiStats = SignalStats.EMPTY,
             snrStats = SignalStats.EMPTY,
@@ -1346,6 +1372,7 @@ private fun SignalGraphAutoScalePreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_relay, "0xcd"),
             subtitle = "PQPL1",
+            positionLabel = "PQPL1",
             series = SampleData.graphSeries,
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
@@ -1367,6 +1394,7 @@ private fun SignalGraphFrozenPreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_neighbour, "!b1a2c3d4"),
             subtitle = "GTF",
+            positionLabel = "GTF",
             series = SampleData.graphSeries,
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,
@@ -1386,6 +1414,7 @@ private fun SignalGraphDarkPreview() {
         SignalGraphScreen(
             title = stringResource(R.string.graph_title_relay, "0xcd"),
             subtitle = "PQPL1",
+            positionLabel = "PQPL1",
             series = SampleData.graphSeries,
             rssiStats = SampleData.graphRssiStats,
             snrStats = SampleData.graphSnrStats,

@@ -260,7 +260,7 @@ private fun RemoteNodeRow(
             // "") call for this table - see this file's own top-level KDoc
             // for the :1798-1800 evidence that the original shows this link
             // here too.
-            PositionLine(info = location, nodeNum = nodeNum, meshviewUrl = meshviewUrl)
+            PositionLine(info = location, nodeNum = nodeNum, shortName = shortName, meshviewUrl = meshviewUrl)
         }
     }
 }

@@ -206,7 +206,12 @@ fun NodeCard(
                 // missing row rather than an absent one. Matches
                 // [com.cerocoder.meshrelay.ui.neighbours.NeighbourListScreen]'s own
                 // `LocalNodeLine`, which calls this composable the same bare way.
-                PositionLine(info = location, nodeNum = record.num, meshviewUrl = meshviewUrl)
+                PositionLine(
+                    info = location,
+                    nodeNum = record.num,
+                    shortName = identity.shortName ?: "",
+                    meshviewUrl = meshviewUrl,
+                )
 
                 if (telemetry != null && telemetry.lastUptimeSeconds != null) {
                     val uptime = StatsFormat.uptimeParts(telemetry.lastUptimeSeconds)

@@ -1251,12 +1251,93 @@ longer offered.
 
 ---
 
+## Group M — Opening a coordinate in an installed map app (2026-09-05)
+
+Nothing in this group has ever been run. CI proves `MapLinks.geoUri` builds the right string
+(`MapLinksTest`) and `MapLauncher.openPosition` takes the right branch on success, on failure and
+with the setting off (`MapLauncherTest`); the settings switch's three subtitle states, the
+detector's own `PackageManager` query, and a real tap on a real phone have no Compose test harness
+in this project and go here instead, per `docs/superpowers/specs/2026-09-04-map-app-geo-uri-design.md`
+§7.
+
+### M1. No map application installed: the switch is disabled and says so
+**Do:** On a phone with no application registered for the `geo:` scheme, open Settings and find
+Prefer an installed map app.
+**Pass looks like:** the switch is off and disabled, and its subtitle says no map application is
+installed (`MapAppState.None`, decision 61) - a stated reason, not merely absent text.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### M2. Exactly one map application installed: the switch names it, and a tap drops a named pin
+**Do:** With exactly one map application installed (or one already set as the phone's default for
+`geo:` links), turn the switch on. Open a node with a known short name and tap its coordinate.
+**Pass looks like:** the switch's subtitle names that application (`MapAppState.One`). The tap
+opens it, not a browser, centred on the node's position with a pin labelled with the node's short
+name (`MapLinks.geoUri`) - not an anonymous dot.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### M3. Two map applications, no default: the subtitle warns you will be asked, and a tap shows the chooser
+**Do:** With two map applications installed and neither set as the default handler for `geo:`
+links, turn the switch on and tap a node's coordinate.
+**Pass looks like:** the subtitle says you will be asked which application to use
+(`MapAppState.Several`) before any tap happens, and tapping raises the system's own chooser rather
+than silently picking one.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### M4. The switch off: a tap still opens the website chosen under Map provider
+**Do:** With Prefer an installed map app off, regardless of what is installed, tap a node's
+coordinate from the node panel, the neighbour list, and the Graph crosshair's globe.
+**Pass looks like:** all three open the website Map provider names - Google Maps or OpenStreetMap -
+exactly as before this feature existed. Nothing about the switch merely being available changes
+today's default behaviour.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### M5. Uninstall between Settings and a tap: the website opens, and the app does not crash
+**Do:** Turn the switch on with a map application installed. Without reopening Settings, uninstall
+that application. Tap a node's coordinate.
+**Pass looks like:** the website Map provider names opens and the app keeps running - no crash, no
+frozen screen. This is `openPosition`'s own `catch` (decision 62), the one case no unit test in this
+project can reach: the failure exists only between two screens, not inside one function call.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
+### M6. A node at a negative longitude arrives at the right place, not the wrong hemisphere
+**Do:** With the switch on, tap the coordinate of a node anywhere in this mesh - Madrid and every
+town this workspace tracks south of it sit at a negative longitude - and confirm where the
+installed application opens.
+**Pass looks like:** the pin sits over Spain, west of the Greenwich meridian. A decimal-comma bug
+(`Locale.ROOT` dropped somewhere in the chain) would not fail loudly - it would open a coordinate in
+the wrong hemisphere and still look like success from the screenshot alone.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 92
+- **Total items run:** _____ / 98
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT
