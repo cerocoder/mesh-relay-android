@@ -175,6 +175,8 @@
     <string name="graph_open_map">Open this measurement on a map</string>
     <string name="graph_position_from_node">Open on a map — position from the node</string>
     <string name="graph_position_from_phone">Open on a map — position from the phone</string>
+    <string name="graph_pin_from_node">Node position</string>
+    <string name="graph_pin_from_phone">Phone position</string>
     <string name="graph_candidate_label">Compare with</string>
     <string name="graph_candidate_none">None</string>
     <string name="graph_candidate_gap">Gap: %1$s dB</string>

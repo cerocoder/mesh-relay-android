@@ -477,22 +477,11 @@ private fun GraphDestination(
                     },
                 )
             }
-            // Read once, not once for the app bar and again for the crosshair's own
-            // pin: `uniqueRelayName` is the same "" until a candidate list is
-            // narrowed to one, so both readings would agree anyway, but computing
-            // it twice would invite the two to drift apart under a later edit.
-            val relayName = snapshot.directory.uniqueRelayName(relay.relayByte)
             SignalGraphScreen(
                 title = stringResource(R.string.graph_title_relay, relay.hexId),
                 // A name beside an ambiguous byte would present a guess as a fact -
                 // the same honesty rule DetailScreen's own title line enforces.
-                subtitle = relayName,
-                // The crosshair's globe has no candidate list to be ambiguous
-                // about - it is naming whichever relay byte this whole screen is
-                // for, not guessing which node sent one packet - so the ambiguous
-                // case falls back to the byte itself, [relay.hexId], the same
-                // identifier already in [title], rather than staying unlabelled.
-                positionLabel = relayName.ifEmpty { relay.hexId },
+                subtitle = snapshot.directory.uniqueRelayName(relay.relayByte),
                 series = series,
                 rssiStats = relay.rssi,
                 snrStats = relay.snr,
@@ -513,17 +502,9 @@ private fun GraphDestination(
         is DetailSubject.Neighbour -> {
             val neighbour = snapshot.neighbours.find { it.nodeNum == subject.nodeNum }
                 ?: NeighbourStats(nodeNum = subject.nodeNum)
-            // Read once for the same reason the Relay branch above reads its own
-            // name once: the app bar's subtitle and the crosshair's pin must not be
-            // able to drift apart by each resolving the directory separately.
-            val neighbourName = snapshot.directory.shortName(subject.nodeNum)
             SignalGraphScreen(
                 title = stringResource(R.string.graph_title_neighbour, NodeId.format(subject.nodeNum)),
-                subtitle = neighbourName,
-                // Where the mesh has never announced a name, the formatted node id -
-                // already computed above for [title] - labels the pin instead of
-                // leaving it anonymous.
-                positionLabel = neighbourName.ifEmpty { NodeId.format(subject.nodeNum) },
+                subtitle = snapshot.directory.shortName(subject.nodeNum),
                 series = series,
                 rssiStats = neighbour.rssi,
                 snrStats = neighbour.snr,

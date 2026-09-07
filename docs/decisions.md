@@ -857,3 +857,24 @@ Ruling: `openPosition`'s `catch` stays even though `MapAppAvailability` already 
   whole screen down.
   Cost if wrong: nothing - the fallback is a website `MapLinks.forProvider` always resolves, so a
   catch that never fires on a given phone costs that phone nothing either.
+
+### 63
+
+Ruling: the `geo:` pin's label is **not** the subject's name at every call site - final whole-branch
+  review, Task 3 fix round 1. `PositionLine`'s coordinate button (`ui/detail/NodeCard.kt`,
+  `ui/detail/RemoteNodesTab.kt`) genuinely is the node's own position, so the design's own intent
+  (`docs/superpowers/specs/2026-09-04-map-app-geo-uri-design.md` §2: "the pin's label - the node's
+  short name") holds there unchanged. The Graph crosshair's globe is different: the coordinate it
+  opens is `SignalSeries.positionOf`, which `MeshStatsEngine.positionForSample` documents as where
+  the *observer* stood for that measurement - the phone's fix or the local node's own, resolved by
+  `AppSettings.usePhoneLocation` - never the relay's or neighbour's location. A pin there labelled
+  with the subject's short name (once built,
+  briefly, as part of this same task) would assert something false: relay `0xcd`'s Graph, tapped,
+  would open the owner's own footpath with a pin reading the relay's name, as if that were where the
+  relay stood. The globe's pin is labelled "Node position" / "Phone position" instead
+  (`graph_pin_from_node` / `graph_pin_from_phone`), the same distinction its own
+  `contentDescription` already draws (`graph_position_from_node` / `graph_position_from_phone`),
+  and carries no parameter for the subject's name at all - there is nothing correct such a parameter
+  could be given here, so the fix removes it rather than leaving it unused.
+  Cost if wrong: a pin reading the wrong one of two short, already-shipped strings; the coordinate
+  underneath it is unaffected either way, so nothing about where the tap lands changes.

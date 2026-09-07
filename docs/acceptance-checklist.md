@@ -1271,12 +1271,19 @@ installed (`MapAppState.None`, decision 61) - a stated reason, not merely absent
 
 ---
 
-### M2. Exactly one map application installed: the switch names it, and a tap drops a named pin
+### M2. Exactly one map application installed: the switch names it, and every pin says what it names
 **Do:** With exactly one map application installed (or one already set as the phone's default for
-`geo:` links), turn the switch on. Open a node with a known short name and tap its coordinate.
-**Pass looks like:** the switch's subtitle names that application (`MapAppState.One`). The tap
-opens it, not a browser, centred on the node's position with a pin labelled with the node's short
-name (`MapLinks.geoUri`) - not an anonymous dot.
+`geo:` links), turn the switch on. Open a node with a known short name and tap its coordinate from
+the node panel or the neighbour list. Separately, open that node's Graph and tap the crosshair's
+globe on a measurement.
+**Pass looks like:** the switch's subtitle names that application (`MapAppState.One`). The node
+panel and neighbour list open the application centred on the node's own position, with a pin
+labelled with the node's short name (`MapLinks.geoUri`) - not an anonymous dot. The Graph globe
+opens the application centred on the *observer's* position for that measurement instead - the
+phone's fix or the local node's own, never the relay's or neighbour's, exactly as the globe's own
+icon already says (`graph_position_from_node` / `graph_position_from_phone`) - with a pin labelled
+"Node position" or "Phone position" to match, never the subject's name: that coordinate is not
+where the subject is.
 
 - [ ] Ran on: __________________ Result: __________________________________________________
   Notes: ________________________________________________________________________________

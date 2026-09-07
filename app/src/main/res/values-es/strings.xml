@@ -175,6 +175,8 @@
     <string name="graph_open_map">Abrir esta medición en un mapa</string>
     <string name="graph_position_from_node">Abrir en un mapa: posición del nodo</string>
     <string name="graph_position_from_phone">Abrir en un mapa: posición del teléfono</string>
+    <string name="graph_pin_from_node">Posición del nodo</string>
+    <string name="graph_pin_from_phone">Posición del teléfono</string>
     <string name="graph_candidate_label">Comparar con</string>
     <string name="graph_candidate_none">Ninguno</string>
     <string name="graph_candidate_gap">Diferencia: %1$s dB</string>
