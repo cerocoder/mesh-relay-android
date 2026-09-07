@@ -1266,8 +1266,11 @@ Prefer an installed map app.
 **Pass looks like:** the switch is off and disabled, and its subtitle says no map application is
 installed (`MapAppState.None`, decision 61) - a stated reason, not merely absent text.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [ ] Ran on: __not run__________ Result: __blocked - the None state was unreachable________
+  Notes: The test device has five `geo:` handlers (Google Maps, OsmAnd~, GPSTest, OSM Dashboard,
+  Zoom). `pm disable-user` was refused by Knox for the two side-loaded ones ("Shell cannot change
+  component state"), so reaching None would have meant uninstalling the owner's applications.
+  Needs a phone or a spare profile with no `geo:` handler.
 
 ---
 
@@ -1285,8 +1288,16 @@ icon already says (`graph_position_from_node` / `graph_position_from_phone`) - w
 "Node position" or "Phone position" to match, never the subject's name: that coordinate is not
 where the subject is.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: __SM-S721B / Android 16 (SDK 36), 2026-09-07__ Result: __both pin halves pass; the
+  subtitle half not run__
+  Notes: Node panel, demo Zona Centro node GETR: the launched intent was
+  `geo:40.3083000,-3.7325000?q=40.3083000,-3.7325000(GETR)` and Google Maps drew a pin reading
+  **GETR** at 40.308300, -3.732500 - the node's own position, named, not an anonymous dot.
+  Graph crosshair globe on a relay measurement: icon read "Open on a map - position from the phone",
+  the intent carried `(Phone position)`, and Maps drew that pin at 40.3309520, -3.7500330
+  (86JX+9XP Leganes) - the observer's fix, not the relay's, exactly as decision 63 requires.
+  The switch-names-it half needs exactly one handler installed; see M1 for why that state was
+  unreachable here.
 
 ---
 
@@ -1297,8 +1308,12 @@ links, turn the switch on and tap a node's coordinate.
 (`MapAppState.Several`) before any tap happens, and tapping raises the system's own chooser rather
 than silently picking one.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: __SM-S721B / Android 16 (SDK 36), 2026-09-07__ Result: __pass________________
+  Notes: Five handlers installed and no default set - `cmd package resolve-activity` returned
+  `com.android.internal.app.ResolverActivity`, the exact case that would make a naive detector name
+  "android" as the application. Subtitle read "Several map applications are installed; the system
+  will ask which one to use" before any tap. Tapping raised the system chooser listing GPSTest,
+  Maps, OSM Dashboard (Offline), OsmAnd~ and Zoom.
 
 ---
 
@@ -1309,8 +1324,15 @@ coordinate from the node panel, the neighbour list, and the Graph crosshair's gl
 exactly as before this feature existed. Nothing about the switch merely being available changes
 today's default behaviour.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: __SM-S721B / Android 16 (SDK 36), 2026-09-07__ Result: __pass________________
+  Notes: Switch off. Graph globe opened
+  `https://www.openstreetmap.org/?mlat=40.3308136&mlon=-3.7503933&zoom=15`; node panel opened
+  `https://www.openstreetmap.org/?mlat=40.308299999999996&mlon=-3.7325&zoom=15`. Both are the
+  OpenStreetMap provider selected under Map provider, with no chooser and no crash. The neighbour
+  list was not tapped separately - it is the same `PositionLine` composable as the node panel.
+  Observed while here: the website builder formats coordinates as raw doubles
+  (`40.308299999999996`) where `geoUri` uses `%.7f`. Pre-existing in `MapLinks.forProvider`,
+  harmless to OSM, worth tidying separately.
 
 ---
 
@@ -1321,8 +1343,12 @@ that application. Tap a node's coordinate.
 frozen screen. This is `openPosition`'s own `catch` (decision 62), the one case no unit test in this
 project can reach: the failure exists only between two screens, not inside one function call.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [ ] Ran on: __not run__________ Result: __declined - would require uninstalling the owner's apps__
+  Notes: The case needs a map application to disappear between the settings screen and the tap.
+  Uninstalling one of the owner's own applications was not acceptable, and Knox refused to disable
+  the side-loaded ones. `MapLauncherTest` covers the same branch in the unit suite (a thrown
+  `IllegalStateException` and a thrown `ActivityNotFoundException` both fall back to the website),
+  but the between-two-screens case itself remains unproven on hardware.
 
 ---
 
@@ -1334,8 +1360,13 @@ installed application opens.
 (`Locale.ROOT` dropped somewhere in the chain) would not fail loudly - it would open a coordinate in
 the wrong hemisphere and still look like success from the screenshot alone.
 
-- [ ] Ran on: __________________ Result: __________________________________________________
-  Notes: ________________________________________________________________________________
+- [x] Ran on: __SM-S721B / Android 16 (SDK 36), 2026-09-07__ Result: __pass, in both languages__
+  Notes: English: `geo:40.3309527,-3.7500331?q=...` opened Maps at 86JX+9XP Leganes, Spain - right
+  hemisphere, right town. Spanish (the case that matters): the same screen rendered the coordinate
+  as "40,308300, -3,732500" and the SNR as "7/6,9/7 dB" with Spanish decimal commas, while the URI
+  it emitted carried dots - `geo:40.3083000,-3.7325000?q=40.3083000,-3.7325000(GETR)` - and Maps
+  landed on the node. `Locale.ROOT` holds where the display locale does not. The pin label
+  localised correctly too: "Posicion del telefono" under Spanish.
 
 ---
 
