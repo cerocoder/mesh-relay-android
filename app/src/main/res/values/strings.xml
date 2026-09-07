@@ -239,7 +239,7 @@
     <string name="settings_map_provider">Map provider</string>
     <string name="settings_prefer_installed_map_app">Prefer installed map app</string>
     <string name="settings_map_app_none">No map application is installed</string>
-    <string name="settings_map_app_one">%1$s is installed</string>
+    <string name="settings_map_app_one">Coordinates open in %1$s</string>
     <string name="settings_map_app_several">Several map applications are installed; the system will ask which one to use</string>
     <string name="settings_time_format">Time</string>
     <string name="settings_default_sort">Default sort</string>

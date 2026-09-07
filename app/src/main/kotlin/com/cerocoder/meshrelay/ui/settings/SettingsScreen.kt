@@ -85,7 +85,11 @@ import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
  *
  * [MapAppAvailability.of] is read once, through [remember] with no keys: it
  * changes only when applications are installed or uninstalled, which does not
- * happen while this screen is on screen.
+ * happen while this screen is on screen. Wrapped in [runCatching]: it is a
+ * binder call into another package's `PackageManager` data and reads that
+ * package's own resources for a label, and this screen has no other way to
+ * fail - a dead binder or a package being updated mid-read degrades to
+ * [MapAppState.None] rather than taking the whole screen down.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -102,7 +106,7 @@ fun SettingsScreen(
     var clearAllDialogVisible by remember { mutableStateOf(false) }
 
     val packageManager = LocalContext.current.packageManager
-    val mapAppState = remember { MapAppAvailability.of(packageManager) }
+    val mapAppState = remember { runCatching { MapAppAvailability.of(packageManager) }.getOrDefault(MapAppState.None) }
     val mapAppSubtitle = when (mapAppState) {
         is MapAppState.None -> stringResource(R.string.settings_map_app_none)
         is MapAppState.One -> stringResource(R.string.settings_map_app_one, mapAppState.name)

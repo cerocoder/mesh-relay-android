@@ -77,18 +77,6 @@ class SettingsRepository(private val store: SettingsStore) {
         persist()
     }
 
-    /**
-     * A named setter for [AppSettings.preferInstalledMapApp], alongside the
-     * generic [update] every field on the settings screen itself goes
-     * through. Given a name of its own so a caller outside that screen - the
-     * code that actually opens a node's coordinate - can flip this
-     * preference without building an `(AppSettings) -> AppSettings`
-     * transform just to change the one field it cares about.
-     */
-    fun setPreferInstalledMapApp(value: Boolean) {
-        update { it.copy(preferInstalledMapApp = value) }
-    }
-
     fun addSkippedRelayNode(nodeNum: Int) {
         _skippedRelayNodes.value = _skippedRelayNodes.value + nodeNum
         persist()

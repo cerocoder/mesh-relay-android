@@ -93,20 +93,6 @@ class SettingsRepositoryTest {
     }
 
     @Test
-    fun `the named setter for preferring an installed map app persists like the generic update`() {
-        // setPreferInstalledMapApp is a second, named entry point to the same
-        // field - a caller outside the settings screen should not need to
-        // build an (AppSettings) -> AppSettings transform just to flip one
-        // preference. It must reach the flow immediately and survive a reopen,
-        // exactly as update itself does.
-        val store = FakeStore()
-        val subject = repo(store)
-        subject.setPreferInstalledMapApp(true)
-        assertEquals(true, subject.settings.value.preferInstalledMapApp)
-        assertEquals(true, repo(store).settings.value.preferInstalledMapApp)
-    }
-
-    @Test
     fun `time format persists both ways`() {
         // Both directions, for the same reason the map-provider test above gives:
         // the default is TWENTY_FOUR_HOUR, so a store that dropped the write

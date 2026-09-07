@@ -855,8 +855,9 @@ Ruling: `openPosition`'s `catch` stays even though `MapAppAvailability` already 
   `AndroidUriHandler` wraps it in, which one surfaces has changed between Compose versions, which is
   why the catch is `Exception` rather than either specific type - does not degrade, it takes the
   whole screen down.
-  Cost if wrong: nothing - the fallback is a website `MapLinks.forProvider` always resolves, so a
-  catch that never fires on a given phone costs that phone nothing either.
+  Cost if wrong: nothing - the fallback is a website, which resolves on any phone with a browser,
+  the same assumption this app already made for its untouched Meshview link, so a catch that never
+  fires on a given phone costs that phone nothing either.
 
 ### 63
 

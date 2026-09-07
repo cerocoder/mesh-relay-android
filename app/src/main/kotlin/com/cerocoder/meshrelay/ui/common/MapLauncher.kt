@@ -21,8 +21,9 @@ fun openPosition(
     label: String,
 ) {
     if (preferInstalledApp) {
+        val geo = MapLinks.geoUri(lat, lon, label)
         try {
-            uriHandler.openUri(MapLinks.geoUri(lat, lon, label))
+            uriHandler.openUri(geo)
             return
         } catch (noHandler: Exception) {
             // Deliberately Exception: Compose's AndroidUriHandler wraps

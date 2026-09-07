@@ -21,11 +21,11 @@ import org.junit.Test
  */
 class MapAppAvailabilityTest {
 
-    private fun resolveInfo(packageName: String, className: String): ResolveInfo =
+    private fun resolveInfo(pkg: String, cls: String): ResolveInfo =
         ResolveInfo().apply {
             activityInfo = ActivityInfo().apply {
-                this.packageName = packageName
-                name = className
+                this.packageName = pkg
+                name = cls
             }
         }
 
@@ -48,8 +48,13 @@ class MapAppAvailabilityTest {
 
     @Test
     fun `different packages are not the same activity`() = with(MapAppAvailability) {
-        val a = resolveInfo("com.example.maps", "com.example.maps.MapActivity")
-        val b = resolveInfo("com.other.maps", "com.other.maps.MapActivity")
+        // Shared class name on purpose: a mutant that dropped the packageName half
+        // of isSameActivityAs and compared activityInfo.name alone would pass this
+        // if the two class names differed too, the same way the test above would
+        // pass a mutant that dropped the name half. Only a shared class name pins
+        // the packageName comparison specifically.
+        val a = resolveInfo("com.example.maps", "MapActivity")
+        val b = resolveInfo("com.other.maps", "MapActivity")
         assertFalse(a.isSameActivityAs(b))
     }
 }

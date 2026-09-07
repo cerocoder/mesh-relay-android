@@ -94,16 +94,22 @@ object MapLinks {
         String.format(Locale.ROOT, GEO_TEMPLATE, lat, lon, lat, lon, encodeLabel(label))
 
     /**
-     * The three characters that are structural inside `q=...(label)`. Hand-rolled
-     * rather than `Uri.encode`, which is `android.net.Uri` and unavailable to a JVM
-     * unit test, and rather than `URLEncoder`, which encodes a space as `+` - form
+     * The characters that are structural inside `q=...(label)`. Hand-rolled rather
+     * than `Uri.encode`, which is `android.net.Uri` and unavailable to a JVM unit
+     * test, and rather than `URLEncoder`, which encodes a space as `+` - form
      * encoding, not URI encoding. `%` is replaced first, or it would escape the
      * escapes that follow it.
+     *
+     * `&` would otherwise split the query at that point, and `#` is worse still -
+     * it starts a fragment, so `Uri.parse` truncates the query there rather than
+     * merely splitting it.
      */
     private fun encodeLabel(label: String): String = label
         .replace("%", "%25")
         .replace("(", "%28")
         .replace(")", "%29")
+        .replace("&", "%26")
+        .replace("#", "%23")
 
     // A scheme plus "://" at the very start, e.g. "https://", "http://" - deliberately
     // narrow rather than a full URI-scheme grammar, since the only two values this

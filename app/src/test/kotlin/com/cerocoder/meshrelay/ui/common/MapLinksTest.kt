@@ -175,4 +175,18 @@ class MapLinksTest {
         val uri = MapLinks.geoUri(40.0, -3.0, "a(b)c")
         assertTrue(uri.endsWith("(a%28b%29c)"))
     }
+
+    @Test
+    fun `an ampersand in a label is encoded, or it would split the query`() {
+        val uri = MapLinks.geoUri(40.0, -3.0, "Fish & Chips")
+        assertTrue(uri.endsWith("(Fish %26 Chips)"))
+    }
+
+    @Test
+    fun `a hash in a label is encoded, or Uri parse would truncate the query at it`() {
+        // Worse than an ampersand: # starts a fragment, so an unescaped one drops
+        // everything after it rather than merely splitting the query in two.
+        val uri = MapLinks.geoUri(40.0, -3.0, "Node #1")
+        assertTrue(uri.endsWith("(Node %231)"))
+    }
 }
