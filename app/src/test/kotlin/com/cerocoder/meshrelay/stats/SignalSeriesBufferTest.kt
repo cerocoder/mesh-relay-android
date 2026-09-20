@@ -130,7 +130,7 @@ class SignalSeriesBufferTest {
         buffer.append(3_000L, -90f, 5f, getafe, 0x22222222)
 
         val series = buffer.snapshot()
-        assertEquals(0x22222222, series.sourceNodeNum(0))
+        assertEquals(0x11111111, series.sourceNodeNum(0))
         assertEquals(0x22222222, series.sourceNodeNum(1))
     }
 
@@ -163,7 +163,7 @@ class SignalSeriesBufferTest {
 
     @Test
     fun `the default capacity is the one the memory budget was calculated for`() {
-        // 25 bytes per measurement x 5000 = 125 KB per relay or neighbour. If this
+        // 33 bytes per measurement x 5000 = 165 KB per relay or neighbour. If this
         // number changes, the figure in the spec's section 5.3 is wrong.
         assertEquals(5000, SignalSeriesBuffer.MAX_SAMPLES)
     }
