@@ -565,7 +565,7 @@ Add to `app/src/test/kotlin/com/cerocoder/meshrelay/stats/NodeDirectoryTest.kt`,
 ```kotlin
     @Test
     fun `the local altitude is resolved through the local node number, same precedence as position`() {
-        assertNull(directory.snapshot(emptySet()).let { NodeDirectory(TimeSource { 5_000L }).localAltitude() })
+        assertNull(directory.localAltitude())
 
         directory.setLocalNodeNum(LOCAL_NODE)
         assertNull(directory.localAltitude())
