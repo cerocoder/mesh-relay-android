@@ -247,7 +247,7 @@ Then add these new tests to `SignalSeriesBufferTest.kt` (append after the existi
         buffer.append(3_000L, -90f, 5f, getafe, 0x22222222)
 
         val series = buffer.snapshot()
-        assertEquals(0x22222222, series.sourceNodeNum(0))
+        assertEquals(0x11111111, series.sourceNodeNum(0))
         assertEquals(0x22222222, series.sourceNodeNum(1))
     }
 ```
