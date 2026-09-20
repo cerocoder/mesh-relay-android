@@ -94,7 +94,7 @@ fun StatsTopBar(
     sort: SortAction?,
     gaugeMode: GaugeMode,
     onSetGaugeMode: (GaugeMode) -> Unit,
-    onExport: () -> Unit,
+    onExport: (() -> Unit)? = null,
     paused: Boolean,
     onTogglePause: () -> Unit,
     onReset: () -> Unit,
@@ -200,13 +200,15 @@ fun StatsTopBar(
                         },
                     )
 
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_export)) },
-                        onClick = {
-                            overflowExpanded = false
-                            onExport()
-                        },
-                    )
+                    if (onExport != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_export)) },
+                            onClick = {
+                                overflowExpanded = false
+                                onExport()
+                            },
+                        )
+                    }
 
                     if (reload != null) {
                         DropdownMenuItem(
