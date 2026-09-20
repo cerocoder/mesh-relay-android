@@ -1901,27 +1901,54 @@ git commit -m "feat(export): add an Export command to both detail screens' overf
 
 **Files:**
 - Modify: `app/src/main/kotlin/com/cerocoder/meshrelay/MainActivity.kt`
+- Modify: `app/src/main/kotlin/com/cerocoder/meshrelay/AppContainer.kt`
 
 **Interfaces:**
 - Consumes: `MeshStatsEngine.requestExport`/`exportResult`/`exportConsumed` (Task 6), `ExportRows.build` (Task 7), `CsvWriter.write` (Task 8), `ExportFileNames.suggest` (Task 9), `MeshRelayNavHost(..., onExportSeries)` (Task 11).
+- Produces: `AppContainer.pendingExportText: String?` (a plain mutable field, not a StateFlow - see Step 2).
 
 No unit test: this is the activity-level Compose wiring and a real `ActivityResultLauncher`, neither of which this project unit-tests (no test file exists for `MainActivity` today). Verified in Task 13, which is this whole feature's actual proof: the picker opening and the file's contents are the thing no JVM test here can see.
 
-- [ ] **Step 1: Add the imports**
+- [ ] **Step 1: Add `pendingExportText` to `AppContainer`**
+
+The final whole-branch review found that holding the pending CSV text in Compose state (`rememberSaveable`) survives rotation only by writing the *entire generated file* into the activity's saved-instance-state `Bundle` - for a large export (near the 5000-sample cap) this can approach Android's ~1&nbsp;MB Binder transaction limit and crash with `TransactionTooLargeException`, trading one rotation bug for a worse one. `AppContainer` already outlives activity recreation by design (it is hung off the `Application`, per its own class KDoc) - parking the pending text there instead removes the failure mode entirely rather than working around it.
+
+In `app/src/main/kotlin/com/cerocoder/meshrelay/AppContainer.kt`, add a plain field near the top of the class body (not a `StateFlow` - nothing subscribes to this, it is a single in-flight handoff between the export coroutine and the document-picker callback):
+
+```kotlin
+    /**
+     * The most recently built CSV export text, waiting for the document picker
+     * to return a [android.net.Uri] to write it to. Held here, not in Compose
+     * state: this container survives an activity recreation (rotation, the
+     * app's own language-change recreate(), low memory) while the system
+     * picker is on screen; `rememberSaveable` would have to put the whole
+     * generated file in the saved-instance-state Bundle to survive the same
+     * window, which risks Android's ~1 MB Binder transaction limit on a large
+     * export.
+     */
+    var pendingExportText: String? = null
+```
+
+- [ ] **Step 2: Add the imports**
 
 In `app/src/main/kotlin/com/cerocoder/meshrelay/MainActivity.kt`, add:
 
 ```kotlin
+import android.util.Log
 import com.cerocoder.meshrelay.export.CsvWriter
 import com.cerocoder.meshrelay.export.ExportFileNames
 import com.cerocoder.meshrelay.export.ExportKind
 import com.cerocoder.meshrelay.export.ExportRows
 import com.cerocoder.meshrelay.stats.SeriesKey
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 ```
 
-- [ ] **Step 2: Add the launcher and the orchestration inside `MeshRelayContent`**
+`MainActivity.kt` has no existing `Log`/`TAG` usage anywhere in the file (checked: this is the first). Add a top-level `private const val TAG = "MeshRelayContent"` near the top of the file (file scope, not inside any class - `MeshRelayContent` is a plain top-level function).
+
+- [ ] **Step 3: Add the launcher and the orchestration inside `MeshRelayContent`**
 
 In `MeshRelayContent` (the private composable in this file, already hosting `permissionLauncher`), add - right after the existing `val permissionLauncher = rememberLauncherForActivityResult(...)` block:
 
@@ -1933,31 +1960,34 @@ In `MeshRelayContent` (the private composable in this file, already hosting `per
     // returns", is what this is for.
     val exportSnapshot by container.engine.snapshot.collectAsState()
 
-    // rememberSaveable, not remember: the system picker is a separate activity,
-    // and an activity recreation while it is on screen (rotation, the app's own
-    // language-change recreate(), low memory) would otherwise drop this back to
-    // null - the picker would still return a real Uri, and the callback below
-    // would silently write nothing. A String survives the default Bundle saver.
-    var pendingExportText by rememberSaveable { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
-        val text = pendingExportText
-        pendingExportText = null
+        val text = container.pendingExportText
+        container.pendingExportText = null
         if (uri != null && text != null) {
-            // A full volume or a flaky document provider throws here, on the main
-            // thread, from inside the activity-result callback; letting that
-            // propagate crashes the app over what the user will experience as a
-            // successful tap. Logged rather than shown, matching this codebase's
-            // existing rule against a second logging mechanism for what is, from
-            // the user's side, an already-closed action - the failure is visible
-            // in logcat if the owner is looking for it, and the file the picker
-            // named simply never gets its contents.
-            runCatching {
-                appContext.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(text.toByteArray(Charsets.UTF_8))
-                }
-            }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
+            // Dispatchers.IO, not the callback's own main thread: the write goes
+            // through an arbitrary DocumentsProvider, and a cloud-backed one
+            // (Drive, OneDrive) can block for seconds - long enough to ANR on
+            // Main. "wt", not the bare "w" CreateDocument's own contract allows:
+            // some providers do not guarantee truncation on "w" alone, and a
+            // shorter new export overwriting a longer old file could otherwise
+            // leave stale rows appended past the new content's end.
+            scope.launch(Dispatchers.IO) {
+                // A full volume or a flaky document provider throws here; letting
+                // that propagate crashes the app over what the user will
+                // experience as a successful tap. Logged rather than shown,
+                // matching this codebase's existing rule against a second
+                // logging mechanism for what is, from the user's side, an
+                // already-closed action - the failure is visible in logcat if
+                // the owner is looking for it, and the file the picker named
+                // simply never gets its contents.
+                runCatching {
+                    appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
+            }
         }
     }
 
@@ -1974,23 +2004,30 @@ In `MeshRelayContent` (the private composable in this file, already hosting `per
             // Clears any result a previous export's coroutine left behind after
             // being cancelled between exportResult resolving and exportConsumed()
             // running (the same activity-recreation window pendingExportText's
-            // own comment describes) - a narrower gap than the accepted limitation
+            // own KDoc describes) - a narrower gap than the accepted limitation
             // above, and closing it costs nothing: clearing an already-null value
             // is a no-op.
             container.engine.exportConsumed()
             container.engine.requestExport(keys)
             val seriesByKey = container.engine.exportResult.filterNotNull().first()
             container.engine.exportConsumed()
-            val rows = ExportRows.build(seriesByKey, exportSnapshot)
-            pendingExportText = CsvWriter.write(rows)
-            exportLauncher.launch(ExportFileNames.suggest(kind, keys, System.currentTimeMillis()))
+            // Off Main: building rows resolves a NodeIdentity per row
+            // (directory.shortName), which for a large list export is real
+            // allocation volume, and building the CSV string is proportional
+            // work on top of that - neither belongs on the UI thread.
+            val fileName = withContext(Dispatchers.Default) {
+                val rows = ExportRows.build(seriesByKey, exportSnapshot)
+                container.pendingExportText = CsvWriter.write(rows)
+                ExportFileNames.suggest(kind, keys, System.currentTimeMillis())
+            }
+            exportLauncher.launch(fileName)
         }
     }
 ```
 
-`MainActivity.kt` has no existing `Log`/`TAG` usage anywhere in the file (checked: this is the first). Add a top-level `private const val TAG = "MeshRelayContent"` near the top of the file (file scope, not inside any class - `MeshRelayContent` is a plain top-level function), plus the imports `android.util.Log` and `androidx.compose.runtime.saveable.rememberSaveable`.
+`exportLauncher.launch(...)` runs back on `scope`'s own dispatcher (Main), which is where an `ActivityResultLauncher` expects to be driven from - only the CPU-bound row/CSV building moves to `Dispatchers.Default` via `withContext`, and only the blocking file write moves to `Dispatchers.IO`.
 
-- [ ] **Step 3: Pass it to `MeshRelayNavHost`**
+- [ ] **Step 4: Pass it to `MeshRelayNavHost`**
 
 At the bottom of `MeshRelayContent`, add `onExportSeries = onExportSeries,` to the existing `MeshRelayNavHost(...)` call, right after `onExit = onExit,`:
 
@@ -2013,10 +2050,10 @@ At the bottom of `MeshRelayContent`, add `onExportSeries = onExportSeries,` to t
     )
 ```
 
-- [ ] **Step 4: Commit**
+- [ ] **Step 5: Commit**
 
 ```bash
-git add app/src/main/kotlin/com/cerocoder/meshrelay/MainActivity.kt
+git add app/src/main/kotlin/com/cerocoder/meshrelay/MainActivity.kt app/src/main/kotlin/com/cerocoder/meshrelay/AppContainer.kt
 git commit -m "feat(export): open the system Save As picker and write the CSV"
 ```
 
