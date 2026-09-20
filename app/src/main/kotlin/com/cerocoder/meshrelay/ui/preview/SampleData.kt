@@ -649,6 +649,7 @@ object SampleData {
                     -3.7325611 - i * 0.000009,
                     if (i % 20 == 0) PositionOrigin.NODE else PositionOrigin.PHONE,
                 ),
+                fromNode = NUM_GETAFE_ROUTER,
             )
         }
     }.snapshot()
@@ -657,7 +658,7 @@ object SampleData {
      *  position at all, which is the case that must leave the crosshair's globe
      *  disabled rather than opening a map on the Gulf of Guinea. */
     val graphSeriesSingle: SignalSeries = SignalSeriesBuffer().apply {
-        append(NOW - 30_000L, -92f, 4.5f, null)
+        append(NOW - 30_000L, -92f, 4.5f, null, NUM_GETAFE_ROUTER)
     }.snapshot()
 
     /**
