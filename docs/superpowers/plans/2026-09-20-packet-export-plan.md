@@ -1551,7 +1551,9 @@ git commit -m "feat(export): suggest a filename for the document picker"
 - Modify: `app/src/main/res/values-es/strings.xml`
 
 **Interfaces:**
-- Produces: `StatsTopBar(..., onExport: () -> Unit, ...)`, `RelayListScreen(..., onExport: () -> Unit, ...)`, `NeighbourListScreen(..., onExport: () -> Unit, ...)`.
+- Produces: `StatsTopBar(..., onExport: (() -> Unit)? = null, ...)`, `RelayListScreen(..., onExport: () -> Unit, ...)`, `NeighbourListScreen(..., onExport: () -> Unit, ...)`.
+
+`StatsTopBar` is shared by **three** screens, not two - `MyNodeScreen` also calls it (with `sort = null`, since it sorts nothing). My Node has no export command (spec's four named entry points don't include it), so `onExport` on `StatsTopBar` must be nullable with a `null` default, the same pattern `reload: ReloadAction? = null` already uses for "this screen doesn't have this feature" - not a required parameter, which would break `MyNodeScreen.kt`'s existing call and force it to pass a fake no-op. With the nullable default, `MyNodeScreen.kt` needs **no change at all** for this task.
 
 No unit test: these are Compose screens, and this project verifies Composables on the phone and in Previews rather than with JVM tests (no test file exists for `StatsTopBar`, `RelayListScreen`, or `NeighbourListScreen` today). Verified in Task 13.
 
@@ -1571,7 +1573,7 @@ In `app/src/main/res/values-es/strings.xml`, at the same position:
 
 - [ ] **Step 2: Add `onExport` to `StatsTopBar`**
 
-In `app/src/main/kotlin/com/cerocoder/meshrelay/ui/common/StatsTopBar.kt`, add `onExport: () -> Unit,` to the parameter list, right after `onSetGaugeMode: (GaugeMode) -> Unit,`:
+In `app/src/main/kotlin/com/cerocoder/meshrelay/ui/common/StatsTopBar.kt`, add `onExport: (() -> Unit)? = null,` to the parameter list, right after `onSetGaugeMode: (GaugeMode) -> Unit,` - nullable and defaulted, like `reload` below it, so `MyNodeScreen.kt`'s existing call (which supplies neither `onExport` nor `reload`) keeps compiling unchanged:
 
 ```kotlin
 fun StatsTopBar(
@@ -1579,7 +1581,7 @@ fun StatsTopBar(
     sort: SortAction?,
     gaugeMode: GaugeMode,
     onSetGaugeMode: (GaugeMode) -> Unit,
-    onExport: () -> Unit,
+    onExport: (() -> Unit)? = null,
     paused: Boolean,
     onTogglePause: () -> Unit,
     onReset: () -> Unit,
@@ -1590,16 +1592,18 @@ fun StatsTopBar(
 ) {
 ```
 
-Add a new `DropdownMenuItem` to the overflow menu, right after the "Gauges" item and before the `if (reload != null)` block:
+Add a new, conditionally-shown `DropdownMenuItem` to the overflow menu, right after the "Gauges" item and before the `if (reload != null)` block - gated on `onExport != null`, the same shape the `reload` block below it already uses for a menu item that not every caller wants:
 
 ```kotlin
-                    DropdownMenuItem(
-                        text = { Text(stringResource(R.string.action_export)) },
-                        onClick = {
-                            overflowExpanded = false
-                            onExport()
-                        },
-                    )
+                    if (onExport != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_export)) },
+                            onClick = {
+                                overflowExpanded = false
+                                onExport()
+                            },
+                        )
+                    }
 ```
 
 - [ ] **Step 3: Wire it through `RelayListScreen`**
@@ -1682,7 +1686,11 @@ fun NeighbourListScreen(
 
 - [ ] **Step 5: Fix every `@Preview` in these three files**
 
-`StatsTopBar`, `RelayListScreen`, and `NeighbourListScreen` each have `@Preview` composables that call the function under test with named arguments (`onExport` was not in scope for any of them, so the Kotlin compiler forces a value at every call site with no default). Search each of the three files for every call to `StatsTopBar(`, `RelayListScreen(`, and `NeighbourListScreen(` respectively, and add `onExport = {},` to each one. There is no default value on `onExport` (every real caller must supply one; a silent no-op default would let a screen forget to wire it), so this step is mandatory for the files to compile.
+`RelayListScreen` and `NeighbourListScreen` each have `@Preview` composables that call the function under test with named arguments, and `onExport` on *these two* has no default (every real caller must supply one; a silent no-op default would let a screen forget to wire it) - search both files for every call to `RelayListScreen(`/`NeighbourListScreen(` and add `onExport = {},` to each one, mandatory for the files to compile.
+
+`StatsTopBar`'s own `@Preview`s (in `StatsTopBar.kt` itself, if any) do NOT need this - its `onExport` is nullable with a `null` default (Step 2), specifically so `MyNodeScreen.kt`'s existing call keeps compiling with no change at all. Adding `onExport = {}` to a `StatsTopBar` preview that wants to show the new menu item is fine but optional, not required for compilation.
+
+**Also check every other screen that calls `StatsTopBar` directly**, not only the two this task otherwise touches - `MyNodeScreen.kt` calls it too (`sort = null`, no `reload` argument, matching the same "not every screen has every feature" pattern `onExport`'s new default now joins). Confirm it still compiles unchanged and is left untouched; it is intentionally not one of the four export entry points.
 
 - [ ] **Step 6: Commit**
 
