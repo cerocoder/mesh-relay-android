@@ -4,6 +4,7 @@ import com.cerocoder.meshrelay.stats.SeriesKey
 import com.cerocoder.meshrelay.stats.SignalSeriesBuffer
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.StampedPosition
@@ -12,6 +13,8 @@ import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
+
+private const val DB_AT_MILLIS = 1_700_000_000_000L
 
 class ExportRowsTest {
 
@@ -128,6 +131,62 @@ class ExportRowsTest {
         )
 
         assertEquals(listOf(1_000L, 5_000L), rows.map { it.atMillis })
+    }
+
+    @Test
+    fun `a neighbour row resolves both its own name and its source name from a populated directory`() {
+        // Every other test in this file uses emptyDirectory(), so shortName()
+        // never runs against a real entry and always falls through to "" - which
+        // would pass just as well whether the lookup were wired correctly or not.
+        // This one populates the directory's own node database (not the air
+        // store, but shortName()/identity() resolve either the same way) with a
+        // real short name, and uses SeriesKey.Neighbour rather than
+        // SeriesKey.Relay: a neighbour's source is always itself, so the same
+        // node number is asserted on both nodeName and sourceNodeName.
+        val nodeNum = 0xA1000A2A.toInt()
+        val buffer = SignalSeriesBuffer()
+        buffer.append(1_000L, -94f, -7.5f, null, nodeNum)
+        val directory = NodeDirectorySnapshot(
+            nodes = mapOf(
+                nodeNum to NodeRecord(
+                    num = nodeNum,
+                    longName = "Getafe Router",
+                    shortName = "gt2a",
+                    // fromProto copies Wire's defaults verbatim rather than nulls
+                    // (NodeDirectoryTest pins this) - "UNSET"/"CLIENT" is the shape
+                    // a real database record actually has, not a state the app
+                    // cannot reach.
+                    hwModel = "UNSET",
+                    role = "CLIENT",
+                    dbPosition = null,
+                    dbSnr = null,
+                    lastHeardEpochSeconds = null,
+                    hopsAway = null,
+                    hasPublicKey = false,
+                    // Never 0L on a committed snapshot: markLoaded overwrites this
+                    // at commit, and 0L is only the pre-commit sentinel.
+                    receivedAtMillis = DB_AT_MILLIS,
+                ),
+            ),
+            airNodes = emptyMap(),
+            loadedAtMillis = null,
+            localNodeNum = null,
+            positions = emptyMap(),
+            telemetry = emptyMap(),
+            skipped = emptySet(),
+        )
+
+        val rows = ExportRows.build(
+            mapOf(SeriesKey.Neighbour(nodeNum) to buffer.snapshot()),
+            snapshotWith(emptyList(), directory),
+        )
+
+        assertEquals(1, rows.size)
+        val row = rows.single()
+        // The real, non-blank name - not "", which is what every other test in
+        // this file gets from an empty directory and would pass either way.
+        assertEquals("gt2a", row.nodeName)
+        assertEquals("gt2a", row.sourceNodeName)
     }
 
     @Test

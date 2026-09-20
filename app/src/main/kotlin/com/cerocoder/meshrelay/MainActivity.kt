@@ -25,7 +25,6 @@ import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
@@ -47,9 +46,11 @@ import com.cerocoder.meshrelay.ui.common.LocalPreferInstalledMapApp
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
 
 private const val TAG = "MeshRelayContent"
@@ -265,31 +266,34 @@ private fun MeshRelayContent(
     // returns", is what this is for.
     val exportSnapshot by container.engine.snapshot.collectAsState()
 
-    // rememberSaveable, not remember: the system picker is a separate activity,
-    // and an activity recreation while it is on screen (rotation, the app's own
-    // language-change recreate(), low memory) would otherwise drop this back to
-    // null - the picker would still return a real Uri, and the callback below
-    // would silently write nothing. A String survives the default Bundle saver.
-    var pendingExportText by rememberSaveable { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
-        val text = pendingExportText
-        pendingExportText = null
+        val text = container.pendingExportText
+        container.pendingExportText = null
         if (uri != null && text != null) {
-            // A full volume or a flaky document provider throws here, on the main
-            // thread, from inside the activity-result callback; letting that
-            // propagate crashes the app over what the user will experience as a
-            // successful tap. Logged rather than shown, matching this codebase's
-            // existing rule against a second logging mechanism for what is, from
-            // the user's side, an already-closed action - the failure is visible
-            // in logcat if the owner is looking for it, and the file the picker
-            // named simply never gets its contents.
-            runCatching {
-                appContext.contentResolver.openOutputStream(uri)?.use { out ->
-                    out.write(text.toByteArray(Charsets.UTF_8))
-                }
-            }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
+            // Dispatchers.IO, not the callback's own main thread: the write goes
+            // through an arbitrary DocumentsProvider, and a cloud-backed one
+            // (Drive, OneDrive) can block for seconds - long enough to ANR on
+            // Main. "wt", not the bare "w" CreateDocument's own contract allows:
+            // some providers do not guarantee truncation on "w" alone, and a
+            // shorter new export overwriting a longer old file could otherwise
+            // leave stale rows appended past the new content's end.
+            scope.launch(Dispatchers.IO) {
+                // A full volume or a flaky document provider throws here; letting
+                // that propagate crashes the app over what the user will
+                // experience as a successful tap. Logged rather than shown,
+                // matching this codebase's existing rule against a second
+                // logging mechanism for what is, from the user's side, an
+                // already-closed action - the failure is visible in logcat if
+                // the owner is looking for it, and the file the picker named
+                // simply never gets its contents.
+                runCatching {
+                    appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
+            }
         }
     }
 
@@ -306,16 +310,23 @@ private fun MeshRelayContent(
             // Clears any result a previous export's coroutine left behind after
             // being cancelled between exportResult resolving and exportConsumed()
             // running (the same activity-recreation window pendingExportText's
-            // own comment describes) - a narrower gap than the accepted limitation
+            // own KDoc describes) - a narrower gap than the accepted limitation
             // above, and closing it costs nothing: clearing an already-null value
             // is a no-op.
             container.engine.exportConsumed()
             container.engine.requestExport(keys)
             val seriesByKey = container.engine.exportResult.filterNotNull().first()
             container.engine.exportConsumed()
-            val rows = ExportRows.build(seriesByKey, exportSnapshot)
-            pendingExportText = CsvWriter.write(rows)
-            exportLauncher.launch(ExportFileNames.suggest(kind, keys, System.currentTimeMillis()))
+            // Off Main: building rows resolves a NodeIdentity per row
+            // (directory.shortName), which for a large list export is real
+            // allocation volume, and building the CSV string is proportional
+            // work on top of that - neither belongs on the UI thread.
+            val fileName = withContext(Dispatchers.Default) {
+                val rows = ExportRows.build(seriesByKey, exportSnapshot)
+                container.pendingExportText = CsvWriter.write(rows)
+                ExportFileNames.suggest(kind, keys, System.currentTimeMillis())
+            }
+            exportLauncher.launch(fileName)
         }
     }
 

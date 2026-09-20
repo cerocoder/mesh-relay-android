@@ -55,6 +55,18 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     }
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default + errors)
 
+    /**
+     * The most recently built CSV export text, waiting for the document picker
+     * to return a [android.net.Uri] to write it to. Held here, not in Compose
+     * state: this container survives an activity recreation (rotation, the
+     * app's own language-change recreate(), low memory) while the system
+     * picker is on screen; `rememberSaveable` would have to put the whole
+     * generated file in the saved-instance-state Bundle to survive the same
+     * window, which risks Android's ~1 MB Binder transaction limit on a large
+     * export.
+     */
+    var pendingExportText: String? = null
+
     /** Permission and adapter state, for the device screen. */
     val availability = BluetoothAvailability(context)
 
