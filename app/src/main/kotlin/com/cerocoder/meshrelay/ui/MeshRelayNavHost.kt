@@ -36,6 +36,7 @@ import com.cerocoder.meshrelay.BuildConfig
 import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
+import com.cerocoder.meshrelay.export.ExportKind
 import com.cerocoder.meshrelay.settings.AppSettings
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
@@ -95,6 +96,7 @@ fun MeshRelayNavHost(
     onSelectDevice: (DeviceListEntry) -> Unit,
     onDisconnect: () -> Unit,
     onExit: () -> Unit,
+    onExportSeries: (ExportKind, List<SeriesKey>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backStack = rememberSaveable(saver = backStackSaver) { BackStack(Screen.Devices) }
@@ -177,6 +179,7 @@ fun MeshRelayNavHost(
             container = container,
             backStack = backStack,
             onExit = onExit,
+            onExportSeries = onExportSeries,
             modifier = modifier,
         )
 
@@ -198,6 +201,7 @@ fun MeshRelayNavHost(
             meshviewUrl = meshviewUrl,
             container = container,
             backStack = backStack,
+            onExportSeries = onExportSeries,
             modifier = modifier,
         )
 
@@ -249,6 +253,7 @@ private fun MainScaffold(
     container: AppContainer,
     backStack: BackStack,
     onExit: () -> Unit,
+    onExportSeries: (ExportKind, List<SeriesKey>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -287,6 +292,7 @@ private fun MainScaffold(
                 onOpenRelay = { relayByte -> backStack.push(Screen.Detail(DetailSubject.Relay(relayByte))) },
                 onSetSortMode = { mode -> container.engine.setSortMode(mode) },
                 onSetGaugeMode = { mode -> container.settings.update { it.copy(gaugeMode = mode) } },
+                onExport = { onExportSeries(ExportKind.RELAY_LIST, snapshot.relays.map { SeriesKey.Relay(it.relayByte) }) },
                 // The engine owns whether it is paused; this only asks for the
                 // opposite of what the snapshot last reported.
                 onTogglePause = { container.engine.setPaused(!snapshot.paused) },
@@ -303,6 +309,7 @@ private fun MainScaffold(
                 onOpenNeighbour = { nodeNum -> backStack.push(Screen.Detail(DetailSubject.Neighbour(nodeNum))) },
                 onSetSortMode = { mode -> container.engine.setSortMode(mode) },
                 onSetGaugeMode = { mode -> container.settings.update { it.copy(gaugeMode = mode) } },
+                onExport = { onExportSeries(ExportKind.NEIGHBOUR_LIST, snapshot.neighbours.map { SeriesKey.Neighbour(it.nodeNum) }) },
                 onTogglePause = { container.engine.setPaused(!snapshot.paused) },
                 onReset = { container.engine.reset() },
                 onOpenSettings = { backStack.push(Screen.Settings) },
@@ -349,6 +356,7 @@ private fun DetailDestination(
     meshviewUrl: String?,
     container: AppContainer,
     backStack: BackStack,
+    onExportSeries: (ExportKind, List<SeriesKey>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     // For a relay this is its own byte; for a neighbour it is the byte that
@@ -362,6 +370,10 @@ private fun DetailDestination(
     // open, exactly as the shell's own header resolution allows for; an all-zero
     // record renders an empty tab rather than crashing.
     val relay = snapshot.relays.find { it.relayByte == relayByte } ?: RelayStats(relayByte = relayByte)
+    val exportKind = when (subject) {
+        is DetailSubject.Relay -> ExportKind.RELAY_DETAIL
+        is DetailSubject.Neighbour -> ExportKind.NEIGHBOUR_DETAIL
+    }
 
     DetailScreen(
         subject = subject,
@@ -373,9 +385,12 @@ private fun DetailDestination(
         onSkipNode = { nodeNum -> container.skipRelayNode(nodeNum) },
         onClearSkipped = { container.clearSkippedForRelay(relayByte) },
         modifier = modifier,
-        // Today exactly one item. A second command is one more entry in this
-        // list, not a change to DetailScreen's signature.
-        menuItems = listOf(DetailMenuItem(R.string.action_graph) { backStack.push(Screen.Graph(subject)) }),
+        // A relay's or neighbour's own chart data, exported to a file - the
+        // second command in this list, per DetailMenuItem's own KDoc.
+        menuItems = listOf(
+            DetailMenuItem(R.string.action_graph) { backStack.push(Screen.Graph(subject)) },
+            DetailMenuItem(R.string.action_export) { onExportSeries(exportKind, listOf(subject.toSeriesKey())) },
+        ),
         matchingNodesTab = {
             when (subject) {
                 // relayByte above is already this subject's own byte in this branch.
@@ -435,10 +450,7 @@ private fun GraphDestination(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val key = when (subject) {
-        is DetailSubject.Relay -> SeriesKey.Relay(subject.relayByte)
-        is DetailSubject.Neighbour -> SeriesKey.Neighbour(subject.nodeNum)
-    }
+    val key = subject.toSeriesKey()
 
     DisposableEffect(key) {
         container.engine.watchSeries(key)
@@ -627,3 +639,9 @@ private fun EmptyState(title: String, body: String, modifier: Modifier = Modifie
  */
 private fun meshviewUrlOrNull(settings: AppSettings): String? =
     settings.meshviewUrl.trim().takeIf { it.isNotEmpty() }
+
+/** [DetailSubject] and [SeriesKey] mirror each other; this is the one place that says how. */
+private fun DetailSubject.toSeriesKey(): SeriesKey = when (this) {
+    is DetailSubject.Relay -> SeriesKey.Relay(relayByte)
+    is DetailSubject.Neighbour -> SeriesKey.Neighbour(nodeNum)
+}
