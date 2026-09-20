@@ -37,8 +37,10 @@ As given by the owner, refined during brainstorming:
    that instant.
 3. A list view's export writes the same per-sample data for **every** relay (or
    neighbour) currently tracked in that list - not a one-row-per-node summary -
-   combined into a single file with a column naming which node each row belongs
-   to.
+   combined into a single file with columns naming **both the id and the name**
+   of the node each row belongs to (added at the owner's request during review:
+   the id alone identifies the row, but the name is what a person reading the
+   file recognises without reopening the app).
 4. **Observer altitude is recorded per sample too**, alongside latitude and
    longitude (added after the first design pass, at the owner's explicit
    request). Sourced from the phone's GPS fix when the phone is the position
@@ -66,8 +68,11 @@ As given by the owner, refined during brainstorming:
 | Where observer altitude comes from | Reuse the existing altitude resolution, not a new one | `NodeDirectorySnapshot.locationInfo(num, from)` already resolves an altitude for any node from the same live-then-database precedence; `MyNodeScreen`'s own card and the header's `Alt(...)` reading (separate, already-shipped change) both call it for the local node. A third, independent resolution risks disagreeing with those two. |
 | Altitude "no data" encoding | `Int.MIN_VALUE` sentinel in the ring buffer, not a second boolean array | A position can exist with no altitude (2D fix; a node with lat/lon only) - see `PositionHistory.newestWithCoordinates`'s own KDoc - so absence needs tracking independent of `source`. `PositionOrigin.NONE` already uses a reserved-value sentinel in the same class rather than a parallel array; `Int.MIN_VALUE` is a value no real altitude reaches. |
 | CSV number/timestamp format | `Locale.ROOT`, ISO-8601 UTC timestamps | This is a data file, not prose - unlike `PositionLineText`, which deliberately uses the *display* locale for a human sentence, a CSV column must not grow a decimal comma depending on the phone's language, or every spreadsheet import breaks in Spanish. |
-| Node label column | The same identifier the app already treats as primary | A relay's `hexId` ("0x1a"); a neighbour's `NodeId.format(nodeNum)`. Not the short name: a relay byte is not always uniquely named, and embedding a name risks CSV-unsafe characters and drags in i18n encoding this file doesn't need. |
-| One CSV schema for both export kinds | Yes - the node column is always present | A detail export's rows all share one node value; keeping the same header either way means one writer, no schema branch, and a file opened without its context is still self-describing. |
+| Node id column | The same identifier the app already treats as primary | A relay's `hexId` ("0x1a"); a neighbour's `NodeId.format(nodeNum)`. Always present, never ambiguous - it is a byte or a node number, not a guess. |
+| Node name column, separate from the id | Yes, both - not name alone | The owner asked for it explicitly. A relay byte can be ambiguous (several candidates) while its id never is, so the two need separate columns rather than one column that is sometimes an id and sometimes a name. |
+| Where the name comes from | Reuse the app's own naming, don't invent a second one | A relay's `RelayStats.nodeName` - already `""` unless exactly one candidate matches, the same honesty rule `DetailScreen`'s title uses (§`resolveHeader`'s `titleSecondary`). A neighbour's `NodeDirectorySnapshot.shortName(nodeNum)` - always unambiguous, since a neighbour is a whole node number. Blank in the CSV means exactly what it means on screen: not known, or not safe to guess. |
+| CSV quoting | RFC 4180 quoting in `CsvWriter`, not a name restriction | A short/long name is free text and can contain a comma or a quote. Escaping it (wrap in `"…"`, double any embedded `"`) is a few lines in the one place that already owns "how a field becomes CSV text" - simpler than stripping the field or the app's own naming feature to avoid it. |
+| One CSV schema for both export kinds | Yes - the node columns are always present | A detail export's rows all share one node id/name; keeping the same header either way means one writer, no schema branch, and a file opened without its context is still self-describing. |
 
 ## 4. Architecture
 
@@ -179,13 +184,18 @@ still living inside the engine's coroutine confinement.
 One schema for both detail and list exports:
 
 ```
-node,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m,observer_source
-0x1a,2026-09-20T18:32:04Z,-94,-7.5,40.330012,-3.750441,612,node
+node_id,node_name,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m,observer_source
+0x1a,"Getafe, Router 2",2026-09-20T18:32:04Z,-94,-7.5,40.330012,-3.750441,612,node
 ```
 
-- `node` - `RelayStats.hexId` for a relay, `NodeId.format(nodeNum)` for a
-  neighbour. Constant down a detail export's whole file; varies down a list
-  export's.
+- `node_id` - `RelayStats.hexId` for a relay, `NodeId.format(nodeNum)` for a
+  neighbour. Always present, never ambiguous. Constant down a detail export's
+  whole file; varies down a list export's.
+- `node_name` - `RelayStats.nodeName` for a relay (blank unless exactly one
+  candidate matches the byte - the same rule `DetailScreen`'s title already
+  applies, so a name here is never a guess presented as fact); `NodeDirectorySnapshot.shortName(nodeNum)`
+  for a neighbour (blank only when nothing has named it). Quoted per RFC 4180
+  when it contains a comma, a quote, or a newline.
 - `timestamp_utc` - ISO-8601, UTC, seconds precision. Not epoch millis: a
   spreadsheet needs an extra step to make millis readable at all, and not local
   time: a file opened later, possibly on a different machine, must not depend on
@@ -200,11 +210,17 @@ node,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m
 
 `export/CsvWriter.kt` is the one place that owns this: a pure function from a
 `List<ExportRow>` (a new, small, Android-free data class holding exactly these
-eight fields) to text, so it is unit-testable without touching `SignalSeries` or
-Android at all. Building the `List<ExportRow>` from a `Map<SeriesKey, SignalSeries>`
-and the directory (for the node label) is a second, separate, equally pure
+nine fields) to text, including the RFC 4180 quoting, so it is unit-testable
+without touching `SignalSeries` or Android at all. Building the `List<ExportRow>`
+from a `Map<SeriesKey, SignalSeries>` is a second, separate, equally pure
 function - keeping "what a row looks like" apart from "how to fill 5000 of them
-from a ring buffer's arrays" is what makes both independently testable.
+from a ring buffer's arrays" is what makes both independently testable. This
+second function needs the id and name for each key too, which do not live on
+`SignalSeries` - the caller supplies them from what it already has in hand: a
+`RelayStats`/`NeighbourStats` list (or the `NodeDirectorySnapshot` for a
+neighbour's name) is already sitting in the screen or nav host that triggers the
+export, and re-deriving it inside the engine would be a second, riskier lookup
+of a name the snapshot has already resolved once.
 
 ## 8. UI wiring
 
@@ -230,7 +246,9 @@ launcher alongside the existing permission one. The tap handler:
 
 1. Calls `engine.requestExport(keys)`.
 2. Collects the first non-null `exportResult`, calls `exportConsumed()`, and
-   builds the row list (§7).
+   builds the row list (§7) - zipping each key's `SignalSeries` against the id
+   and name already sitting in the `snapshot` the tap handler was called with,
+   not a fresh lookup.
 3. Launches the picker with a suggested filename (§8.4), holding the row list in
    memory until the picker returns.
 4. On a non-null result `Uri`, opens it via `contentResolver.openOutputStream(uri)`
@@ -241,7 +259,7 @@ launcher alongside the existing permission one. The tap handler:
 
 `meshrelay_relay_0x1a_20260920_183204.csv` (detail, relay),
 `meshrelay_neighbour_a1b2c3d4_20260920_183204.csv` (detail, neighbour - `NodeId.format`'s
-leading `!` stripped for the filename only; the CSV's own `node` column keeps it),
+leading `!` stripped for the filename only; the CSV's own `node_id` column keeps it),
 `meshrelay_relays_20260920_183204.csv` / `meshrelay_neighbours_20260920_183204.csv`
 (list). The picker lets the user rename before saving; this is only the default.
 
@@ -255,10 +273,14 @@ is: `action_export` = "Export data" (en) / "Exportar datos" (es).
 - `CsvWriter` - pure JVM: header line, one row, multiple rows, blank fields for
   null lat/lon/altitude/source, `Locale.ROOT` formatting proven independent of
   the default locale (the same class of bug `PositionLineText`'s tests already
-  guard against, in the opposite direction).
+  guard against, in the opposite direction), and RFC 4180 quoting for a name
+  containing a comma, a quote, and a newline - three separate cases, since a
+  writer that only handles the first is a writer that silently breaks on the
+  second.
 - The row-building function - pure JVM: a detail export's rows all share one
-  node label; a list export's vary; a subject with no buffered samples produces
-  a header with zero rows.
+  node id/name; a list export's vary; a relay with more than one matching
+  candidate produces a blank name (never a guess) while still carrying its id;
+  a subject with no buffered samples produces a header with zero rows.
 - `MeshStatsEngine` - extend `MeshStatsEngineTest.kt`: `requestExport` returns
   the buffered series for exactly the requested keys; a key nothing has been
   heard for resolves to `SignalSeries.EMPTY`, mirroring the existing watched-series
