@@ -62,6 +62,25 @@ As given by the owner, refined during brainstorming:
    review: the owner's "observed node" meant the sender, not the relay's own
    guessed identity). For a relay row this is usually a different node than the
    relay itself; for a neighbour row it is always the same node, by definition.
+10. **Rows are in chronological order by `timestamp_utc`**, oldest first, across
+    the whole file - not merely within one node's block. This only bites a list
+    export: a detail export's rows are already in this order because
+    `SignalSeries` stores its one subject's samples oldest-first by construction
+    (§`SignalSeries`'s own KDoc), but a list export combines several subjects'
+    series, and concatenating each node's block one after another would not be
+    chronological across the file as a whole.
+11. **The decimal separator is always `.`**, never a locale-dependent `,` - already
+    true for `rssi_dbm`/`snr_db`/`observer_lat`/`observer_lon` via `Locale.ROOT`
+    (§3), called out here as its own requirement rather than left to be inferred
+    from the formatting decision.
+12. **The CSV field separator is always `,`**, regardless of the app's display
+    language. Some locales' spreadsheet software defaults to `;` when the
+    system's own decimal separator is `,` - irrelevant here, since requirement
+    11 means this file's numbers never use `,` for anything, so a plain
+    comma-separated file is never ambiguous to a correct RFC 4180 reader. A
+    reader whose default import settings assume `;` may still need an explicit
+    "this file uses commas" step; that is a limitation of the reader, not
+    something this file works around.
 
 ## 3. Decisions
 
@@ -76,6 +95,9 @@ As given by the owner, refined during brainstorming:
 | Storing the source per sample, not deriving it later | A new `fromNode` array in `SignalSeriesBuffer`, not a lookup against `RelayStats.fromNodeStats` at export time | `fromNodeStats` is keyed by sender and aggregates across *all* of a relay's packets from that sender - it cannot say which sender a specific timestamped/positioned sample came from, only that the relay has carried that sender at some point. The per-sample truth only exists at the moment `foldRelayed`/`foldDirect` fold the packet, which is where it is captured. |
 | Source "no data" encoding | None needed | Unlike altitude, every sample that exists came from some packet, and every packet has a `from` - there is no "sample exists but has no source" case to encode a sentinel for. |
 | CSV number/timestamp format | `Locale.ROOT`, ISO-8601 UTC timestamps | This is a data file, not prose - unlike `PositionLineText`, which deliberately uses the *display* locale for a human sentence, a CSV column must not grow a decimal comma depending on the phone's language, or every spreadsheet import breaks in Spanish. |
+| Row order | Sort the whole row list by `timestamp_utc` ascending before writing, always - not only for a list export | One rule with no branch on export kind is simpler than "sort only when combining subjects," and a detail export's rows are already in this order, so sorting is a no-op cost there and the one behaviour that is actually needed for a list export. |
+| Sort stability / tie-breaking | A stable sort (`sortedBy`), no secondary key | Two rows can share a `timestamp_utc` (its precision is one second, per §7, while samples can arrive faster than that). A stable sort keeps such ties in the order they were already in - each key's own samples oldest-first, keys visited in the order `requestExport`'s `keys` list gave them - which is deterministic without inventing a tie-break column nobody asked for. |
+| CSV delimiter | `,`, always, RFC 4180 quoting for any field that needs it | The owner's explicit choice. Never `;`: that convention exists only to stay unambiguous against a `,` decimal separator, which requirement 11 already rules out for every numeric field here. |
 | Node id column | The same identifier the app already treats as primary | A relay's `hexId` ("0x1a"); a neighbour's `NodeId.format(nodeNum)`. Always present, never ambiguous - it is a byte or a node number, not a guess. |
 | Node name column, separate from the id | Yes, both - not name alone | The owner asked for it explicitly. A relay byte can be ambiguous (several candidates) while its id never is, so the two need separate columns rather than one column that is sometimes an id and sometimes a name. |
 | Where the name comes from | Reuse the app's own naming, don't invent a second one | A relay's `RelayStats.nodeName` - already `""` unless exactly one candidate matches, the same honesty rule `DetailScreen`'s title uses (§`resolveHeader`'s `titleSecondary`). A neighbour's `NodeDirectorySnapshot.shortName(nodeNum)` - always unambiguous, since a neighbour is a whole node number. Blank in the CSV means exactly what it means on screen: not known, or not safe to guess. |
@@ -243,7 +265,13 @@ node_id,node_name,source_node_id,source_node_name,timestamp_utc,rssi_dbm,snr_db,
 - `timestamp_utc` - ISO-8601, UTC, seconds precision. Not epoch millis: a
   spreadsheet needs an extra step to make millis readable at all, and not local
   time: a file opened later, possibly on a different machine, must not depend on
-  the time zone the phone happened to be in when it was written.
+  the time zone the phone happened to be in when it was written. `ExportRow`
+  itself carries the raw `atMillis: Long` (from `SignalSeries.atMillis(index)`),
+  not a pre-formatted string - `CsvWriter` is the one place that turns it into
+  ISO-8601, the same reason it and not the row-building function owns
+  `Locale.ROOT` number formatting below. Sorting (§3's Row order decision) sorts
+  this raw `Long`, not text, so it never depends on the display format staying
+  lexicographically sortable.
 - `rssi_dbm`, `snr_db` - the raw stored floats, `Locale.ROOT` formatted (`.`
   decimal separator, regardless of the app's display language - see §3).
 - `observer_lat`, `observer_lon` - decimal degrees, `Locale.ROOT`, blank when the
@@ -266,6 +294,13 @@ but both names need a directory lookup, so the function takes the
 list for the row's own name (as before), and `directory.shortName(sourceNodeNum)`
 per row for the source's - one lookup shape, reused for two different node
 numbers, rather than a second naming path invented for the source alone.
+
+The same function's last step is `.sortedBy { it.atMillis }` over the whole row
+list (§3's Row order decision), before it ever reaches `CsvWriter`. `CsvWriter`
+itself does not sort - it writes whatever order it is given, so a test can hand
+it out-of-order rows and assert the file preserves them, keeping "rows are
+chronological" and "text is well-formed CSV" as two independently-tested
+properties rather than one function trying to prove both at once.
 
 ## 8. UI wiring
 
@@ -319,17 +354,25 @@ is: `action_export` = "Export data" (en) / "Exportar datos" (es).
 - `CsvWriter` - pure JVM: header line, one row, multiple rows, blank fields for
   null lat/lon/altitude/source, `Locale.ROOT` formatting proven independent of
   the default locale (the same class of bug `PositionLineText`'s tests already
-  guard against, in the opposite direction), and RFC 4180 quoting for a name
-  containing a comma, a quote, and a newline - three separate cases, since a
-  writer that only handles the first is a writer that silently breaks on the
-  second.
+  guard against, in the opposite direction) - run under at least one locale
+  whose own decimal separator is `,` (e.g. `Locale("es", "ES")`) to prove the
+  output does not drift with it, and RFC 4180 quoting for a name containing a
+  comma, a quote, and a newline - three separate cases, since a writer that
+  only handles the first is a writer that silently breaks on the second. The
+  field separator itself is asserted to be `,` in every case, including when a
+  quoted field's own content contains one - that content must stay inside its
+  quotes rather than being read as an extra column.
 - The row-building function - pure JVM: a detail export's rows all share one
   node id/name; a list export's vary; a relay with more than one matching
   candidate produces a blank name (never a guess) while still carrying its id;
   a subject with no buffered samples produces a header with zero rows; a
   relay's rows carry per-sample source ids/names that differ from the relay's
   own and from each other; a neighbour's rows carry a source id/name equal to
-  the neighbour's own, every row.
+  the neighbour's own, every row. **Sorting:** rows built from out-of-order
+  input (a later-appended sample from one key interleaved with an
+  earlier-appended sample from another) come out non-decreasing by `atMillis`;
+  two samples sharing a `timestamp_utc` at second precision keep their original
+  relative order (the stable-sort case from §3).
 - `MeshStatsEngine` - extend `MeshStatsEngineTest.kt`: `requestExport` returns
   the buffered series for exactly the requested keys; a key nothing has been
   heard for resolves to `SignalSeries.EMPTY`, mirroring the existing watched-series
