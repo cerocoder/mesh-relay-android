@@ -1927,21 +1927,37 @@ In `MeshRelayContent` (the private composable in this file, already hosting `per
 
 ```kotlin
     // The container's own snapshot, collected here too (MeshRelayNavHost already
-    // collects it for rendering): export needs it to resolve a row's node id/name
-    // at the moment the picker returns, which can be well after the tap that
-    // started it.
+    // collects it for rendering): the row-building call below reads it, and the
+    // separate collector is what lets this composable read a `by`-delegated
+    // current value at all - the collection itself, not "when the picker
+    // returns", is what this is for.
     val exportSnapshot by container.engine.snapshot.collectAsState()
 
-    var pendingExportText by remember { mutableStateOf<String?>(null) }
+    // rememberSaveable, not remember: the system picker is a separate activity,
+    // and an activity recreation while it is on screen (rotation, the app's own
+    // language-change recreate(), low memory) would otherwise drop this back to
+    // null - the picker would still return a real Uri, and the callback below
+    // would silently write nothing. A String survives the default Bundle saver.
+    var pendingExportText by rememberSaveable { mutableStateOf<String?>(null) }
     val exportLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("text/csv"),
     ) { uri ->
         val text = pendingExportText
         pendingExportText = null
         if (uri != null && text != null) {
-            appContext.contentResolver.openOutputStream(uri)?.use { out ->
-                out.write(text.toByteArray(Charsets.UTF_8))
-            }
+            // A full volume or a flaky document provider throws here, on the main
+            // thread, from inside the activity-result callback; letting that
+            // propagate crashes the app over what the user will experience as a
+            // successful tap. Logged rather than shown, matching this codebase's
+            // existing rule against a second logging mechanism for what is, from
+            // the user's side, an already-closed action - the failure is visible
+            // in logcat if the owner is looking for it, and the file the picker
+            // named simply never gets its contents.
+            runCatching {
+                appContext.contentResolver.openOutputStream(uri)?.use { out ->
+                    out.write(text.toByteArray(Charsets.UTF_8))
+                }
+            }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
         }
     }
 
@@ -1955,6 +1971,13 @@ In `MeshRelayContent` (the private composable in this file, already hosting `per
     // a request-id correlation the spec did not ask for.
     val onExportSeries: (ExportKind, List<SeriesKey>) -> Unit = { kind, keys ->
         scope.launch {
+            // Clears any result a previous export's coroutine left behind after
+            // being cancelled between exportResult resolving and exportConsumed()
+            // running (the same activity-recreation window pendingExportText's
+            // own comment describes) - a narrower gap than the accepted limitation
+            // above, and closing it costs nothing: clearing an already-null value
+            // is a no-op.
+            container.engine.exportConsumed()
             container.engine.requestExport(keys)
             val seriesByKey = container.engine.exportResult.filterNotNull().first()
             container.engine.exportConsumed()
@@ -1964,6 +1987,8 @@ In `MeshRelayContent` (the private composable in this file, already hosting `per
         }
     }
 ```
+
+`MainActivity.kt` has no existing `Log`/`TAG` usage anywhere in the file (checked: this is the first). Add a top-level `private const val TAG = "MeshRelayContent"` near the top of the file (file scope, not inside any class - `MeshRelayContent` is a plain top-level function), plus the imports `android.util.Log` and `androidx.compose.runtime.saveable.rememberSaveable`.
 
 - [ ] **Step 3: Pass it to `MeshRelayNavHost`**
 
