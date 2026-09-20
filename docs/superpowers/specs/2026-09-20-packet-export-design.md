@@ -57,6 +57,11 @@ As given by the owner, refined during brainstorming:
 8. Only currently-retained samples are exportable. The ring buffer caps at 5000
    samples per subject (the Graph screen already lives with this limit); export
    inherits it for the same reason - there is nothing older to write.
+9. **Each row also names the packet's actual source node** - id and name, both -
+   distinct from the relay/neighbour the row is filed under (clarified during
+   review: the owner's "observed node" meant the sender, not the relay's own
+   guessed identity). For a relay row this is usually a different node than the
+   relay itself; for a neighbour row it is always the same node, by definition.
 
 ## 3. Decisions
 
@@ -67,6 +72,9 @@ As given by the owner, refined during brainstorming:
 | List export granularity | Full per-sample history for every tracked node, one file | The owner's own reading of "RSSI and SNR of remote node ... or all nodes in the selected list" - a summary row would throw away exactly the history the Graph screen (and this export) exists to preserve. |
 | Where observer altitude comes from | Reuse the existing altitude resolution, not a new one | `NodeDirectorySnapshot.locationInfo(num, from)` already resolves an altitude for any node from the same live-then-database precedence; `MyNodeScreen`'s own card and the header's `Alt(...)` reading (separate, already-shipped change) both call it for the local node. A third, independent resolution risks disagreeing with those two. |
 | Altitude "no data" encoding | `Int.MIN_VALUE` sentinel in the ring buffer, not a second boolean array | A position can exist with no altitude (2D fix; a node with lat/lon only) - see `PositionHistory.newestWithCoordinates`'s own KDoc - so absence needs tracking independent of `source`. `PositionOrigin.NONE` already uses a reserved-value sentinel in the same class rather than a parallel array; `Int.MIN_VALUE` is a value no real altitude reaches. |
+| Source node columns, separate from the row's own node id/name | Yes, both a `source_node_id`/`source_node_name` pair and the existing `node_id`/`node_name` pair | The owner's clarification: "the observed node" meant the packet's sender. A relay's own id/name identifies *which forwarding byte carried this measurement* (sometimes ambiguous); the source id/name identifies *whose traffic it was* (never ambiguous - `from` is a full node number straight off the packet). These answer different questions and neither can stand in for the other. |
+| Storing the source per sample, not deriving it later | A new `fromNode` array in `SignalSeriesBuffer`, not a lookup against `RelayStats.fromNodeStats` at export time | `fromNodeStats` is keyed by sender and aggregates across *all* of a relay's packets from that sender - it cannot say which sender a specific timestamped/positioned sample came from, only that the relay has carried that sender at some point. The per-sample truth only exists at the moment `foldRelayed`/`foldDirect` fold the packet, which is where it is captured. |
+| Source "no data" encoding | None needed | Unlike altitude, every sample that exists came from some packet, and every packet has a `from` - there is no "sample exists but has no source" case to encode a sentinel for. |
 | CSV number/timestamp format | `Locale.ROOT`, ISO-8601 UTC timestamps | This is a data file, not prose - unlike `PositionLineText`, which deliberately uses the *display* locale for a human sentence, a CSV column must not grow a decimal comma depending on the phone's language, or every spreadsheet import breaks in Spanish. |
 | Node id column | The same identifier the app already treats as primary | A relay's `hexId` ("0x1a"); a neighbour's `NodeId.format(nodeNum)`. Always present, never ambiguous - it is a byte or a node number, not a guess. |
 | Node name column, separate from the id | Yes, both - not name alone | The owner asked for it explicitly. A relay byte can be ambiguous (several candidates) while its id never is, so the two need separate columns rather than one column that is sometimes an id and sometimes a name. |
@@ -109,7 +117,7 @@ that does not know about altitude keeps compiling unchanged.
 `COORD_SCALE`, so `SignalSeriesBuffer` and `SignalSeries` share one sentinel
 rather than each inventing their own.
 
-### 5.2 `SignalSeriesBuffer` / `SignalSeries` gain a seventh array
+### 5.2 `SignalSeriesBuffer` / `SignalSeries` gain two more arrays
 
 `SignalSeriesBuffer` adds `altitudeI = IntArray(capacity)`, written
 unconditionally on every `append` exactly like `latI`/`lonI`/`source` already
@@ -117,18 +125,25 @@ are (`position?.altitude ?: StampedPosition.NO_ALTITUDE`) - the same discipline
 the class's own KDoc already argues for, so an evicted sample's altitude never
 leaks into a reused slot.
 
+It also adds `fromNode = IntArray(capacity)`: the packet's own sender, a full
+node number straight off the wire, never ambiguous the way a relay byte is (§5.4).
+Written unconditionally too, for the same reason.
+
 This changes the class's own documented size budget, which is stated in
 concrete numbers and needs updating along with the code (the existing figures
 are decimal - "125 KB" is exactly 125,000 bytes, not a binary kibibyte - so the
-replacements keep that convention): 29 bytes/sample (was 25), 145 KB per
-subject at the 5000 cap (was 125 KB), ~8.7 MB for a typical 60-subject session
-(was ~7.5 MB), ~37 MB worst case (was ~32 MB).
+replacements keep that convention): 33 bytes/sample (was 25), 165 KB per
+subject at the 5000 cap (was 125 KB), ~9.9 MB for a typical 60-subject session
+(was ~7.5 MB), ~42 MB worst case (was ~32 MB).
 
-`SignalSeries` adds the matching `altitudeI: IntArray` constructor parameter and
-`fun altitudeMeters(index: Int): Int? = altitudeI[index].takeIf { it != StampedPosition.NO_ALTITUDE }`.
-`positionOf(index)` is extended to pass this through, so a `StampedPosition`
-read back from a series carries the same altitude it was appended with.
-`SignalSeries.EMPTY` gets an empty `IntArray(0)`.
+`SignalSeries` adds the matching `altitudeI: IntArray` and `fromNode: IntArray`
+constructor parameters, plus
+`fun altitudeMeters(index: Int): Int? = altitudeI[index].takeIf { it != StampedPosition.NO_ALTITUDE }`
+and `fun sourceNodeNum(index: Int): Int = fromNode[index]` - the latter needs no
+sentinel, because every sample that exists at all came from some packet, and
+every packet has a `from`. `positionOf(index)` is extended to pass the altitude
+through, so a `StampedPosition` read back from a series carries the same
+altitude it was appended with. `SignalSeries.EMPTY` gets two empty `IntArray(0)`s.
 
 ### 5.3 Where each origin's altitude comes from
 
@@ -142,6 +157,27 @@ read back from a series carries the same altitude it was appended with.
   functions can never disagree about which report they are reading from, even
   though they are called separately. `NodeDirectory` gains `fun localAltitude(): Int? =
   localAltitudeOf(localNodeNum, positions, nodes)` alongside `localPosition()`.
+
+### 5.4 Where the per-sample source node comes from
+
+Added after the owner's own clarification during review: "the observed node"
+in the original ask meant the packet's sender, not the relay's own guessed
+identity - a relay byte alone cannot answer *who was this measurement's
+traffic actually from*, and nothing in the Graph feature's data model captured
+it either, because the Graph screen never needed to.
+
+Both call sites that already append to a `SignalSeriesBuffer` already have the
+answer in scope and simply never pass it on:
+
+- `MeshStatsEngine.foldRelayed` - `relayed.fromNode`, right beside the existing
+  `.append(atMillis, signal.rssi, signal.snr, positionForSample())` call.
+- `MeshStatsEngine.foldDirect` - `direct.fromNode`, same shape.
+
+Both become `.append(atMillis, signal.rssi, signal.snr, positionForSample(), fromNode)`.
+For a neighbour this is always the same number as the `SeriesKey.Neighbour` the
+sample is filed under - a neighbour's every packet is, by definition, from
+itself - so the field is redundant there but costs nothing extra to fill in
+uniformly, the same call already made for the position fields.
 
 ## 6. The engine: one-shot export
 
@@ -184,18 +220,26 @@ still living inside the engine's coroutine confinement.
 One schema for both detail and list exports:
 
 ```
-node_id,node_name,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m,observer_source
-0x1a,"Getafe, Router 2",2026-09-20T18:32:04Z,-94,-7.5,40.330012,-3.750441,612,node
+node_id,node_name,source_node_id,source_node_name,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m,observer_source
+0x1a,"Getafe, Router 2",!beefc0de,PQPL1,2026-09-20T18:32:04Z,-94,-7.5,40.330012,-3.750441,612,node
 ```
 
 - `node_id` - `RelayStats.hexId` for a relay, `NodeId.format(nodeNum)` for a
   neighbour. Always present, never ambiguous. Constant down a detail export's
-  whole file; varies down a list export's.
+  whole file; varies down a list export's. Answers *which forwarding byte
+  carried this measurement*.
 - `node_name` - `RelayStats.nodeName` for a relay (blank unless exactly one
   candidate matches the byte - the same rule `DetailScreen`'s title already
   applies, so a name here is never a guess presented as fact); `NodeDirectorySnapshot.shortName(nodeNum)`
   for a neighbour (blank only when nothing has named it). Quoted per RFC 4180
   when it contains a comma, a quote, or a newline.
+- `source_node_id` - `NodeId.format(SignalSeries.sourceNodeNum(index))`. Always
+  present, never ambiguous - `from` is a full node number, not a guessed byte.
+  Answers *whose traffic this measurement actually was* (§5.4). For a neighbour
+  row this is always the same node as `node_id`, by definition; for a relay row
+  it usually differs.
+- `source_node_name` - `NodeDirectorySnapshot.shortName(sourceNodeNum)`, blank
+  only when nothing has named that node. Same RFC 4180 quoting as `node_name`.
 - `timestamp_utc` - ISO-8601, UTC, seconds precision. Not epoch millis: a
   spreadsheet needs an extra step to make millis readable at all, and not local
   time: a file opened later, possibly on a different machine, must not depend on
@@ -210,17 +254,18 @@ node_id,node_name,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observ
 
 `export/CsvWriter.kt` is the one place that owns this: a pure function from a
 `List<ExportRow>` (a new, small, Android-free data class holding exactly these
-nine fields) to text, including the RFC 4180 quoting, so it is unit-testable
+eleven fields) to text, including the RFC 4180 quoting, so it is unit-testable
 without touching `SignalSeries` or Android at all. Building the `List<ExportRow>`
 from a `Map<SeriesKey, SignalSeries>` is a second, separate, equally pure
 function - keeping "what a row looks like" apart from "how to fill 5000 of them
 from a ring buffer's arrays" is what makes both independently testable. This
-second function needs the id and name for each key too, which do not live on
-`SignalSeries` - the caller supplies them from what it already has in hand: a
-`RelayStats`/`NeighbourStats` list (or the `NodeDirectorySnapshot` for a
-neighbour's name) is already sitting in the screen or nav host that triggers the
-export, and re-deriving it inside the engine would be a second, riskier lookup
-of a name the snapshot has already resolved once.
+second function needs the row's own id/name and, per sample, the source's id/name
+too - the source *id* comes straight from `SignalSeries.sourceNodeNum(index)`,
+but both names need a directory lookup, so the function takes the
+`NodeDirectorySnapshot` alongside the series map: a `RelayStats`/`NeighbourStats`
+list for the row's own name (as before), and `directory.shortName(sourceNodeNum)`
+per row for the source's - one lookup shape, reused for two different node
+numbers, rather than a second naming path invented for the source alone.
 
 ## 8. UI wiring
 
@@ -246,9 +291,10 @@ launcher alongside the existing permission one. The tap handler:
 
 1. Calls `engine.requestExport(keys)`.
 2. Collects the first non-null `exportResult`, calls `exportConsumed()`, and
-   builds the row list (§7) - zipping each key's `SignalSeries` against the id
-   and name already sitting in the `snapshot` the tap handler was called with,
-   not a fresh lookup.
+   builds the row list (§7) - zipping each key's `SignalSeries` against the row's
+   own id/name (already sitting in the `snapshot` the tap handler was called
+   with) and, per sample, `snapshot.directory.shortName(series.sourceNodeNum(i))`
+   for the source's name.
 3. Launches the picker with a suggested filename (§8.4), holding the row list in
    memory until the picker returns.
 4. On a non-null result `Uri`, opens it via `contentResolver.openOutputStream(uri)`
@@ -280,15 +326,23 @@ is: `action_export` = "Export data" (en) / "Exportar datos" (es).
 - The row-building function - pure JVM: a detail export's rows all share one
   node id/name; a list export's vary; a relay with more than one matching
   candidate produces a blank name (never a guess) while still carrying its id;
-  a subject with no buffered samples produces a header with zero rows.
+  a subject with no buffered samples produces a header with zero rows; a
+  relay's rows carry per-sample source ids/names that differ from the relay's
+  own and from each other; a neighbour's rows carry a source id/name equal to
+  the neighbour's own, every row.
 - `MeshStatsEngine` - extend `MeshStatsEngineTest.kt`: `requestExport` returns
   the buffered series for exactly the requested keys; a key nothing has been
   heard for resolves to `SignalSeries.EMPTY`, mirroring the existing watched-series
-  coverage; requesting does not disturb an unrelated in-progress `watchSeries`.
-- `SignalSeriesBufferTest.kt` / `SignalSeriesTest.kt` - extend for the new
-  altitude array: append with and without altitude, sentinel round-trips to
-  `null`, an evicted slot's old altitude never survives a wraparound (mirrors
-  the existing position-leak test if one exists for `latI`/`lonI`).
+  coverage; requesting does not disturb an unrelated in-progress `watchSeries`;
+  a relay fed packets from two different senders produces samples whose
+  `sourceNodeNum` differ accordingly (extends the existing sort/fold tests'
+  pattern of relaying from more than one `fromNode`).
+- `SignalSeriesBufferTest.kt` / `SignalSeriesTest.kt` - extend for the two new
+  arrays: append with and without altitude, sentinel round-trips to `null`, an
+  evicted slot's old altitude never survives a wraparound (mirrors the existing
+  position-leak test if one exists for `latI`/`lonI`); `sourceNodeNum` round-trips
+  exactly the `fromNode` each sample was appended with, including across a
+  wraparound.
 - `NodeDirectoryTest.kt` - extend alongside the existing `localPosition()`
   coverage (`the local position is resolved through the local node number`,
   `with no local node number there is no local position`, etc.) with the
@@ -306,9 +360,13 @@ is: `action_export` = "Export data" (en) / "Exportar datos" (es).
   session itself durable.
 - **Any format besides CSV**, and **any destination besides the system picker**
   (no auto-save, no share-sheet) - both were explicit either/or choices in §3.
-- **Altitude, or any other field, for the remote node.** Only the observer's own
-  position gained a new field; the remote node's row is RSSI/SNR/timestamp,
-  unchanged from the Graph screen's own data.
+- **Altitude for anything other than the observer.** Neither the relay/neighbour
+  subject nor the packet's source node gains an altitude column - only the
+  observer's own position did. The source node gaining an id/name (§5.4) is a
+  separate addition, about identity, not altitude.
+- **Showing the per-sample source node on the Graph screen itself.** §5.4 adds
+  it to the shared data model because export needs it; the Graph screen's own
+  UI (crosshair, lines) is unchanged.
 - **Exporting from the Graph screen itself.** The four menus named in the
   requirements are the only entry points; the Graph screen's own overflow (if it
   gains one later) is a separate decision.
