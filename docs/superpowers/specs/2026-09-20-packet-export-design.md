@@ -1,7 +1,7 @@
 # Design: export packet data to a file
 
 **Date:** 2026-09-20
-**Status:** draft, awaiting owner review
+**Status:** approved, ready for the implementation plan
 **Source:** brainstorming session of 2026-09-20
 **Builds on:** `docs/superpowers/specs/2026-09-01-signal-graph-design.md` (this reuses
 `SignalSeries`/`SignalSeriesBuffer` verbatim for the per-sample data)
