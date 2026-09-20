@@ -10,6 +10,7 @@ import android.os.Looper
 import android.util.Log
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.StampedPosition
+import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -51,6 +52,8 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
                 location.latitude,
                 location.longitude,
                 PositionOrigin.PHONE,
+                // hasAltitude() guards this: not every provider reports one on every fix.
+                altitude = location.altitude.roundToInt().takeIf { location.hasAltitude() },
             )
         }
 
