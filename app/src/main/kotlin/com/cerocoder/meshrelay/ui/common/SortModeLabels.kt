@@ -13,9 +13,10 @@ import com.cerocoder.meshrelay.stats.SortMode
 object SortModeLabels {
     fun labelOf(mode: SortMode): Int = when (mode) {
         SortMode.PACKETS -> R.string.sort_packets
-        SortMode.PERCENT -> R.string.sort_percent
         SortMode.AVG_SNR -> R.string.sort_avg_snr
         SortMode.AVG_RSSI -> R.string.sort_avg_rssi
+        SortMode.LAST_SNR -> R.string.sort_last_snr
+        SortMode.LAST_RSSI -> R.string.sort_last_rssi
         SortMode.NAME -> R.string.sort_name
         SortMode.KNOWN_NODES -> R.string.sort_known_nodes
         SortMode.LATEST_PACKET -> R.string.sort_latest_packet

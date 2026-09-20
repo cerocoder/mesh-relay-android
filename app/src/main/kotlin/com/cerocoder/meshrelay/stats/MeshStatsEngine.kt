@@ -614,12 +614,12 @@ class MeshStatsEngine(
     /** Ports get_sorted_nodes, mesh_stats.py:1120-1140. */
     private fun sortedRelays(): List<RelayStats> {
         val values = relays.values.toList()
-        val total = counterState.totalRelayedPackets
         return when (sortMode) {
             SortMode.PACKETS -> values.sortedByDescending { it.packetCount }
-            SortMode.PERCENT -> values.sortedByDescending { share(it.packetCount, total) }
             SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr) }
             SortMode.AVG_RSSI -> values.sortedByDescending { rank(it.rssi) }
+            SortMode.LAST_SNR -> values.sortedByDescending { rankLast(it.snr) }
+            SortMode.LAST_RSSI -> values.sortedByDescending { rankLast(it.rssi) }
             SortMode.NAME -> values.sortedBy { it.nodeName.ifEmpty { it.hexId } }
             SortMode.KNOWN_NODES -> values.sortedByDescending { it.knownNodesCount }
             SortMode.LATEST_PACKET -> values.sortedByDescending { it.lastPacketAtMillis }
@@ -629,12 +629,12 @@ class MeshStatsEngine(
     /** Ports get_sorted_neighbours, mesh_stats.py:770-791. */
     private fun sortedNeighbours(view: NodeDirectorySnapshot): List<NeighbourStats> {
         val values = neighbours.values.toList()
-        val total = counterState.totalDirectPackets
         return when (sortMode.forNeighbours()) {
             SortMode.PACKETS -> values.sortedByDescending { it.packetCount }
-            SortMode.PERCENT -> values.sortedByDescending { share(it.packetCount, total) }
             SortMode.AVG_SNR -> values.sortedByDescending { rank(it.snr) }
             SortMode.AVG_RSSI -> values.sortedByDescending { rank(it.rssi) }
+            SortMode.LAST_SNR -> values.sortedByDescending { rankLast(it.snr) }
+            SortMode.LAST_RSSI -> values.sortedByDescending { rankLast(it.rssi) }
             // A neighbour is a whole node number, so unlike a relay byte it always has
             // an identity to fall back on when the database has not named it.
             SortMode.NAME -> values.sortedBy {
@@ -649,14 +649,6 @@ class MeshStatsEngine(
     }
 
     /**
-     * Share of the relevant total. The divisor is the same for every row, so this
-     * orders exactly as [SortMode.PACKETS] does - kept because it is what the
-     * original computes and because the divisor is what the screen prints beside it.
-     */
-    private fun share(count: Int, total: Int): Float =
-        if (total > 0) count.toFloat() / total else 0f
-
-    /**
      * Sort key for an average that may not exist.
      *
      * Float.NEGATIVE_INFINITY, never 0f: a relay whose packets all arrived with
@@ -666,6 +658,10 @@ class MeshStatsEngine(
      */
     private fun rank(stats: SignalStats): Float =
         if (stats.hasData) stats.avg else Float.NEGATIVE_INFINITY
+
+    /** Same rule as [rank], for the most recent reading instead of the average. */
+    private fun rankLast(stats: SignalStats): Float =
+        if (stats.hasData) stats.lastVal else Float.NEGATIVE_INFINITY
 
     private companion object {
         const val COMMAND_CAPACITY = 256
