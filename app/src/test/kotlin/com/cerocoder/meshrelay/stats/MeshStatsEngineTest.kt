@@ -877,6 +877,21 @@ class MeshStatsEngineTest {
     }
 
     @Test
+    fun `a node-position sample records the local node's altitude`() = runTest(StandardTestDispatcher()) {
+        val subject = MeshStatsEngine(
+            backgroundScope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = MutableStateFlow(PositionMode.NODE),
+        ) { 1_000L }
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        // positionFrame's own KDoc: altitude is fixed at 600 in the proto it builds.
+        subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231), relayed()))
+        runCurrent()
+
+        assertEquals(600, seen.last()?.positionOf(0)?.altitude)
+    }
+
+    @Test
     fun `node mode never falls back to the phone`() = runTest(StandardTestDispatcher()) {
         // Turning the setting off is a request that the phone's GPS not be used.
         // Quietly using it anyway would break that request; a sample with no position

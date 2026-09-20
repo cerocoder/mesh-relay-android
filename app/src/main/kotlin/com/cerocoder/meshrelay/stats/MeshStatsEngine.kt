@@ -514,7 +514,7 @@ class MeshStatsEngine(
 
     private fun nodePosition(): StampedPosition? {
         val local = directory.localPosition() ?: return null
-        return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE)
+        return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE, directory.localAltitude())
     }
 
     /**
