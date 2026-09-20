@@ -6,7 +6,7 @@ import org.junit.Test
 
 class ExportFileNamesTest {
 
-    private val nowMillis = 1_789_502_524_000L // 2026-09-20T18:32:04Z
+    private val nowMillis = 1_789_929_124_000L // 2026-09-20T18:32:04Z
 
     @Test
     fun `a relay detail export names itself after the relay's byte`() {
