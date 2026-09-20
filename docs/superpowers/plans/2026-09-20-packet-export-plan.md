@@ -1263,8 +1263,16 @@ class CsvWriterTest {
     @Test
     fun `a node name containing a newline is quoted`() {
         val text = CsvWriter.write(listOf(row(nodeName = "Line one\nLine two")))
-        // Quoted, so the embedded newline does not create a second CSV line.
-        assertEquals(2, text.trim('\n').lines().size)
+        // RFC 4180 preserves a quoted field's literal embedded newline as-is - it
+        // is not escaped away - so the raw text genuinely has one more "\n" than
+        // there are logical rows, and a naive String.lines() (which has no CSV
+        // awareness) would wrongly count it as an extra line. The real assertion
+        // has to go through a CSV-aware split to prove the newline stayed inside
+        // its field rather than starting a spurious third row.
+        val dataLine = text.substringAfter('\n').trim('\n')
+        val fields = splitCsvLine(dataLine)
+        assertEquals(11, fields.size)
+        assertEquals("Line one\nLine two", fields[1])
     }
 
     @Test
