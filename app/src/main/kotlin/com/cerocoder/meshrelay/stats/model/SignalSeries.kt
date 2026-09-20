@@ -27,7 +27,9 @@ class SignalSeries(
     private val snrValues: FloatArray,
     private val latI: IntArray,
     private val lonI: IntArray,
+    private val altitudeI: IntArray,
     private val source: ByteArray,
+    private val fromNode: IntArray,
     /**
      * Every sample ever appended to the buffer this came from, retained or
      * evicted. The chart's scroll anchor is the difference between two of these
@@ -50,8 +52,21 @@ class SignalSeries(
     /** Where the observer was for this measurement, or `null` if nothing was known then. */
     fun positionOf(index: Int): StampedPosition? {
         val origin = PositionOrigin.ofCode(source[index]) ?: return null
-        return StampedPosition(latI[index], lonI[index], origin)
+        val altitude = altitudeI[index].takeIf { it != StampedPosition.NO_ALTITUDE }
+        return StampedPosition(latI[index], lonI[index], origin, altitude)
     }
+
+    /**
+     * The node number this measurement's packet actually came from - distinct
+     * from the relay byte a [com.cerocoder.meshrelay.stats.SeriesKey.Relay] series
+     * is filed under, and usually different from it. For a
+     * [com.cerocoder.meshrelay.stats.SeriesKey.Neighbour] series this is always
+     * that same neighbour's own node number, by definition.
+     *
+     * Needs no sentinel and no null case: every sample that exists at all came
+     * from some packet, and every packet has a `from`.
+     */
+    fun sourceNodeNum(index: Int): Int = fromNode[index]
 
     companion object {
         val EMPTY = SignalSeries(
@@ -60,7 +75,9 @@ class SignalSeries(
             snrValues = FloatArray(0),
             latI = IntArray(0),
             lonI = IntArray(0),
+            altitudeI = IntArray(0),
             source = ByteArray(0),
+            fromNode = IntArray(0),
             totalAppended = 0L,
         )
     }

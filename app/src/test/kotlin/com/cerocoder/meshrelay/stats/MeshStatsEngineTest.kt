@@ -783,6 +783,35 @@ class MeshStatsEngineTest {
     }
 
     @Test
+    fun `each relayed sample records who actually sent it, not the relay byte`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, from = 0x11111111, snr = -15f),
+                relayed(relay = 0x69, from = 0x22222222, snr = -10f),
+            ),
+        )
+        runCurrent()
+
+        val series = seen.last()!!
+        assertEquals(0x11111111, series.sourceNodeNum(0))
+        assertEquals(0x22222222, series.sourceNodeNum(1))
+    }
+
+    @Test
+    fun `a direct sample's source is the neighbour itself`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Neighbour(0x11111111))
+        subject.attach(flowOf(direct(from = 0x11111111)))
+        runCurrent()
+
+        assertEquals(0x11111111, seen.last()?.sourceNodeNum(0))
+    }
+
+    @Test
     fun `nothing is published while nothing is watched`() = runTest(StandardTestDispatcher()) {
         // publishWatchedSeries()'s one gate is watchedSeries != null - never called
         // here - so the buffer fills but the series stays untouched.

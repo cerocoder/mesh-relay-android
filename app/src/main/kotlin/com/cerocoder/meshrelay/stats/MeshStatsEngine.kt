@@ -468,7 +468,7 @@ class MeshStatsEngine(
         // case.
         if (signal != null) {
             seriesBuffers.getOrPut(SeriesKey.Relay(relayed.relayByte)) { SignalSeriesBuffer() }
-                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+                .append(atMillis, signal.rssi, signal.snr, positionForSample(), relayed.fromNode)
         }
     }
 
@@ -488,7 +488,7 @@ class MeshStatsEngine(
         // Same guard, same reason as foldRelayed.
         if (signal != null) {
             seriesBuffers.getOrPut(SeriesKey.Neighbour(direct.fromNode)) { SignalSeriesBuffer() }
-                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+                .append(atMillis, signal.rssi, signal.snr, positionForSample(), direct.fromNode)
         }
     }
 

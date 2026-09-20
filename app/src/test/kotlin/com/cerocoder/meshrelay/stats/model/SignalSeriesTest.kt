@@ -13,8 +13,8 @@ class SignalSeriesTest {
         // zero-timestamped measurements at the start of a session, and the chart
         // would plot them.
         val buffer = SignalSeriesBuffer(capacity = 100)
-        buffer.append(1_000L, -90f, 5f, null)
-        buffer.append(2_000L, -91f, 4f, null)
+        buffer.append(1_000L, -90f, 5f, null, 0x11111111)
+        buffer.append(2_000L, -91f, 4f, null, 0x11111111)
         assertEquals(2, buffer.snapshot().size)
     }
 
@@ -24,10 +24,10 @@ class SignalSeriesTest {
         // long as a composition lives, on another thread, while the engine keeps
         // folding packets into the arrays behind it.
         val buffer = SignalSeriesBuffer(capacity = 100)
-        buffer.append(1_000L, -90f, 5f, null)
+        buffer.append(1_000L, -90f, 5f, null, 0x11111111)
         val taken = buffer.snapshot()
 
-        buffer.append(2_000L, -91f, 4f, null)
+        buffer.append(2_000L, -91f, 4f, null, 0x11111111)
 
         assertEquals(1, taken.size)
         assertEquals(2, buffer.snapshot().size)
@@ -44,7 +44,7 @@ class SignalSeriesTest {
         // The accessors index the arrays directly. That is deliberate - a bounds
         // check per pixel row is not free - and this test records that the failure
         // mode is a thrown exception rather than a plotted zero.
-        val series = SignalSeriesBuffer(capacity = 4).also { it.append(1L, -90f, 5f, null) }.snapshot()
+        val series = SignalSeriesBuffer(capacity = 4).also { it.append(1L, -90f, 5f, null, 0x11111111) }.snapshot()
         assertThrows(IndexOutOfBoundsException::class.java) { series.rssi(1) }
     }
 }

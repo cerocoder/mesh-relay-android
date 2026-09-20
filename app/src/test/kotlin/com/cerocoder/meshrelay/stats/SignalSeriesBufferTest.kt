@@ -19,8 +19,8 @@ class SignalSeriesBufferTest {
     @Test
     fun `samples come back oldest first, in the order they were appended`() {
         val buffer = SignalSeriesBuffer(capacity = 4)
-        buffer.append(1_000L, -90f, 5f, null)
-        buffer.append(2_000L, -91f, 4f, null)
+        buffer.append(1_000L, -90f, 5f, null, 0x11111111)
+        buffer.append(2_000L, -91f, 4f, null, 0x11111111)
 
         val series = buffer.snapshot()
         assertEquals(2, series.size)
@@ -36,7 +36,7 @@ class SignalSeriesBufferTest {
         // Six into a ring of four: 1 and 2 are gone, 3..6 survive in order. A
         // buffer that read its arrays from index 0 instead of from the head would
         // return 5, 6, 3, 4 here and pass every test that only appends twice.
-        repeat(6) { i -> buffer.append((i + 1) * 1_000L, -90f - i, i.toFloat(), null) }
+        repeat(6) { i -> buffer.append((i + 1) * 1_000L, -90f - i, i.toFloat(), null, 0x11111111) }
 
         val series = buffer.snapshot()
         assertEquals(4, series.size)
@@ -48,8 +48,8 @@ class SignalSeriesBufferTest {
     @Test
     fun `a position and its origin survive the arrays they are split across`() {
         val buffer = SignalSeriesBuffer(capacity = 4)
-        buffer.append(1_000L, -90f, 5f, getafe)
-        buffer.append(2_000L, -91f, 4f, toledo)
+        buffer.append(1_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(2_000L, -91f, 4f, toledo, 0x11111111)
 
         val series = buffer.snapshot()
         assertEquals(getafe, series.positionOf(0))
@@ -63,7 +63,7 @@ class SignalSeriesBufferTest {
         // Not as 0,0. The globe on that measurement's crosshair must be disabled,
         // not pointed at the Gulf of Guinea.
         val buffer = SignalSeriesBuffer(capacity = 4)
-        buffer.append(1_000L, -90f, 5f, null)
+        buffer.append(1_000L, -90f, 5f, null, 0x11111111)
         assertNull(buffer.snapshot().positionOf(0))
     }
 
@@ -74,9 +74,9 @@ class SignalSeriesBufferTest {
         // one would leave its coordinates in the slot and the new sample would
         // inherit them.
         val buffer = SignalSeriesBuffer(capacity = 2)
-        buffer.append(1_000L, -90f, 5f, getafe)
-        buffer.append(2_000L, -90f, 5f, getafe)
-        buffer.append(3_000L, -90f, 5f, null)
+        buffer.append(1_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(2_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(3_000L, -90f, 5f, null, 0x11111111)
 
         val series = buffer.snapshot()
         assertEquals(getafe, series.positionOf(0))
@@ -84,11 +84,62 @@ class SignalSeriesBufferTest {
     }
 
     @Test
+    fun `an altitude survives the arrays it is split across`() {
+        val buffer = SignalSeriesBuffer(capacity = 4)
+        val withAltitude = getafe.copy(altitude = 612)
+        buffer.append(1_000L, -90f, 5f, withAltitude, 0x11111111)
+        assertEquals(612, buffer.snapshot().positionOf(0)?.altitude)
+    }
+
+    @Test
+    fun `a position with no altitude reads back as no altitude, not zero`() {
+        // 0 is a real altitude at sea level. Only a genuinely absent one is null.
+        val buffer = SignalSeriesBuffer(capacity = 4)
+        buffer.append(1_000L, -90f, 5f, getafe, 0x11111111)
+        assertNull(buffer.snapshot().positionOf(0)?.altitude)
+    }
+
+    @Test
+    fun `a slot reused after the wrap does not keep the evicted sample's altitude`() {
+        val buffer = SignalSeriesBuffer(capacity = 2)
+        buffer.append(1_000L, -90f, 5f, getafe.copy(altitude = 612), 0x11111111)
+        buffer.append(2_000L, -90f, 5f, getafe.copy(altitude = 612), 0x11111111)
+        buffer.append(3_000L, -90f, 5f, getafe, 0x11111111)
+
+        val series = buffer.snapshot()
+        assertEquals(612, series.positionOf(0)?.altitude)
+        assertNull(series.positionOf(1)?.altitude)
+    }
+
+    @Test
+    fun `sourceNodeNum survives the arrays it is split across`() {
+        val buffer = SignalSeriesBuffer(capacity = 4)
+        buffer.append(1_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(2_000L, -91f, 4f, toledo, 0x22222222)
+
+        val series = buffer.snapshot()
+        assertEquals(0x11111111, series.sourceNodeNum(0))
+        assertEquals(0x22222222, series.sourceNodeNum(1))
+    }
+
+    @Test
+    fun `a slot reused after the wrap does not keep the evicted sample's source`() {
+        val buffer = SignalSeriesBuffer(capacity = 2)
+        buffer.append(1_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(2_000L, -90f, 5f, getafe, 0x11111111)
+        buffer.append(3_000L, -90f, 5f, getafe, 0x22222222)
+
+        val series = buffer.snapshot()
+        assertEquals(0x22222222, series.sourceNodeNum(0))
+        assertEquals(0x22222222, series.sourceNodeNum(1))
+    }
+
+    @Test
     fun `totalAppended counts every sample ever appended, not the ones retained`() {
         // This is what the chart re-anchors its scroll by. Once the ring is full,
         // size stops moving and only this number still says how many arrived.
         val buffer = SignalSeriesBuffer(capacity = 4)
-        repeat(10) { buffer.append(it.toLong(), -90f, 5f, null) }
+        repeat(10) { buffer.append(it.toLong(), -90f, 5f, null, 0x11111111) }
         assertEquals(10L, buffer.totalAppended)
         assertEquals(10L, buffer.snapshot().totalAppended)
         assertEquals(4, buffer.snapshot().size)
@@ -97,7 +148,7 @@ class SignalSeriesBufferTest {
     @Test
     fun `clear empties the buffer and restarts the count`() {
         val buffer = SignalSeriesBuffer(capacity = 4)
-        repeat(6) { buffer.append(it.toLong(), -90f, 5f, getafe) }
+        repeat(6) { buffer.append(it.toLong(), -90f, 5f, getafe, 0x11111111) }
         buffer.clear()
 
         assertEquals(0, buffer.snapshot().size)
@@ -105,7 +156,7 @@ class SignalSeriesBufferTest {
 
         // And it is usable afterwards, from the head, not from wherever the ring
         // happened to stop.
-        buffer.append(9_000L, -70f, 1f, null)
+        buffer.append(9_000L, -70f, 1f, null, 0x11111111)
         assertEquals(1, buffer.snapshot().size)
         assertEquals(9_000L, buffer.snapshot().atMillis(0))
     }
