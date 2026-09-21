@@ -183,7 +183,10 @@ These are not follow-ups. They are the state of the branch.
   `SignalGraphScreen` fixes it at 1. Deferred at the owner's request; adding a control is a value
   to pass, not a restructuring.
 - **Persisting series across launches.** Statistics remain a single session, per decision 8 of the
-  stage-1 spec. Exporting a chart or its data is out of scope for the same reason.
+  stage-1 spec - unchanged as of the export feature (`docs/superpowers/specs/2026-09-20-packet-export-design.md`):
+  export saves a copy of the current session's data, it does not make the session itself durable.
+  **[CLOSED]** Exporting a chart's underlying data to a file, once itself deferred here, shipped as
+  its own feature - see the export spec and `docs/superpowers/plans/2026-09-20-packet-export-plan.md`.
 - **A chart for a remote node.** `Screen.RemoteNode` has no Graph command: the measurements there
   belong to the relay that carried them, which has its own chart.
 - **SNR prints to whole units in the bars and to a tenth in the crosshair**, on the same screen -

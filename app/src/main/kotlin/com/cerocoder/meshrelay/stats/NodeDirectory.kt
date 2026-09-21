@@ -7,6 +7,7 @@ import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionReport
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
+import com.cerocoder.meshrelay.stats.model.localAltitudeOf
 import com.cerocoder.meshrelay.stats.model.localPositionOf
 import org.meshtastic.proto.NodeInfo
 import org.meshtastic.proto.Position
@@ -286,6 +287,9 @@ class NodeDirectory(private val time: TimeSource) {
      * snapshot.
      */
     fun localPosition(): LatLon? = localPositionOf(localNodeNum, positions, nodes)
+
+    /** This device's own altitude, without building a snapshot to ask - see [localPosition]. */
+    fun localAltitude(): Int? = localAltitudeOf(localNodeNum, positions, nodes)
 
     /**
      * The one value that leaves this coroutine. Every map is copied, so the

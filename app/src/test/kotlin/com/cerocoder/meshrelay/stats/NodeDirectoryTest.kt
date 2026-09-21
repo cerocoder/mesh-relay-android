@@ -672,6 +672,25 @@ class NodeDirectoryTest {
     }
 
     @Test
+    fun `the local altitude is resolved through the local node number, same precedence as position`() {
+        assertNull(directory.localAltitude())
+
+        directory.setLocalNodeNum(LOCAL_NODE)
+        assertNull(directory.localAltitude())
+
+        // A decoy, exactly as the position test above uses one.
+        directory.applyPosition(GETAFE_ROUTER, position(GETAFE_LAT_I, GETAFE_LON_I, altitude = 622))
+        directory.applyPosition(LOCAL_NODE, position(MADRID_LAT_I, MADRID_LON_I, altitude = 667))
+
+        assertEquals(667, directory.localAltitude())
+    }
+
+    @Test
+    fun `with no local node number there is no local altitude`() {
+        assertNull(NodeDirectory(TimeSource { 5_000L }).localAltitude())
+    }
+
+    @Test
     fun `the directory and its snapshot agree on where we are`() {
         // Two callers, one precedence rule. The engine asks the directory per packet
         // (a snapshot copies every map); the screens ask the snapshot. They must not
@@ -695,6 +714,7 @@ class NodeDirectoryTest {
         directory.applyPosition(SENDER, Position(latitude_i = 403057734, longitude_i = -37325611, altitude = 610))
         assertEquals(directory.localPosition(), directory.snapshot(emptySet()).localPosition())
         assertEquals(40.3057734, directory.localPosition()!!.lat, 1e-7)
+        assertEquals(610, directory.localAltitude())
     }
 
     @Test

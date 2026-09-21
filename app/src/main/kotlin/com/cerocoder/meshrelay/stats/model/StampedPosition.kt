@@ -34,8 +34,12 @@ enum class PositionOrigin(val code: Byte) {
  * resolution the mesh transmits, and it respects the standing rule against
  * `Float` coordinates recorded at [PositionReport]: a `Float` loses roughly ten
  * metres at these magnitudes.
+ *
+ * [altitude] is independently optional from the coordinates: a 2D fix, or a
+ * node broadcasting lat/lon with no altitude field at all, is a real position
+ * with no altitude - see [PositionHistory.newestWithCoordinates]'s own KDoc.
  */
-data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOrigin) {
+data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOrigin, val altitude: Int? = null) {
 
     /** Multiplied in `Double`, the conversion [PositionReport] already documents. */
     val latitude: Double get() = latI * COORD_SCALE
@@ -44,6 +48,15 @@ data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOri
     companion object {
         /** Coordinates travel as integers scaled by ten million. */
         const val COORD_SCALE = 1e-7
+
+        /**
+         * The sentinel [SignalSeriesBuffer]/[SignalSeries] store for "this sample's
+         * position, if any, carried no altitude" - a value no real altitude reaches,
+         * so no second boolean array is needed to track presence separately from
+         * [PositionOrigin.NONE], which already tracks presence of the position
+         * itself.
+         */
+        const val NO_ALTITUDE = Int.MIN_VALUE
 
         /**
          * Rounded, not truncated: truncation biases every coordinate toward the
@@ -56,11 +69,12 @@ data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOri
          * nonsense value from a broken provider clamps instead of appearing on the
          * other side of the world.
          */
-        fun fromDegrees(lat: Double, lon: Double, origin: PositionOrigin): StampedPosition =
+        fun fromDegrees(lat: Double, lon: Double, origin: PositionOrigin, altitude: Int? = null): StampedPosition =
             StampedPosition(
                 latI = (lat / COORD_SCALE).roundToInt(),
                 lonI = (lon / COORD_SCALE).roundToInt(),
                 origin = origin,
+                altitude = altitude,
             )
     }
 }

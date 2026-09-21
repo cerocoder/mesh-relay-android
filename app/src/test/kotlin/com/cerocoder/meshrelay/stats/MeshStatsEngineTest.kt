@@ -856,6 +856,35 @@ class MeshStatsEngineTest {
     }
 
     @Test
+    fun `each relayed sample records who actually sent it, not the relay byte`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, from = 0x11111111, snr = -15f),
+                relayed(relay = 0x69, from = 0x22222222, snr = -10f),
+            ),
+        )
+        runCurrent()
+
+        val series = seen.last()!!
+        assertEquals(0x11111111, series.sourceNodeNum(0))
+        assertEquals(0x22222222, series.sourceNodeNum(1))
+    }
+
+    @Test
+    fun `a direct sample's source is the neighbour itself`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Neighbour(0x11111111))
+        subject.attach(flowOf(direct(from = 0x11111111)))
+        runCurrent()
+
+        assertEquals(0x11111111, seen.last()?.sourceNodeNum(0))
+    }
+
+    @Test
     fun `nothing is published while nothing is watched`() = runTest(StandardTestDispatcher()) {
         // publishWatchedSeries()'s one gate is watchedSeries != null - never called
         // here - so the buffer fills but the series stays untouched.
@@ -918,6 +947,21 @@ class MeshStatsEngineTest {
 
         assertEquals(PositionOrigin.NODE, seen.last()?.positionOf(0)?.origin)
         assertEquals(398628316, seen.last()?.positionOf(0)?.latI)
+    }
+
+    @Test
+    fun `a node-position sample records the local node's altitude`() = runTest(StandardTestDispatcher()) {
+        val subject = MeshStatsEngine(
+            backgroundScope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = MutableStateFlow(PositionMode.NODE),
+        ) { 1_000L }
+        val seen = collectSeries(subject)
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        // positionFrame's own KDoc: altitude is fixed at 600 in the proto it builds.
+        subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231), relayed()))
+        runCurrent()
+
+        assertEquals(600, seen.last()?.positionOf(0)?.altitude)
     }
 
     @Test
@@ -1030,5 +1074,66 @@ class MeshStatsEngineTest {
 
         // One, not three: the neighbour's own series, not the relay's left behind.
         assertEquals(1, seen.last()?.size)
+    }
+
+    @Test
+    fun `requestExport returns the buffered series for exactly the requested keys`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(relayed(relay = 0x69, snr = -15f), direct(from = 0x11111111, snr = 2f)))
+        runCurrent()
+
+        val results = mutableListOf<Map<SeriesKey, SignalSeries>?>()
+        val job = launch { subject.exportResult.collect { results += it } }
+        subject.requestExport(listOf(SeriesKey.Relay(0x69), SeriesKey.Neighbour(0x11111111)))
+        runCurrent()
+
+        val bundle = results.last()
+        assertEquals(setOf(SeriesKey.Relay(0x69), SeriesKey.Neighbour(0x11111111)), bundle?.keys)
+        assertEquals(1, bundle?.get(SeriesKey.Relay(0x69))?.size)
+        assertEquals(1, bundle?.get(SeriesKey.Neighbour(0x11111111))?.size)
+        job.cancel()
+    }
+
+    @Test
+    fun `requestExport resolves a key nothing has been heard for to an empty series`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+
+        val results = mutableListOf<Map<SeriesKey, SignalSeries>?>()
+        val job = launch { subject.exportResult.collect { results += it } }
+        subject.requestExport(listOf(SeriesKey.Relay(0xff)))
+        runCurrent()
+
+        assertEquals(0, results.last()?.get(SeriesKey.Relay(0xff))?.size)
+        job.cancel()
+    }
+
+    @Test
+    fun `exportConsumed clears the result so a stale export is never reread`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.requestExport(listOf(SeriesKey.Relay(0x69)))
+        runCurrent()
+        assertNotNull(subject.exportResult.value)
+
+        subject.exportConsumed()
+        assertNull(subject.exportResult.value)
+    }
+
+    @Test
+    fun `requesting an export does not disturb an unrelated in-progress watchSeries`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(relayed(relay = 0x69, snr = -15f)))
+        runCurrent()
+        subject.watchSeries(SeriesKey.Relay(0x69))
+        runCurrent()
+        val watchedSizeBefore = subject.series.value?.size
+
+        subject.requestExport(listOf(SeriesKey.Relay(0xa4)))
+        runCurrent()
+
+        assertEquals(watchedSizeBefore, subject.series.value?.size)
     }
 }

@@ -24,3 +24,20 @@ internal fun localPositionOf(
     val lon = report.longitude ?: return null
     return LatLon(lat, lon)
 }
+
+/**
+ * This device's own altitude, as far as the mesh has told it - the same
+ * precedence as [localPositionOf], resolved from the identical winning report
+ * (`positions[num]?.newestWithCoordinates ?: nodes[num]?.dbPosition`) so the two
+ * functions can never disagree about which report they are reading from, even
+ * though a caller wanting both position and altitude calls each separately.
+ */
+internal fun localAltitudeOf(
+    localNodeNum: Int?,
+    positions: Map<Int, PositionHistory>,
+    nodes: Map<Int, NodeRecord>,
+): Int? {
+    val num = localNodeNum ?: return null
+    val report = positions[num]?.newestWithCoordinates ?: nodes[num]?.dbPosition ?: return null
+    return report.altitude
+}

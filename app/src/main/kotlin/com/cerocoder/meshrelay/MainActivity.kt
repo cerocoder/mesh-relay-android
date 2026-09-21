@@ -8,6 +8,7 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
+import android.util.Log
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -29,7 +30,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
 import com.cerocoder.meshrelay.ble.BleReadiness
+import com.cerocoder.meshrelay.export.CsvWriter
+import com.cerocoder.meshrelay.export.ExportFileNames
+import com.cerocoder.meshrelay.export.ExportKind
+import com.cerocoder.meshrelay.export.ExportRows
 import com.cerocoder.meshrelay.location.LocationAvailability
+import com.cerocoder.meshrelay.stats.SeriesKey
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.settings.LanguageOption
 import com.cerocoder.meshrelay.transport.DeviceListEntry
@@ -40,8 +46,14 @@ import com.cerocoder.meshrelay.ui.common.LocalPreferInstalledMapApp
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
 import com.cerocoder.meshrelay.ui.common.ProvideRelativeClock
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import kotlin.system.exitProcess
+
+private const val TAG = "MeshRelayContent"
 
 /**
  * The only activity. Everything that outlives it - the connection, the
@@ -247,6 +259,77 @@ private fun MeshRelayContent(
         container.refreshLocationUpdates()
     }
 
+    // The container's own snapshot, collected here too (MeshRelayNavHost already
+    // collects it for rendering): the row-building call below reads it, and the
+    // separate collector is what lets this composable read a `by`-delegated
+    // current value at all - the collection itself, not "when the picker
+    // returns", is what this is for.
+    val exportSnapshot by container.engine.snapshot.collectAsState()
+
+    val exportLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("text/csv"),
+    ) { uri ->
+        val text = container.pendingExportText
+        container.pendingExportText = null
+        if (uri != null && text != null) {
+            // Dispatchers.IO, not the callback's own main thread: the write goes
+            // through an arbitrary DocumentsProvider, and a cloud-backed one
+            // (Drive, OneDrive) can block for seconds - long enough to ANR on
+            // Main. "wt", not the bare "w" CreateDocument's own contract allows:
+            // some providers do not guarantee truncation on "w" alone, and a
+            // shorter new export overwriting a longer old file could otherwise
+            // leave stale rows appended past the new content's end.
+            scope.launch(Dispatchers.IO) {
+                // A full volume or a flaky document provider throws here; letting
+                // that propagate crashes the app over what the user will
+                // experience as a successful tap. Logged rather than shown,
+                // matching this codebase's existing rule against a second
+                // logging mechanism for what is, from the user's side, an
+                // already-closed action - the failure is visible in logcat if
+                // the owner is looking for it, and the file the picker named
+                // simply never gets its contents.
+                runCatching {
+                    appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    }
+                }.onFailure { Log.w(TAG, "failed to write the exported CSV", it) }
+            }
+        }
+    }
+
+    // Known, accepted limitation carried over from the spec's own shape for
+    // exportResult (design doc section 6): it is not correlated to a particular
+    // request. Two Export taps started close enough together that the second
+    // fires before the first's requestExport/exportConsumed round trip finishes
+    // could each observe the other's result. The menu closes after one tap and
+    // the round trip is in-memory and near-instant, so this needs two deliberate,
+    // fast taps on two different screens to trigger - accepted rather than adding
+    // a request-id correlation the spec did not ask for.
+    val onExportSeries: (ExportKind, List<SeriesKey>) -> Unit = { kind, keys ->
+        scope.launch {
+            // Clears any result a previous export's coroutine left behind after
+            // being cancelled between exportResult resolving and exportConsumed()
+            // running (the same activity-recreation window pendingExportText's
+            // own KDoc describes) - a narrower gap than the accepted limitation
+            // above, and closing it costs nothing: clearing an already-null value
+            // is a no-op.
+            container.engine.exportConsumed()
+            container.engine.requestExport(keys)
+            val seriesByKey = container.engine.exportResult.filterNotNull().first()
+            container.engine.exportConsumed()
+            // Off Main: building rows resolves a NodeIdentity per row
+            // (directory.shortName), which for a large list export is real
+            // allocation volume, and building the CSV string is proportional
+            // work on top of that - neither belongs on the UI thread.
+            val fileName = withContext(Dispatchers.Default) {
+                val rows = ExportRows.build(seriesByKey, exportSnapshot)
+                container.pendingExportText = CsvWriter.write(rows)
+                ExportFileNames.suggest(kind, keys, System.currentTimeMillis())
+            }
+            exportLauncher.launch(fileName)
+        }
+    }
+
     // Bluetooth, location and - from Android 13 - notifications, asked for in one
     // dialog sequence at first connect. Location is not part of BleReadiness: a
     // refusal is not an error, the setting stays on, no fix ever arrives, and every
@@ -346,5 +429,6 @@ private fun MeshRelayContent(
             scope.launch { container.connectionManager.disconnect() }
         },
         onExit = onExit,
+        onExportSeries = onExportSeries,
     )
 }

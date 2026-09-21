@@ -59,6 +59,7 @@ class MeshStatsEngine(
         data class SetPositionMode(val mode: PositionMode) : Command
         data class SetPhoneFix(val fix: StampedPosition?) : Command
         data class WatchSeries(val key: SeriesKey?) : Command
+        data class RequestExport(val keys: List<SeriesKey>) : Command
         data object Reset : Command
 
         /**
@@ -158,6 +159,17 @@ class MeshStatsEngine(
      */
     val series: StateFlow<SignalSeries?> = _series.asStateFlow()
 
+    private val _exportResult = MutableStateFlow<Map<SeriesKey, SignalSeries>?>(null)
+
+    /**
+     * The result of the most recent [requestExport], until [exportConsumed] clears
+     * it. Unlike [series], this is a one-shot snapshot of several subjects at
+     * once - copying every subject's series continuously the way [series] does
+     * for one subject would be the exact cost that mechanism was built to avoid,
+     * which is why export gets its own command instead of reusing [watchSeries].
+     */
+    val exportResult: StateFlow<Map<SeriesKey, SignalSeries>?> = _exportResult.asStateFlow()
+
     // Not stateIn(WhileSubscribed): the build has to happen on the coroutine that
     // owns the state, and a shared upstream flow would run it on whichever coroutine
     // stateIn starts - the one thing this class is built to prevent. The property
@@ -256,6 +268,12 @@ class MeshStatsEngine(
     /** Open a chart on [key], or pass null when it closes. */
     fun watchSeries(key: SeriesKey?) { commands.trySend(Command.WatchSeries(key)) }
 
+    /** Copies the requested subjects' buffered series once. See [exportResult]. */
+    fun requestExport(keys: List<SeriesKey>) { commands.trySend(Command.RequestExport(keys)) }
+
+    /** Clears [exportResult], so a stale export is never read twice. */
+    fun exportConsumed() { _exportResult.value = null }
+
     private fun apply(command: Command) {
         when (command) {
             is Command.Frame -> handleFrame(command.frame)
@@ -275,6 +293,9 @@ class MeshStatsEngine(
                 if (command.key == null) _series.value = null
                 publishedKey = null
                 publishedTotal = -1L
+            }
+            is Command.RequestExport -> {
+                _exportResult.value = command.keys.associateWith { key -> seriesBuffers[key]?.snapshot() ?: SignalSeries.EMPTY }
             }
             Command.Reset -> resetStatistics()
             Command.ResetForNewNode -> {
@@ -468,7 +489,7 @@ class MeshStatsEngine(
         // case.
         if (signal != null) {
             seriesBuffers.getOrPut(SeriesKey.Relay(relayed.relayByte)) { SignalSeriesBuffer() }
-                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+                .append(atMillis, signal.rssi, signal.snr, positionForSample(), relayed.fromNode)
         }
     }
 
@@ -488,7 +509,7 @@ class MeshStatsEngine(
         // Same guard, same reason as foldRelayed.
         if (signal != null) {
             seriesBuffers.getOrPut(SeriesKey.Neighbour(direct.fromNode)) { SignalSeriesBuffer() }
-                .append(atMillis, signal.rssi, signal.snr, positionForSample())
+                .append(atMillis, signal.rssi, signal.snr, positionForSample(), direct.fromNode)
         }
     }
 
@@ -514,7 +535,7 @@ class MeshStatsEngine(
 
     private fun nodePosition(): StampedPosition? {
         val local = directory.localPosition() ?: return null
-        return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE)
+        return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE, directory.localAltitude())
     }
 
     /**
