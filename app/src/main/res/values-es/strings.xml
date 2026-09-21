@@ -30,7 +30,7 @@
     <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Fuente: %1$s</string>
     <string name="format_source_aged">Fuente: %1$s:%2$s</string>
-    <string name="format_db_header">DB(%1$d) · Aire(%2$d) · %3$s</string>
+    <string name="format_db_header">DB(%1$d) · Aire(%2$d) · Alt(%3$s) · %4$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$ddías %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (hora local)</string>
@@ -64,9 +64,10 @@
     <!-- Sort -->
     <string name="sort_label">Ordenar por</string>
     <string name="sort_packets">Número de paquetes</string>
-    <string name="sort_percent">Porcentaje</string>
     <string name="sort_avg_snr">SNR medio</string>
     <string name="sort_avg_rssi">RSSI medio</string>
+    <string name="sort_last_snr">Último SNR</string>
+    <string name="sort_last_rssi">Último RSSI</string>
     <string name="sort_name">Nombre del nodo</string>
     <string name="sort_known_nodes">Nodos conocidos</string>
     <string name="sort_latest_packet">Último paquete</string>

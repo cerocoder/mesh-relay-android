@@ -51,9 +51,9 @@ private fun relayed(
         ),
     )
 
-private fun direct(from: Int = SENDER, at: Long = 1_000L) = TimestampedFrame(
+private fun direct(from: Int = SENDER, at: Long = 1_000L, snr: Float = -3f, rssi: Int = -80) = TimestampedFrame(
     rxMillis = at,
-    frame = FromRadio(packet = MeshPacket(from = from, relay_node = 0, rx_snr = -3f, rx_rssi = -80)),
+    frame = FromRadio(packet = MeshPacket(from = from, relay_node = 0, rx_snr = snr, rx_rssi = rssi)),
 )
 
 /** A POSITION_APP packet from [from], carrying coordinates and an altitude - both
@@ -552,6 +552,79 @@ class MeshStatsEngineTest {
         runCurrent()
 
         assertEquals(listOf(0x69, 0xa4), subject.snapshot.value.relays.map { it.relayByte })
+    }
+
+    @Test
+    fun `a relay with no signal samples sorts last under last snr too`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(relayed(relay = 0x69, snr = -15f), relayed(relay = 0xa4, rssi = 0, snr = 0f)))
+        runCurrent()
+        subject.setSortMode(SortMode.LAST_SNR)
+        runCurrent()
+
+        assertEquals(listOf(0x69, 0xa4), subject.snapshot.value.relays.map { it.relayByte })
+    }
+
+    @Test
+    fun `last snr sorts relays by their most recent reading, not the average`() = runTest(StandardTestDispatcher()) {
+        // 0x69's average (2.5) beats 0xa4's (1), but 0x69's latest reading is the
+        // worse one - LAST_SNR must rank by lastVal, not reuse AVG_SNR's order.
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, snr = 10f),
+                relayed(relay = 0x69, snr = -5f),
+                relayed(relay = 0xa4, snr = 1f),
+                relayed(relay = 0xa4, snr = 1f),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.LAST_SNR)
+        runCurrent()
+
+        assertEquals(listOf(0xa4, 0x69), subject.snapshot.value.relays.map { it.relayByte })
+    }
+
+    @Test
+    fun `last rssi sorts relays by their most recent reading, not the average`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                relayed(relay = 0x69, rssi = -40),
+                relayed(relay = 0x69, rssi = -100),
+                relayed(relay = 0xa4, rssi = -70),
+                relayed(relay = 0xa4, rssi = -70),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.LAST_RSSI)
+        runCurrent()
+
+        assertEquals(listOf(0xa4, 0x69), subject.snapshot.value.relays.map { it.relayByte })
+    }
+
+    @Test
+    fun `last snr orders neighbours by their most recent reading too`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                direct(from = 0x11111111, snr = 10f),
+                direct(from = 0x11111111, snr = -5f),
+                direct(from = 0x22222222, snr = 1f),
+            ),
+        )
+        runCurrent()
+        subject.setSortMode(SortMode.LAST_SNR)
+        runCurrent()
+
+        assertEquals(
+            listOf(0x22222222, 0x11111111),
+            subject.snapshot.value.neighbours.map { it.nodeNum },
+        )
     }
 
     @Test

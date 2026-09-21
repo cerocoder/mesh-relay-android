@@ -1,14 +1,16 @@
 package com.cerocoder.meshrelay.stats
 
 /**
- * Ports SORT_MODES, mesh_stats.py:167-174 - the first five. [KNOWN_NODES] and
- * [LATEST_PACKET] are additions, not ports: the terminal tool has neither, and
+ * Ports SORT_MODES, mesh_stats.py:167-174 - four of the original five.
+ * [PERCENT] was the fifth and has been removed at the owner's request:
+ * [LAST_SNR] and [LAST_RSSI], like [KNOWN_NODES] and [LATEST_PACKET] before
+ * them, are additions, not ports - the terminal tool has none of the four, and
  * a reader comparing the two should not go looking for them.
  *
  * Labels live in the ui layer.
  */
 enum class SortMode {
-    PACKETS, PERCENT, AVG_SNR, AVG_RSSI, NAME, KNOWN_NODES, LATEST_PACKET;
+    PACKETS, AVG_SNR, AVG_RSSI, LAST_SNR, LAST_RSSI, NAME, KNOWN_NODES, LATEST_PACKET;
 
     /**
      * This mode as the neighbour list can honour it.

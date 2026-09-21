@@ -30,7 +30,7 @@
     <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Src: %1$s</string>
     <string name="format_source_aged">Src: %1$s:%2$s</string>
-    <string name="format_db_header">DB(%1$d) · Air(%2$d) · %3$s</string>
+    <string name="format_db_header">DB(%1$d) · Air(%2$d) · Alt(%3$s) · %4$s</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$ddays %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (local time)</string>
@@ -64,9 +64,10 @@
     <!-- Sort -->
     <string name="sort_label">Sort by</string>
     <string name="sort_packets">Packet count</string>
-    <string name="sort_percent">Percentage</string>
     <string name="sort_avg_snr">Avg SNR</string>
     <string name="sort_avg_rssi">Avg RSSI</string>
+    <string name="sort_last_snr">Last SNR</string>
+    <string name="sort_last_rssi">Last RSSI</string>
     <string name="sort_name">Node name</string>
     <string name="sort_known_nodes">Known nodes</string>
     <string name="sort_latest_packet">Latest packet</string>
