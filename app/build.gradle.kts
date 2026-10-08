@@ -16,16 +16,30 @@ android {
         resourceConfigurations += setOf("en", "es")
     }
 
+    // The release key comes from the environment (CI secrets), never from the repo.
+    // Without RELEASE_KEYSTORE_PATH - a local build, or a run without access to
+    // secrets such as a pull request from a fork - the release variant falls back
+    // to the debug key below, so it can still be installed for testing.
+    val releaseKeystorePath = System.getenv("RELEASE_KEYSTORE_PATH")
+    signingConfigs {
+        if (releaseKeystorePath != null) {
+            create("release") {
+                storeFile = file(releaseKeystorePath)
+                storePassword = System.getenv("RELEASE_KEYSTORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
         release {
             isMinifyEnabled = false
-            // Signed with the debug key. This is a personal tool for one's own node
-            // and is not published; without a signature assembleRelease emits
-            // app-release-unsigned.apk, which Android refuses to install, so there
-            // would be no way to test the release variant on a phone at all.
-            // If this ever travels beyond its owner's phone, a real key from CI
-            // secrets belongs here.
-            signingConfig = signingConfigs.getByName("debug")
+            // A debug-signed release APK must never be published: the key that signs
+            // the first published APK has to sign every later one. The tagged CI run
+            // refuses to build without the real key (see build.yml).
+            signingConfig = signingConfigs.findByName("release")
+                ?: signingConfigs.getByName("debug")
         }
     }
 
