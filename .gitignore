@@ -10,3 +10,9 @@
 .cxx
 .claude/
 .superpowers/
+
+# Signing material - never commit
+*.jks
+*.keystore
+*.p12
+*.jks.b64
