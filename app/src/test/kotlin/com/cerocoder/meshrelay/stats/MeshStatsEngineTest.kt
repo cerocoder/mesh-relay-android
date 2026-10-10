@@ -1136,4 +1136,164 @@ class MeshStatsEngineTest {
 
         assertEquals(watchedSizeBefore, subject.series.value?.size)
     }
+
+    // --- The observer: one position for Alt, distance and the Graph's pins ---------
+
+    /** A phone fix [metres] due north of a fixed origin; one degree of latitude is about 111 320 m. */
+    private fun fixNorth(metres: Double) =
+        StampedPosition.fromDegrees(40.0 + metres / 111_320.0, -3.75, PositionOrigin.PHONE, altitude = 650)
+
+    /** The engine under test, with a clock the test moves and the inputs it can change. */
+    private inner class ObserverRig(scope: CoroutineScope, initialFix: StampedPosition?) {
+        var now = 1_000L
+        val fix = MutableStateFlow(initialFix)
+        val mode = MutableStateFlow(PositionMode.PHONE)
+        val subject = MeshStatsEngine(
+            scope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = mode, phoneFix = fix,
+        ) { now }
+    }
+
+    @Test
+    fun `the snapshot's observer is the phone fix in phone mode`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+
+        assertEquals(PositionOrigin.PHONE, seen.last().observer?.origin)
+        assertEquals(650, seen.last().observer?.altitude)
+    }
+
+    @Test
+    fun `the snapshot's observer falls back to the node when no fix has arrived`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, null)
+        val seen = collectSnapshots(rig.subject)
+        rig.subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231)))
+        runCurrent()
+
+        assertEquals(PositionOrigin.NODE, seen.last().observer?.origin)
+        assertEquals(600, seen.last().observer?.altitude)
+    }
+
+    @Test
+    fun `the snapshot's observer ignores the phone in node mode`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        rig.mode.value = PositionMode.NODE
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+
+        assertNull(seen.last().observer)
+    }
+
+    @Test
+    fun `a fix under five metres from the published observer causes no refresh`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(4.0)
+        runCurrent()
+
+        assertEquals(before, seen.size)
+    }
+
+    @Test
+    fun `a fix over five metres away refreshes at once when ten seconds have passed`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertEquals(fixNorth(6.0), seen.last().observer)
+    }
+
+    @Test
+    fun `a move inside the ten seconds waits for them and then refreshes once`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+        val before = seen.size
+
+        // Three more moves, 3 s after that refresh: all held back, one deadline armed.
+        rig.now = 103_000L
+        rig.fix.value = fixNorth(12.0); runCurrent()
+        rig.fix.value = fixNorth(18.0); runCurrent()
+        rig.fix.value = fixNorth(24.0); runCurrent()
+        assertEquals(before, seen.size)
+
+        rig.now = 110_000L
+        advanceTimeBy(7_000L)
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertEquals(fixNorth(24.0), seen.last().observer)
+    }
+
+    @Test
+    fun `a packet refresh carries the newest fix and cancels the held-back one`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+
+        rig.now = 103_000L
+        rig.fix.value = fixNorth(12.0)
+        runCurrent()
+        val held = seen.size
+
+        // Any other trigger builds as it always did, and picks up the latest fix.
+        rig.subject.attach(flowOf(relayed()))
+        runCurrent()
+        assertEquals(held + 1, seen.size)
+        assertEquals(fixNorth(12.0), seen.last().observer)
+
+        // The deadline finds nothing left to publish.
+        rig.now = 110_000L
+        advanceTimeBy(7_000L)
+        runCurrent()
+        assertEquals(held + 1, seen.size)
+    }
+
+    @Test
+    fun `switching the mode refreshes at once, inside the ten seconds`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 101_000L
+        rig.mode.value = PositionMode.NODE
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertNull(seen.last().observer)
+    }
+
+    @Test
+    fun `the first fix after none refreshes at once`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, null)
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        assertNull(seen.last().observer)
+
+        rig.fix.value = fixNorth(0.0)
+        runCurrent()
+
+        assertEquals(fixNorth(0.0), seen.last().observer)
+    }
 }

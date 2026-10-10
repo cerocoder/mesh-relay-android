@@ -85,7 +85,7 @@ fun RemoteNodesTab(
     val locale = displayLocale()
     val notAvailable = stringResource(R.string.common_not_available)
     val directory = snapshot.directory
-    val localPosition = directory.localPosition()
+    val localPosition = snapshot.observer?.toLatLon()
 
     // Ports the descending packet-count sort mesh_stats.py:1926-1930 applies
     // before rendering. Kotlin's sortedByDescending, like Python's sorted,

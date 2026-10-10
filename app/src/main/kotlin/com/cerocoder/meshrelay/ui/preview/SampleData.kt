@@ -611,6 +611,9 @@ object SampleData {
         lastRelayedPacketAtMillis = MOST_RECENT_PACKET_AT,
         directory = directory,
         skippedRelayNodes = setOf(NUM_ILLESCAS_MUDO),
+        observer = directory.localPosition()?.let {
+            StampedPosition.fromDegrees(it.lat, it.lon, PositionOrigin.NODE, directory.locationInfo(directory.localNodeNum!!, null).altitude)
+        },
     )
 
     /** Before a single packet has arrived - what the screens render at startup. */

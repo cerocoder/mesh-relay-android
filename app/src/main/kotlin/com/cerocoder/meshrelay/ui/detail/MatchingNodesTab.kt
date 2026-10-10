@@ -77,7 +77,7 @@ fun MatchingNodesTab(
     val directory = snapshot.directory
     val candidates = directory.matchingNodeNums(relayByte)
     val skippedCountForThisByte = snapshot.skippedRelayNodes.count { Geo.lastByteOfNodeNum(it) == relayByte }
-    val localPosition = directory.localPosition()
+    val localPosition = snapshot.observer?.toLatLon()
     // A card per candidate, not per database record: `candidates` is now drawn
     // from the union of both stores (matchingNodeNums's own contract, since the
     // node-storage split), so a node the radio has never listed can still be

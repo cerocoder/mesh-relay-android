@@ -1370,6 +1370,20 @@ the wrong hemisphere and still look like success from the screenshot alone.
 
 ---
 
+## Group N — One observer position for Alt and distance (2026-10-10)
+
+### N1. Alt and distances follow the phone, and only refresh sensibly
+**Do:** With **Use phone location** on and a fix, read the header's Alt and a node card's distance.
+Walk about 20 m and watch both. Then switch the setting off and read them again.
+**Pass looks like:** on, Alt is the phone's and the distance is measured from you; they change while
+you walk, no faster than about every 10 s, and not for steps under about 5 m. Off, both return to the
+node's values at once. The *My node* tab shows the node's own position and altitude in both states.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,

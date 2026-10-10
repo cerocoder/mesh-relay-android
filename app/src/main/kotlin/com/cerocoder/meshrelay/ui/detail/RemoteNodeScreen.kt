@@ -101,7 +101,7 @@ fun RemoteNodeScreen(
     // and never invents a stamp the way a hand-rolled synthetic identity would.
     val identity = directory.identity(nodeNum)
     val shortName = directory.shortName(nodeNum)
-    val localPosition = directory.localPosition()
+    val localPosition = snapshot.observer?.toLatLon()
     val location = directory.locationInfo(nodeNum, localPosition)
     val telemetry = directory.telemetry(nodeNum)
     val relaysCarrying = RelayIndex.relaysCarrying(nodeNum, snapshot.relays)

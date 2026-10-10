@@ -45,6 +45,8 @@ data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOri
     val latitude: Double get() = latI * COORD_SCALE
     val longitude: Double get() = lonI * COORD_SCALE
 
+    fun toLatLon(): LatLon = LatLon(latitude, longitude)
+
     companion object {
         /** Coordinates travel as integers scaled by ten million. */
         const val COORD_SCALE = 1e-7

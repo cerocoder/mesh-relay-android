@@ -879,3 +879,18 @@ Ruling: the `geo:` pin's label is **not** the subject's name at every call site 
   could be given here, so the fix removes it rather than leaving it unused.
   Cost if wrong: a pin reading the wrong one of two short, already-shipped strings; the coordinate
   underneath it is unaffected either way, so nothing about where the tap lands changes.
+
+### 64
+
+Ruling: the header's Alt and every distance and direction now read the **observer**
+  (`StatsSnapshot.observer`, resolved by `MeshStatsEngine.positionForSample`), the same position the
+  Graph stamps - the phone's fix when *Use phone location* is on, falling back to the node; the node
+  alone when it is off. Before, they always read the node. The *My node* tab is unchanged and still
+  shows the node's own position and altitude. A phone fix without an altitude shows `n/a`; the node's
+  altitude is never borrowed, because the value would contradict where the position came from.
+  A phone fix causes a snapshot refresh of its own only if the observer moved more than 5 m from the
+  one in the last snapshot **and** 10 s have passed since the last refresh a fix caused (a move inside
+  the 10 s arms one deferred refresh). Both numbers are the owner's. Every other trigger builds as it
+  always did and carries the latest fix; changing the setting refreshes at once.
+  Cost if wrong: a distance up to 5 m or 10 s stale on screen; nothing recorded is affected, as the
+  Graph and export read each fix as it arrives.

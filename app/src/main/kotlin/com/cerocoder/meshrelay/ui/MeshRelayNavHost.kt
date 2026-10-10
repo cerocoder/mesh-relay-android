@@ -593,7 +593,7 @@ private fun NeighbourNodeTab(
             // a real card rather than a crash on `directory.node(nodeNum)!!`.
             record = candidateRecord(directory, nodeNum),
             identity = identity,
-            location = directory.locationInfo(nodeNum, from = directory.localPosition()),
+            location = directory.locationInfo(nodeNum, from = snapshot.observer?.toLatLon()),
             telemetry = directory.telemetry(nodeNum),
             meshviewUrl = meshviewUrl,
             onSkip = null,

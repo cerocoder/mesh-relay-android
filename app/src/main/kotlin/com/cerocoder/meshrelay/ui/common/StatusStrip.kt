@@ -18,7 +18,6 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.stats.AgeText
 import com.cerocoder.meshrelay.stats.RelativeAge
 import com.cerocoder.meshrelay.stats.SortMode
-import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 
 /** One counter in the strip: its label and the number the snapshot reports for it. */
@@ -78,7 +77,7 @@ fun StatusStrip(
                 R.string.format_db_header,
                 snapshot.directory.count,
                 snapshot.directory.airCount,
-                myAltitudeText(snapshot.directory),
+                myAltitudeText(snapshot),
                 dbLoadTimeText(snapshot.directory.loadedAtMillis, nowMillis),
             ),
             style = MaterialTheme.typography.bodySmall,
@@ -133,18 +132,14 @@ private fun LabelledCount(label: String, count: Int, modifier: Modifier = Modifi
 }
 
 /**
- * The local node's own current altitude, or [R.string.common_not_available] when
- * there is no local node yet or it has never reported one.
- *
- * Reads [NodeDirectorySnapshot.locationInfo] the same way [MyNodeScreen] already
- * does for its own node card, and the same way the "Alt(...)" reading is derived
- * for every other node - one precedence rule, resolved in one place, rather than
- * a second guess at "what altitude does this device report" living here.
+ * The observer's current altitude - the phone's when *Use phone location* is on and
+ * a fix has arrived, the node's otherwise - or [R.string.common_not_available] when
+ * there is none. Resolved once by the engine as [StatsSnapshot.observer], the same
+ * position that anchors every distance and the Graph's pins.
  */
 @Composable
-private fun myAltitudeText(directory: NodeDirectorySnapshot): String {
-    val localNodeNum = directory.localNodeNum ?: return stringResource(R.string.common_not_available)
-    val altitude = directory.locationInfo(localNodeNum, from = null).altitude
+private fun myAltitudeText(snapshot: StatsSnapshot): String {
+    val altitude = snapshot.observer?.altitude
         ?: return stringResource(R.string.common_not_available)
     return stringResource(R.string.format_altitude_m, altitude)
 }
