@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -104,6 +105,7 @@ private val SelectorRowSpacing = 8.dp
  *  2026-09-04 section 7) rather than stacking - see the comment above that
  *  row for why they no longer stack. */
 private val ToggleRowSpacing = 24.dp
+private val MarksRowSpacing = 4.dp
 
 /**
  * The selected candidate's own signal line - [CandidateLineOverlay]'s width,
@@ -475,11 +477,17 @@ fun SignalGraphScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding),
-                horizontalArrangement = Arrangement.spacedBy(ToggleRowSpacing, Alignment.End),
+                // Tighter while the Marks button shares the row: at the normal gap the
+                // three controls are wider than a phone, and the switch labels were the
+                // ones that gave way ("Auto sc…" on the reference device).
+                horizontalArrangement = Arrangement.spacedBy(
+                    if (marksAvailable) MarksRowSpacing else ToggleRowSpacing,
+                    Alignment.End,
+                ),
             ) {
                 // Present only while the node has at least one bookmark, loaded or new.
                 if (marksAvailable) {
-                    TextButton(onClick = { marksOpen = true }) {
+                    TextButton(onClick = { marksOpen = true }, contentPadding = PaddingValues(horizontal = 8.dp)) {
                         Text(stringResource(R.string.graph_marks), maxLines = 1)
                     }
                 }

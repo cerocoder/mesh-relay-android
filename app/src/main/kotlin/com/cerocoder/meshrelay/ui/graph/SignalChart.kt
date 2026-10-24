@@ -7,6 +7,8 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.gestures.drag
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -68,6 +70,10 @@ fun SignalChart(
     onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
+    // `pointerInput(Unit)` below builds its gesture handler once and keeps it, so a lambda
+    // captured directly would stay the first composition's - for the carousel, one that
+    // sees no bookmarks at all. Reading through this state always calls the current one.
+    val currentOnLongPress by rememberUpdatedState(onLongPress)
     Canvas(
         modifier = modifier
             .fillMaxSize()
@@ -110,7 +116,7 @@ fun SignalChart(
                     onDoubleTap = { onCrosshairCleared() },
                     // Steps the crosshair to the next bookmark. The press has already put the
                     // crosshair under the finger, and this moves it on from there.
-                    onLongPress = { onLongPress() },
+                    onLongPress = { currentOnLongPress() },
                 )
             },
     ) {
