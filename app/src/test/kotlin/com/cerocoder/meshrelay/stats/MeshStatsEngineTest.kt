@@ -1,6 +1,11 @@
 package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Counters
+import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.NodeAnnotations
+import com.cerocoder.meshrelay.stats.model.NodeFile
+import com.cerocoder.meshrelay.stats.model.NodeFileEntry
+import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.StampedPosition
@@ -17,6 +22,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okio.ByteString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -1295,5 +1301,141 @@ class MeshStatsEngineTest {
         runCurrent()
 
         assertEquals(fixNorth(0.0), seen.last().observer)
+    }
+    // --- The node file ------------------------------------------------------------
+
+    private val relayNodeA = 0xA1000069.toInt()
+    private val relayNodeB = 0xA1001069.toInt()
+
+    private fun fileEntry(num: Int, shortName: String) = NodeFileEntry(
+        record = NodeRecord(
+            num = num, longName = null, shortName = shortName, hwModel = null, role = null,
+            dbPosition = null, dbSnr = null, lastHeardEpochSeconds = null, hopsAway = null,
+            hasPublicKey = false, receivedAtMillis = 0L,
+        ),
+        annotations = NodeAnnotations(LearntSource.AIR, notes = "n"),
+        uptimeSeconds = null,
+        telemetry = emptyMap(),
+    )
+
+    private fun twoNodeInfoFrames(vararg nums: Int) =
+        nums.map { nodeInfoFrame(it, "n") } + configCompleteFrame()
+
+    @Test
+    fun `loading a node file leaves every statistic untouched`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(relayed(), direct()))
+        runCurrent()
+        val before = seen.last()
+
+        subject.loadNodeFile(NodeFile(listOf(fileEntry(0x11111111, "LOAD")), emptySet()))
+        runCurrent()
+        val after = seen.last()
+
+        assertEquals(before.counters, after.counters)
+        assertEquals(before.relays, after.relays)
+        assertEquals(before.neighbours, after.neighbours)
+    }
+
+    @Test
+    fun `a loaded node appears in the snapshot directory`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+
+        subject.loadNodeFile(NodeFile(listOf(fileEntry(0x11111111, "LOAD")), emptySet()))
+        runCurrent()
+
+        assertEquals("LOAD", seen.last().directory.identity(0x11111111).shortName)
+        assertEquals("n", seen.last().directory.annotations(0x11111111)?.notes)
+    }
+
+    @Test
+    fun `requestNodeFile uses live neighbour averages`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                nodeInfoFrame(SENDER, "x"), configCompleteFrame(),
+                direct(from = SENDER, rssi = -80, snr = -4f),
+                direct(from = SENDER, rssi = -70, snr = -2f),
+            ),
+        )
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        val annotations = subject.nodeFileResult.value!!.entries.single().annotations
+        assertEquals(-75f, annotations.avgRssi)
+        assertEquals(-3f, annotations.avgSnr)
+    }
+
+    @Test
+    fun `requestNodeFile includes the current skip list`() = runTest(StandardTestDispatcher()) {
+        val skipped = MutableStateFlow(setOf(0x1234))
+        val subject = engine(backgroundScope, skipped)
+        collectSnapshots(subject)
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertEquals(setOf(0x1234), subject.nodeFileResult.value!!.skippedNodes)
+    }
+
+    @Test
+    fun `nodeFileConsumed clears the result`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.requestNodeFile()
+        runCurrent()
+        assertNotNull(subject.nodeFileResult.value)
+
+        subject.nodeFileConsumed()
+
+        assertNull(subject.nodeFileResult.value)
+    }
+
+    @Test
+    fun `a sole candidate for a heard relay byte is latched as known relay`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.single { it.record.num == relayNodeA }.annotations.knownAsRelay)
+    }
+
+    @Test
+    fun `two candidates are not latched`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA, relayNodeB).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.none { it.annotations.knownAsRelay })
+    }
+
+    @Test
+    fun `a latched relay stays flagged after it is skipped`() = runTest(StandardTestDispatcher()) {
+        val skipped = MutableStateFlow<Set<Int>>(emptySet())
+        val subject = engine(backgroundScope, skipped)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        skipped.value = setOf(relayNodeA)
+        runCurrent()
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.single { it.record.num == relayNodeA }.annotations.knownAsRelay)
     }
 }
