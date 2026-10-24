@@ -108,4 +108,11 @@ class AltitudeFilterTest {
 
         assertEquals(720, filter.valueAt(10 * tenSeconds))
     }
+
+    @Test
+    fun `accept says whether the measurement was kept`() {
+        assertEquals(true, filter.accept(0, 720.0, 5f))
+        assertEquals(false, filter.accept(tenSeconds, 720.0, 40f))
+        assertEquals(false, filter.accept(tenSeconds, 720.0, null))
+    }
 }

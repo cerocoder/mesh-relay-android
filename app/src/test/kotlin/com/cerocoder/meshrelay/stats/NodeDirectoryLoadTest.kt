@@ -335,4 +335,22 @@ class NodeDirectoryLoadTest {
 
         assertEquals(endsInZero, directory.snapshot(setOf(endsInZero)).skippedKnownRelay(0xff))
     }
+
+    @Test
+    fun `loaded count is the number of nodes the file supplied`() {
+        assertEquals(0, snapshot().loadedCount)
+
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY)), entry(record(RADIO_NODE))))
+
+        assertEquals(2, snapshot().loadedCount)
+    }
+
+    @Test
+    fun `loaded count survives a reset of the runtime data`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY))))
+
+        directory.clearRuntimeData()
+
+        assertEquals(1, snapshot().loadedCount)
+    }
 }
