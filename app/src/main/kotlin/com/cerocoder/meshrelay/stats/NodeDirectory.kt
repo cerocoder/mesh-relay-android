@@ -281,6 +281,17 @@ class NodeDirectory(private val time: TimeSource) {
         annotations[nodeNum] = (annotations[nodeNum] ?: NodeAnnotations(learntSource)).copy(knownAsRelay = true)
     }
 
+    /**
+     * Replaces [nodeNum]'s watch points with [rawPoints] (the raw JSON text of each, the
+     * form [NodeAnnotations.watchPoints] carries). Every other annotation is kept; a node
+     * with none yet gets them created, its source taken from the store that holds it.
+     */
+    fun setWatchPoints(nodeNum: Int, rawPoints: List<String>) {
+        val source = if (nodeNum in nodesFromAir) LearntSource.AIR else LearntSource.NODE
+        val current = annotations[nodeNum] ?: NodeAnnotations(source)
+        annotations[nodeNum] = current.copy(watchPoints = rawPoints)
+    }
+
     fun setLocalNodeNum(num: Int) {
         localNodeNum = num
     }

@@ -30,3 +30,10 @@ val VerdictInconsistent = Color(0xFFE57373) // new: a red muted to match the oth
 // this line too - the exact accident the comment above VerdictConsistent
 // already warns against for the verdict constants themselves.
 val CandidateLine = Color(0xFFE57373)
+
+/**
+ * The selected candidate's average direct SNR rule on the Graph - yellow, the twin of
+ * [CandidateLine] for the other metric. Its own constant for the same reason as that
+ * one: this says "this is where its SNR sits" and must not change with a verdict.
+ */
+val CandidateSnrLine = Color(0xFFFFD600)

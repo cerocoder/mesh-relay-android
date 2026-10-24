@@ -37,6 +37,7 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.export.ExportKind
+import com.cerocoder.meshrelay.nodefile.WatchPointJson
 import com.cerocoder.meshrelay.settings.AppSettings
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
@@ -49,6 +50,7 @@ import com.cerocoder.meshrelay.stats.model.RelayCandidates
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.stats.model.WatchPoint
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.detail.candidateRecord
@@ -466,6 +468,15 @@ private fun GraphDestination(
         onDispose { container.engine.watchSeries(null) }
     }
 
+    // Bookmarks live in the node's annotations, as the raw JSON text the node file
+    // carries; this is the one place they are decoded and encoded for the screen.
+    val watchPointsOf: (Int) -> List<WatchPoint> = { nodeNum ->
+        snapshot.directory.annotations(nodeNum)?.watchPoints.orEmpty().mapNotNull(WatchPointJson::decode)
+    }
+    val onSetWatchPoints: (Int, List<WatchPoint>) -> Unit = { nodeNum, points ->
+        container.engine.setWatchPoints(nodeNum, points.map(WatchPointJson::encode))
+    }
+
     // A subject cleared by a reset while the chart is open falls back to an
     // all-zero record rather than crashing, exactly as DetailScreen's own header
     // resolution already allows for.
@@ -495,6 +506,9 @@ private fun GraphDestination(
                             dbSnr = snapshot.directory.node(nodeNum)?.dbSnr,
                             hopsAway = snapshot.directory.node(nodeNum)?.hopsAway,
                             loadedRssiAvg = snapshot.directory.annotations(nodeNum)?.avgRssi,
+                            directSnr = snapshot.neighbours.find { it.nodeNum == nodeNum }?.snr
+                                ?: SignalStats.EMPTY,
+                            loadedSnrAvg = snapshot.directory.annotations(nodeNum)?.avgSnr,
                         )
                     },
                 )
@@ -518,6 +532,8 @@ private fun GraphDestination(
                 onSkipCandidate = { nodeNum -> container.skipRelayNode(nodeNum) },
                 onBack = onBack,
                 modifier = modifier,
+                watchPointsOf = watchPointsOf,
+                onSetWatchPoints = onSetWatchPoints,
             )
         }
 
@@ -542,6 +558,9 @@ private fun GraphDestination(
                 onSkipCandidate = {},
                 onBack = onBack,
                 modifier = modifier,
+                subjectNodeNum = subject.nodeNum,
+                watchPointsOf = watchPointsOf,
+                onSetWatchPoints = onSetWatchPoints,
             )
         }
     }

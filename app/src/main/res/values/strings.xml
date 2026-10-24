@@ -189,6 +189,15 @@
     <string name="graph_candidate_db_snr">Last DB SNR: %1$s</string>
     <string name="graph_candidate_hops">Hops away: %1$d</string>
     <string name="graph_candidate_off_scale">%1$s (off-scale)</string>
+    <string name="graph_marks">Marks</string>
+    <string name="graph_marks_title">Marks</string>
+    <string name="graph_watch_add">Add bookmark</string>
+    <string name="graph_watch_add_needs_node">Select a candidate node to add a bookmark</string>
+    <string name="graph_watch_remove">Remove bookmark</string>
+    <string name="graph_watch_remove_body">Remove the bookmark made at %1$s?</string>
+    <string name="graph_watch_info">Bookmark info</string>
+    <string name="graph_watch_info_title">Bookmark</string>
+    <string name="graph_watch_note_label">Note</string>
     <string name="graph_candidate_verdict_consistent">Consistent with the relay\'s signal</string>
     <string name="graph_candidate_verdict_uncertain">Uncertain match with the relay\'s signal</string>
     <string name="graph_candidate_verdict_inconsistent">Inconsistent with the relay\'s signal</string>

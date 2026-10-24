@@ -61,6 +61,7 @@ class MeshStatsEngine(
         data class SetPaused(val paused: Boolean) : Command
         data class SetSort(val mode: SortMode) : Command
         data class SetSkipped(val skipped: Set<Int>) : Command
+        data class SetWatchPoints(val nodeNum: Int, val rawPoints: List<String>) : Command
         data class SetPositionMode(val mode: PositionMode) : Command
         data class SetPhoneFix(val fix: StampedPosition?) : Command
         data class WatchSeries(val key: SeriesKey?) : Command
@@ -314,6 +315,9 @@ class MeshStatsEngine(
     /** Clears [nodeFileResult], so a stale file is never written twice. */
     fun nodeFileConsumed() { _nodeFileResult.value = null }
 
+    /** Replaces one node's bookmarks; see [NodeDirectory.setWatchPoints]. */
+    fun setWatchPoints(nodeNum: Int, rawPoints: List<String>) { commands.trySend(Command.SetWatchPoints(nodeNum, rawPoints)) }
+
     /**
      * Folds [file]'s nodes into the directory's loaded layer. The skip list is not
      * part of this: it lives in settings and the caller merges it there.
@@ -359,6 +363,7 @@ class MeshStatsEngine(
                 }
                 _nodeFileResult.value = NodeFile(directory.exportEntries(averages), skipped)
             }
+            is Command.SetWatchPoints -> directory.setWatchPoints(command.nodeNum, command.rawPoints)
             is Command.LoadNodeFile -> directory.applyLoaded(command.file.entries)
             Command.Reset -> resetStatistics()
             Command.ResetForNewNode -> {

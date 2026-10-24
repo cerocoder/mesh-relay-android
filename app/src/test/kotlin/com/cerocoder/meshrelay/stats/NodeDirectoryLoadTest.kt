@@ -353,4 +353,23 @@ class NodeDirectoryLoadTest {
 
         assertEquals(1, snapshot().loadedCount)
     }
+
+    @Test
+    fun `setWatchPoints replaces the list and keeps the other annotations`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY), NodeAnnotations(LearntSource.AIR, notes = "x"))))
+
+        directory.setWatchPoints(FILE_ONLY, listOf("""{"a":1}""", """{"a":2}"""))
+        directory.setWatchPoints(FILE_ONLY, listOf("""{"a":2}"""))
+
+        val annotations = snapshot().annotations(FILE_ONLY)!!
+        assertEquals(listOf("""{"a":2}"""), annotations.watchPoints)
+        assertEquals("x", annotations.notes)
+    }
+
+    @Test
+    fun `setWatchPoints creates annotations for a node that had none`() {
+        directory.setWatchPoints(RADIO_NODE, listOf("""{"a":1}"""))
+
+        assertEquals(listOf("""{"a":1}"""), snapshot().annotations(RADIO_NODE)!!.watchPoints)
+    }
 }

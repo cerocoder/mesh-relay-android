@@ -156,4 +156,17 @@ class RelayCandidateTest {
         assertEquals(CandidateVerdict.UNKNOWN, candidate.verdict)
         assertFalse(candidate.directFromFile)
     }
+
+    @Test
+    fun `the direct snr average is live when heard, loaded when not, null otherwise`() {
+        val live = CandidateSource(1, "n", "CLIENT", stats(-80f), dbSnr = null, hopsAway = null, directSnr = stats(4f, 6f), loadedSnrAvg = 1f)
+        val loaded = CandidateSource(2, "n", "CLIENT", SignalStats.EMPTY, dbSnr = null, hopsAway = null, loadedSnrAvg = -2.5f)
+        val none = source(3)
+
+        val byNode = RelayCandidates.rank(-71f, listOf(live, loaded, none)).associateBy { it.nodeNum }
+
+        assertEquals(5f, byNode.getValue(1).directSnrAvg!!, 0.001f)
+        assertEquals(-2.5f, byNode.getValue(2).directSnrAvg!!, 0.001f)
+        assertNull(byNode.getValue(3).directSnrAvg)
+    }
 }

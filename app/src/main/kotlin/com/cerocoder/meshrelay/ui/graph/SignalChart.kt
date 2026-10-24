@@ -42,6 +42,8 @@ import kotlin.math.floor
  * [com.cerocoder.meshrelay.ui.common.SignalGauge] and `GaugeGeometry` already
  * have.
  *
+ * A long press steps the crosshair to the next bookmark ([onLongPress]).
+ *
  * A touch anywhere on the plot places the crosshair, and a drag moves it: the
  * scrollbar beside it is what scrolls. That split is deliberate - a
  * `Modifier.scrollable` under the same touch drag would fight the crosshair, and
@@ -63,6 +65,7 @@ fun SignalChart(
     onViewportHeight: (Float) -> Unit,
     onCrosshairAt: (Float) -> Unit,
     onCrosshairCleared: () -> Unit,
+    onLongPress: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     Canvas(
@@ -105,6 +108,9 @@ fun SignalChart(
                     // `onTap`.
                     onPress = { onCrosshairAt(it.y) },
                     onDoubleTap = { onCrosshairCleared() },
+                    // Steps the crosshair to the next bookmark. The press has already put the
+                    // crosshair under the finger, and this moves it on from there.
+                    onLongPress = { onLongPress() },
                 )
             },
     ) {

@@ -68,6 +68,7 @@ import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayCandidate
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
+import com.cerocoder.meshrelay.stats.model.WatchPoint
 import com.cerocoder.meshrelay.ui.common.LocalMapProvider
 import com.cerocoder.meshrelay.ui.common.LocalPreferInstalledMapApp
 import com.cerocoder.meshrelay.ui.common.LocalTimeFormat
@@ -76,6 +77,7 @@ import com.cerocoder.meshrelay.ui.common.openPosition
 import com.cerocoder.meshrelay.ui.detail.SignalBlock
 import com.cerocoder.meshrelay.ui.preview.SampleData
 import com.cerocoder.meshrelay.ui.theme.CandidateLine
+import com.cerocoder.meshrelay.ui.theme.CandidateSnrLine
 import com.cerocoder.meshrelay.ui.theme.MeshRelayTheme
 import com.cerocoder.meshrelay.ui.theme.RssiTrack
 import com.cerocoder.meshrelay.ui.theme.SnrTrack
@@ -89,6 +91,8 @@ private val ScrollbarCorner = 6.dp
 private val GlobeSize = 40.dp
 private val ScreenPadding = 16.dp
 private val CrosshairLabelPadding = 8.dp
+private val SnrLabelDrop = 18.dp
+private val WatchLineStroke = 1.dp
 private val LabelSpacing = 12.dp
 private val SwitchLabelSpacing = 8.dp
 
@@ -223,6 +227,16 @@ fun SignalGraphScreen(
     onSkipCandidate: (Int) -> Unit,
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
+    /**
+     * The node a bookmark belongs to when this graph shows a neighbour; null for a relay,
+     * whose bookmarks go to the selected candidate instead (or the only one, when a
+     * relay byte has just one).
+     */
+    subjectNodeNum: Int? = null,
+    /** Every bookmark held for a node, oldest first. Read live: Freeze holds the drawing, not the owner's marks. */
+    watchPointsOf: (nodeNum: Int) -> List<WatchPoint> = { emptyList() },
+    /** Replaces a node's whole bookmark list; the caller stores it. */
+    onSetWatchPoints: (nodeNum: Int, points: List<WatchPoint>) -> Unit = { _, _ -> },
 ) {
     // Both survive a rotation. Freeze especially: a rotation must not silently
     // resume a chart the reader deliberately stopped.
@@ -238,6 +252,8 @@ fun SignalGraphScreen(
     var scrollPx by remember { mutableFloatStateOf(0f) }
     var viewportPx by remember { mutableFloatStateOf(0f) }
     var crosshairY by remember { mutableStateOf<Float?>(null) }
+    var cycleAt by remember { mutableStateOf<Long?>(null) }
+    var marksOpen by rememberSaveable { mutableStateOf(false) }
     var lastTotal by remember { mutableLongStateOf(0L) }
 
     val live = GraphFrame(
@@ -397,6 +413,54 @@ fun SignalGraphScreen(
                 .padding(innerPadding)
                 .fillMaxSize(),
         ) {
+            // Read once, ahead of everything below that needs it: the Skip
+            // button just below and the two overlays further down
+            // (CandidateLineOverlay, CandidateOffScaleLabel) all read the same
+            // selection, and a lookup this file already treats as cheap
+            // (MeshRelayNavHost's own linear scans) still has no reason to run
+            // three times.
+            //
+            // Read from `frame.candidates`, never from the bare `candidates`
+            // parameter (final-review finding I-6) - see [GraphFrame]'s own
+            // KDoc for why the parameter alone cannot be trusted once Freeze
+            // is on.
+            val selectedCandidate = frame.candidates.firstOrNull { it.nodeNum == selected }
+            // Whose bookmarks these are: a neighbour's own, or for a relay the selected
+            // candidate's - a relay byte is not a node, so it cannot hold one itself.
+            val watchNodeNum = subjectNodeNum ?: (selectedCandidate ?: frame.candidates.singleOrNull())?.nodeNum
+            val watchPoints = watchNodeNum?.let(watchPointsOf).orEmpty()
+            val watchedTimes = remember(watchPoints) { watchPoints.mapTo(HashSet()) { it.atMillis } }
+            val markRows = remember(shown, watchedTimes) { ChartGeometry.markRows(shown, watchedTimes) }
+
+            // The long-press carousel: each long press puts the crosshair on the next
+            // older bookmark in the series, the newest again after the oldest, scrolling
+            // the chart there if it is off screen. `cycleAt` is the bookmark it last stood
+            // on, by timestamp - the press's own finger-down has already moved the
+            // crosshair to the touched row, so the crosshair cannot say where the
+            // carousel was. Loaded bookmarks with no sample are not in `markRows`; the
+            // Marks list is where those are reached.
+            val onMarkCarousel = {
+                ChartGeometry.nextMark(markRows, cycleAt)?.let { mark ->
+                    cycleAt = mark.atMillis
+                    val target = ChartGeometry.scrollToShow(mark.row, scrollPx, viewportPx, shown.size, pxPerSample)
+                    scrollPx = target
+                    crosshairY = ChartGeometry.yOf(mark.row, target, pxPerSample)
+                }
+                Unit
+            }
+            val marksAvailable = watchPoints.isNotEmpty()
+            // A sheet left open when its last bookmark is removed must not reopen by itself
+            // the next time one is added.
+            LaunchedEffect(marksAvailable) { if (!marksAvailable) marksOpen = false }
+            if (marksOpen && watchNodeNum != null && marksAvailable) {
+                MarksSheet(
+                    points = watchPoints,
+                    locale = locale,
+                    onChange = { onSetWatchPoints(watchNodeNum, it) },
+                    onDismiss = { marksOpen = false },
+                )
+            }
+
             // Requirement 20 (the earlier Graph spec) asked for these two
             // stacked, label left, switch right. The owner has since
             // overridden that in the 2026-09-04 relay-candidate-comparison
@@ -413,32 +477,28 @@ fun SignalGraphScreen(
                     .padding(horizontal = ScreenPadding),
                 horizontalArrangement = Arrangement.spacedBy(ToggleRowSpacing, Alignment.End),
             ) {
+                // Present only while the node has at least one bookmark, loaded or new.
+                if (marksAvailable) {
+                    TextButton(onClick = { marksOpen = true }) {
+                        Text(stringResource(R.string.graph_marks), maxLines = 1)
+                    }
+                }
                 LabelledSwitch(
                     label = stringResource(R.string.graph_freeze),
                     checked = freeze,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { freeze = it },
+                    modifier = Modifier.weight(1f, fill = false),
                 )
                 LabelledSwitch(
                     label = stringResource(R.string.graph_auto_scale),
                     checked = autoScale,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { autoScale = it },
+                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
 
-            // Read once, ahead of everything below that needs it: the Skip
-            // button just below and the two overlays further down
-            // (CandidateLineOverlay, CandidateOffScaleLabel) all read the same
-            // selection, and a lookup this file already treats as cheap
-            // (MeshRelayNavHost's own linear scans) still has no reason to run
-            // three times.
-            //
-            // Read from `frame.candidates`, never from the bare `candidates`
-            // parameter (final-review finding I-6) - see [GraphFrame]'s own
-            // KDoc for why the parameter alone cannot be trusted once Freeze
-            // is on.
-            val selectedCandidate = frame.candidates.firstOrNull { it.nodeNum == selected }
 
             // Spec section 7: "below this row, above the gauges", the selector
             // and Skip sharing one row (spec section 9's own "at the right
@@ -574,8 +634,20 @@ fun SignalGraphScreen(
                     // data". Renders nothing when no candidate is selected or
                     // the selected one has no direct RSSI average.
                     CandidateLineOverlay(
-                        candidate = selectedCandidate,
-                        rssiRange = rssiRange,
+                        avg = selectedCandidate?.directRssiAvg,
+                        range = rssiRange,
+                        color = CandidateLine,
+                    )
+                    CandidateLineOverlay(
+                        avg = selectedCandidate?.directSnrAvg,
+                        range = snrRange,
+                        color = CandidateSnrLine,
+                    )
+                    WatchPointMarks(
+                        series = shown,
+                        marked = watchedTimes,
+                        scrollPx = effectiveScroll,
+                        pxPerSample = pxPerSample,
                     )
                     SignalChart(
                         series = shown,
@@ -589,6 +661,7 @@ fun SignalGraphScreen(
                         onViewportHeight = { viewportPx = it },
                         onCrosshairAt = { crosshairY = it },
                         onCrosshairCleared = { crosshairY = null },
+                        onLongPress = onMarkCarousel,
                         modifier = Modifier.fillMaxSize(),
                     )
                     // Declared after SignalChart, unlike the line above -
@@ -598,8 +671,16 @@ fun SignalGraphScreen(
                     // KDoc), so painting it here puts it over the point
                     // cloud instead of under it.
                     CandidateOffScaleLabel(
-                        candidate = selectedCandidate,
-                        rssiRange = rssiRange,
+                        avg = selectedCandidate?.directRssiAvg,
+                        range = rssiRange,
+                        color = CandidateLine,
+                        isSnr = false,
+                    )
+                    CandidateOffScaleLabel(
+                        avg = selectedCandidate?.directSnrAvg,
+                        range = snrRange,
+                        color = CandidateSnrLine,
+                        isSnr = true,
                     )
                     crosshairY?.let { touchY ->
                         Crosshair(
@@ -609,6 +690,11 @@ fun SignalGraphScreen(
                             pxPerSample = pxPerSample,
                             viewportPx = viewportPx,
                             locale = locale,
+                            watchPoints = watchPoints,
+                            canWatch = watchNodeNum != null,
+                            onWatchPointsChange = { points ->
+                                watchNodeNum?.let { onSetWatchPoints(it, points) }
+                            },
                         )
                     }
                 }
@@ -764,11 +850,23 @@ private fun BoxScope.Crosshair(
     pxPerSample: Float,
     viewportPx: Float,
     locale: Locale,
+    watchPoints: List<WatchPoint>,
+    canWatch: Boolean,
+    onWatchPointsChange: (List<WatchPoint>) -> Unit,
 ) {
     val row = ChartGeometry.rowAtClamped(touchY, scrollPx, pxPerSample, series.size)
     val index = ChartGeometry.indexOfRow(row, series.size)
     val y = ChartGeometry.yOf(row, scrollPx, pxPerSample)
     val position = series.positionOf(index)
+    // A bookmark belongs to a measurement by that measurement's own timestamp, and it
+    // carries its own copy of the values, so it stays valid after the series evicts the row.
+    val atMillis = series.atMillis(index)
+    val bookmark = watchPoints.firstOrNull { it.atMillis == atMillis }
+    var confirmingRemove by remember(atMillis) { mutableStateOf(false) }
+    var editingNote by remember(atMillis) { mutableStateOf(false) }
+    // The symbols stand left of the rule the way the globe stands right of it, so the
+    // label block below starts after them rather than under them.
+    val leftSymbols = if (bookmark == null) 1 else 2
     val uriHandler = LocalUriHandler.current
     // The one delivery mechanism for either preference, not a second route: PositionLine
     // reads the same LocalMapProvider and LocalPreferInstalledMapApp, rather than this
@@ -824,7 +922,7 @@ private fun BoxScope.Crosshair(
                 )
             }
             .onSizeChanged { labelBlockHeightPx = it.height }
-            .padding(horizontal = CrosshairLabelPadding),
+            .padding(start = GlobeSize * leftSymbols + CrosshairLabelPadding, end = CrosshairLabelPadding),
     ) {
         // All three ellipsise rather than clip. The block is a timestamp and two
         // values inside a plot already narrowed by padding and the scrollbar, and
@@ -858,6 +956,80 @@ private fun BoxScope.Crosshair(
     }
 
     var globeHeightPx by remember { mutableIntStateOf(0) }
+    Row(
+        modifier = Modifier
+            .align(Alignment.TopStart)
+            .offset {
+                IntOffset(
+                    x = 0,
+                    y = ChartGeometry.overlayTopPx(
+                        anchorY = y,
+                        aboveAnchorPx = globeHeightPx / 2f,
+                        overlayHeightPx = globeHeightPx.toFloat(),
+                        viewportPx = viewportPx,
+                    ).roundToInt(),
+                )
+            },
+    ) {
+        if (bookmark == null) {
+            IconButton(
+                onClick = {
+                    onWatchPointsChange(
+                        (watchPoints + WatchPoint(atMillis, series.rssi(index), series.snr(index), position))
+                            .sortedBy { it.atMillis },
+                    )
+                },
+                enabled = canWatch,
+                modifier = Modifier.size(GlobeSize),
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_watch_add),
+                    contentDescription = stringResource(
+                        if (canWatch) R.string.graph_watch_add else R.string.graph_watch_add_needs_node,
+                    ),
+                )
+            }
+        } else {
+            IconButton(onClick = { confirmingRemove = true }, modifier = Modifier.size(GlobeSize)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_watch_remove),
+                    contentDescription = stringResource(R.string.graph_watch_remove),
+                )
+            }
+            IconButton(onClick = { editingNote = true }, modifier = Modifier.size(GlobeSize)) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_watch_info),
+                    contentDescription = stringResource(R.string.graph_watch_info),
+                )
+            }
+        }
+    }
+
+    if (bookmark != null && confirmingRemove) {
+        RemoveWatchPointDialog(
+            point = bookmark,
+            locale = locale,
+            onConfirm = {
+                confirmingRemove = false
+                onWatchPointsChange(watchPoints.filterNot { it.atMillis == bookmark.atMillis })
+            },
+            onDismiss = { confirmingRemove = false },
+        )
+    }
+
+    if (bookmark != null && editingNote) {
+        WatchPointNoteDialog(
+            point = bookmark,
+            onSave = { note ->
+                editingNote = false
+                onWatchPointsChange(
+                    watchPoints.map { if (it.atMillis == bookmark.atMillis) it.copy(note = note) else it },
+                )
+            },
+            onDismiss = { editingNote = false },
+        )
+    }
+
     IconButton(
         onClick = {
             // openPosition takes degrees and formats them under Locale.ROOT;
@@ -943,9 +1115,9 @@ private fun BoxScope.Crosshair(
  * selector already says why in either case.
  */
 @Composable
-private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange: ScaleRange) {
-    val avg = candidate?.directRssiAvg ?: return
-    val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
+private fun BoxScope.CandidateLineOverlay(avg: Float?, range: ScaleRange, color: Color) {
+    if (avg == null) return
+    val line = ChartGeometry.candidateLine(avg, range.min, range.max)
 
     // This app's own [CandidateLine] (ui/theme/Color.kt) - not a reuse of
     // VerdictInconsistent (final-review finding I-3), even though the two
@@ -959,7 +1131,7 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
     // is why it never changes colour with the verdict - and why retuning
     // that verdict's red for dot legibility must not silently recolour this
     // line too.
-    val lineColor = CandidateLine
+    val lineColor = color
     val markerSizePx = with(LocalDensity.current) { CandidateMarkerSize.toPx() }
 
     Canvas(modifier = Modifier.fillMaxSize()) {
@@ -999,6 +1171,33 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
 }
 
 /**
+ * A plain gray line across the plot on every row the owner bookmarked, with no label: the
+ * information appears only when the long-press carousel (or a touch) puts the crosshair on it.
+ * Drawn behind the points, so a bookmark never hides a measurement, and only for rows in view.
+ */
+@Composable
+private fun BoxScope.WatchPointMarks(
+    series: SignalSeries,
+    marked: Set<Long>,
+    scrollPx: Float,
+    pxPerSample: Float,
+) {
+    if (marked.isEmpty()) return
+    val strokePx = with(LocalDensity.current) { WatchLineStroke.toPx() }
+    // The theme's own gray, so the line follows light and dark like the crosshair does.
+    val lineColor = MaterialTheme.colorScheme.outline
+    Canvas(modifier = Modifier.fillMaxSize()) {
+        val window = ChartGeometry.visibleRows(scrollPx, size.height, series.size, pxPerSample)
+        if (window.isEmpty) return@Canvas
+        for (row in window.firstRow..window.lastRow) {
+            if (series.atMillis(ChartGeometry.indexOfRow(row, series.size)) !in marked) continue
+            val y = floor(ChartGeometry.yOf(row, scrollPx, pxPerSample))
+            drawLine(color = lineColor, start = Offset(0f, y), end = Offset(size.width, y), strokeWidth = strokePx)
+        }
+    }
+}
+
+/**
  * The selected candidate's off-scale value, labelled beside the edge
  * [CandidateLineOverlay] pinned its line to - spec section 8's "an arrow and
  * its value", the reason [ChartGeometry.OffScale] exists at all (Task 2).
@@ -1023,27 +1222,32 @@ private fun BoxScope.CandidateLineOverlay(candidate: RelayCandidate?, rssiRange:
  * one: the value is inside the plotted range, so there is no edge to label.
  */
 @Composable
-private fun BoxScope.CandidateOffScaleLabel(candidate: RelayCandidate?, rssiRange: ScaleRange) {
-    val avg = candidate?.directRssiAvg ?: return
-    val line = ChartGeometry.candidateLine(avg, rssiRange.min, rssiRange.max)
+private fun BoxScope.CandidateOffScaleLabel(avg: Float?, range: ScaleRange, color: Color, isSnr: Boolean) {
+    if (avg == null) return
+    val line = ChartGeometry.candidateLine(avg, range.min, range.max)
     if (line.offScale == ChartGeometry.OffScale.NONE) return
     val locale = displayLocale()
 
     Text(
         text = stringResource(
             R.string.graph_candidate_off_scale,
-            stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale)),
+            stringResource(
+                if (isSnr) R.string.format_snr_db else R.string.format_rssi_dbm,
+                StatsFormat.candidateRssiAvg(avg, locale),
+            ),
         ),
         // CandidateLine, not VerdictInconsistent - see CandidateLineOverlay's
         // own comment (final-review finding I-3): this label reads the value
         // of the line it sits beside, not a verdict, and must stay in step
         // with that line's colour rather than a verdict's.
-        color = CandidateLine,
+        color = color,
         style = MaterialTheme.typography.labelSmall,
         maxLines = 1,
         overflow = TextOverflow.Ellipsis,
         modifier = Modifier
             .align(if (line.offScale == ChartGeometry.OffScale.LOW) Alignment.CenterStart else Alignment.CenterEnd)
+            // The SNR label sits one line below the RSSI one so both can be read at once.
+            .offset(y = if (isSnr) SnrLabelDrop else 0.dp)
             .padding(horizontal = CandidateMarkerSize + CrosshairLabelPadding),
     )
 }
@@ -1457,8 +1661,8 @@ private fun CandidateLineLowOffScalePreview() {
     val rssiRange = ScaleRange(SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
     MeshRelayTheme {
         Box(modifier = Modifier.size(320.dp, 200.dp)) {
-            CandidateLineOverlay(candidate = candidate, rssiRange = rssiRange)
-            CandidateOffScaleLabel(candidate = candidate, rssiRange = rssiRange)
+            CandidateLineOverlay(avg = candidate.directRssiAvg, range = rssiRange, color = CandidateLine)
+            CandidateOffScaleLabel(avg = candidate.directRssiAvg, range = rssiRange, color = CandidateLine, isSnr = false)
         }
     }
 }
@@ -1481,8 +1685,8 @@ private fun CandidateLineHighOffScalePreview() {
     val rssiRange = ScaleRange(SignalScales.RSSI_MIN, SignalScales.RSSI_MAX)
     MeshRelayTheme {
         Box(modifier = Modifier.size(320.dp, 200.dp)) {
-            CandidateLineOverlay(candidate = candidate, rssiRange = rssiRange)
-            CandidateOffScaleLabel(candidate = candidate, rssiRange = rssiRange)
+            CandidateLineOverlay(avg = candidate.directRssiAvg, range = rssiRange, color = CandidateLine)
+            CandidateOffScaleLabel(avg = candidate.directRssiAvg, range = rssiRange, color = CandidateLine, isSnr = false)
         }
     }
 }
