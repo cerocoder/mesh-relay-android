@@ -23,9 +23,12 @@ class AltitudeFilter {
     private var variance = 0.0
     private var lastAtMillis = NEVER
 
-    /** Offers one measurement taken at [atMillis] (any monotonic clock, in milliseconds). */
-    fun accept(atMillis: Long, altitudeM: Double, accuracyM: Float?) {
-        if (accuracyM == null || accuracyM > MAX_ACCURACY_M || accuracyM <= 0f) return
+    /**
+     * Offers one measurement taken at [atMillis] (any monotonic clock, in milliseconds).
+     * Returns whether it was kept; false means the value on offer is the held one.
+     */
+    fun accept(atMillis: Long, altitudeM: Double, accuracyM: Float?): Boolean {
+        if (accuracyM == null || accuracyM > MAX_ACCURACY_M || accuracyM <= 0f) return false
         // The accuracy is one standard deviation, so its square is the measurement variance.
         val measurementVariance = accuracyM.toDouble() * accuracyM
         // An estimate that has been withdrawn is not blended with: the new fix starts afresh.
@@ -41,6 +44,7 @@ class AltitudeFilter {
             variance = (1 - gain) * predicted
         }
         lastAtMillis = maxOf(lastAtMillis, atMillis)
+        return true
     }
 
     /** The held estimate at [nowMillis], or null when none was ever kept or the last is too old. */

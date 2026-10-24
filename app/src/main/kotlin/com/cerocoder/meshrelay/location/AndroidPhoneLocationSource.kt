@@ -55,12 +55,14 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
             val now = SystemClock.elapsedRealtime()
             // Only the GNSS provider knows a height; the network provider's is a
             // guess and would drag the filter around.
-            if (location.provider == LocationManager.GPS_PROVIDER) offerAltitude(location, now)
+            val kept = location.provider == LocationManager.GPS_PROVIDER && offerAltitude(location, now)
+            val altitude = altitudeFilter.valueAt(now)
             _fix.value = StampedPosition.fromDegrees(
                 location.latitude,
                 location.longitude,
                 PositionOrigin.PHONE,
-                altitude = altitudeFilter.valueAt(now),
+                altitude = altitude,
+                altitudeHeld = altitude != null && !kept,
             )
         }
 
@@ -72,17 +74,20 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
         override fun onProviderDisabled(provider: String) = Unit
     }
 
-    private fun offerAltitude(location: Location, nowMillis: Long) {
+    /** Whether this fix gave the filter a measurement it kept. */
+    private fun offerAltitude(location: Location, nowMillis: Long): Boolean {
         // Height above mean sea level where the platform has it (API 34): the plain
         // altitude is ellipsoid height on some fixes and sea level on others, about
         // fifty metres apart over Madrid.
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && location.hasMslAltitude()) {
             val accuracy = if (location.hasMslAltitudeAccuracy()) location.mslAltitudeAccuracyMeters else null
-            altitudeFilter.accept(nowMillis, location.mslAltitudeMeters, accuracy)
-        } else if (location.hasAltitude()) {
-            val accuracy = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
-            altitudeFilter.accept(nowMillis, location.altitude, accuracy)
+            return altitudeFilter.accept(nowMillis, location.mslAltitudeMeters, accuracy)
         }
+        if (location.hasAltitude()) {
+            val accuracy = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
+            return altitudeFilter.accept(nowMillis, location.altitude, accuracy)
+        }
+        return false
     }
 
     // The permission is checked immediately above every call, by availability

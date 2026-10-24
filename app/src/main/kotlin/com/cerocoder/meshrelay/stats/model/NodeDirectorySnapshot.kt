@@ -62,6 +62,9 @@ class NodeDirectorySnapshot(
      */
     val airCount: Int get() = airNodes.size
 
+    /** How many nodes a node file has supplied; independent of the radio's [count]. */
+    val loadedCount: Int get() = loadedByNode.size
+
     /**
      * The radio's record for [nodeNum], with every field it leaves null filled from
      * what a loaded file said, field by field - or the loaded record alone when the

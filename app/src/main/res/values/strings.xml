@@ -30,7 +30,8 @@
     <string name="format_ago_hours">%1$dhrs %2$02dmin</string>
     <string name="format_source">Src: %1$s</string>
     <string name="format_source_aged">Src: %1$s:%2$s</string>
-    <string name="format_db_header">DB(%1$d) · Air(%2$d) · Alt(%3$s) · %4$s</string>
+    <string name="format_db_header">DB(%1$d) · Air(%2$d) · %3$s · LOAD(%4$d)</string>
+    <string name="format_altitude_field">Alt(%1$s)</string>
     <string name="format_packets_per_hour">%1$s pkt/h</string>
     <string name="format_uptime">%1$ddays %2$dhrs %3$dmin</string>
     <string name="format_last_heard_db">%1$s (local time)</string>
