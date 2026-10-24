@@ -2,6 +2,7 @@ package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.IdentitySource
 import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.LiveAverages
 import com.cerocoder.meshrelay.stats.model.NodeAnnotations
 import com.cerocoder.meshrelay.stats.model.NodeFileEntry
 import com.cerocoder.meshrelay.stats.model.NodeRecord
@@ -13,6 +14,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.meshtastic.proto.DeviceMetrics
 import org.meshtastic.proto.NodeInfo
+import org.meshtastic.proto.Position
 import org.meshtastic.proto.Telemetry
 import org.meshtastic.proto.User
 
@@ -187,5 +189,92 @@ class NodeDirectoryLoadTest {
         val annotations = snapshot().annotations(RADIO_NODE)!!
         assertTrue(annotations.knownAsRelay)
         assertEquals(LearntSource.NODE, annotations.learntSource)
+    }
+    // ---- export ----
+
+    @Test
+    fun `export prefers live averages over loaded ones`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY), NodeAnnotations(LearntSource.AIR, avgRssi = -90f, avgSnr = 3f))))
+
+        val exported = directory.exportEntries(mapOf(FILE_ONLY to LiveAverages(rssi = -80f, snr = null)))
+
+        val annotations = exported.single().annotations
+        assertEquals(-80f, annotations.avgRssi)
+        assertEquals(3f, annotations.avgSnr)
+    }
+
+    @Test
+    fun `export carries loaded averages forward when there is no live data`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY), NodeAnnotations(LearntSource.AIR, avgRssi = -90f, avgSnr = 3f))))
+
+        val annotations = directory.exportEntries(emptyMap()).single().annotations
+
+        assertEquals(-90f, annotations.avgRssi)
+        assertEquals(3f, annotations.avgSnr)
+    }
+
+    @Test
+    fun `export marks learnt source air when an air record exists`() {
+        directory.applyUser(RADIO_NODE, User(long_name = "Air"), NOW)
+        radioHasNode(RADIO_NODE, longName = "Radio")
+
+        assertEquals(LearntSource.AIR, directory.exportEntries(emptyMap()).single().annotations.learntSource)
+    }
+
+    @Test
+    fun `export marks learnt source node when only the radio knows it`() {
+        radioHasNode(RADIO_NODE, longName = "Radio")
+
+        assertEquals(LearntSource.NODE, directory.exportEntries(emptyMap()).single().annotations.learntSource)
+    }
+
+    @Test
+    fun `export of a loaded only node keeps its stored source`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY), NodeAnnotations(LearntSource.AIR))))
+
+        assertEquals(LearntSource.AIR, directory.exportEntries(emptyMap()).single().annotations.learntSource)
+    }
+
+    @Test
+    fun `export is ordered by node number`() {
+        directory.applyLoaded(listOf(entry(record(0x00000300)), entry(record(0x00000100)), entry(record(0x00000200))))
+
+        assertEquals(listOf(0x100, 0x200, 0x300), directory.exportEntries(emptyMap()).map { it.record.num })
+    }
+
+    @Test
+    fun `export carries latest telemetry value and its time`() {
+        directory.applyTelemetry(RADIO_NODE, Telemetry(device_metrics = DeviceMetrics(battery_level = 90, uptime_seconds = 50)), NOW)
+        directory.applyTelemetry(RADIO_NODE, Telemetry(device_metrics = DeviceMetrics(battery_level = 70, uptime_seconds = 80)), NOW + 5_000L)
+        radioHasNode(RADIO_NODE, longName = "Radio")
+
+        val exported = directory.exportEntries(emptyMap()).single()
+
+        assertEquals(TelemetrySample(70f, NOW + 5_000L), exported.telemetry.getValue("battery_level"))
+        assertEquals(80, exported.uptimeSeconds)
+    }
+
+    @Test
+    fun `export prefers a heard position over the database position`() {
+        directory.beginRound()
+        directory.applyNodeInfo(NodeInfo(num = RADIO_NODE, user = User(long_name = "Radio"), position = Position(latitude_i = 404000000, longitude_i = -37000000)))
+        directory.markLoaded(NOW)
+        directory.applyPosition(RADIO_NODE, Position(latitude_i = 403000000, longitude_i = -38000000))
+
+        val position = directory.exportEntries(emptyMap()).single().record.dbPosition!!
+
+        assertEquals(40.3, position.latitude!!, 1e-6)
+        assertEquals(-3.8, position.longitude!!, 1e-6)
+    }
+
+    @Test
+    fun `export resolves identity through the same precedence as the snapshot`() {
+        directory.applyUser(RADIO_NODE, User(long_name = "Air", short_name = "AIR1"), NOW)
+        radioHasNode(RADIO_NODE, longName = "Radio")
+
+        val record = directory.exportEntries(emptyMap()).single().record
+
+        assertEquals("Air", record.longName)
+        assertEquals("AIR1", record.shortName)
     }
 }
