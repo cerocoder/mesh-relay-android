@@ -28,7 +28,8 @@ class AltitudeFilter {
         if (accuracyM == null || accuracyM > MAX_ACCURACY_M || accuracyM <= 0f) return
         // The accuracy is one standard deviation, so its square is the measurement variance.
         val measurementVariance = accuracyM.toDouble() * accuracyM
-        if (lastAtMillis == NEVER) {
+        // An estimate that has been withdrawn is not blended with: the new fix starts afresh.
+        if (valueAt(atMillis) == null) {
             estimate = altitudeM
             variance = measurementVariance
         } else {
