@@ -67,6 +67,9 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
      */
     var pendingExportText: String? = null
 
+    /** The encoded node file waiting for the picker to return a uri; held here for the reason [pendingExportText] is. */
+    var pendingNodeFileText: String? = null
+
     /** Permission and adapter state, for the device screen. */
     val availability = BluetoothAvailability(context)
 
@@ -256,6 +259,12 @@ class AppContainer(private val context: Context, isDebugBuild: Boolean) {
     fun skipRelayNode(nodeNum: Int) = settings.addSkippedRelayNode(nodeNum)
 
     fun clearSkippedForRelay(relayByte: Int) = settings.clearSkippedForRelay(relayByte)
+
+    /** Unions a loaded node file's skip list into the one in settings. */
+    fun mergeSkippedNodes(nodeNums: Set<Int>) = settings.addSkippedRelayNodes(nodeNums)
+
+    /** Undoes the skip of a known relay: it becomes the assigned relay for its byte again. */
+    fun returnMatchingRelay(nodeNum: Int) = settings.removeSkippedRelayNode(nodeNum)
 
     fun clearAllSkippedNodes() = settings.clearAllSkippedNodes()
 

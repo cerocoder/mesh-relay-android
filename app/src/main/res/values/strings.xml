@@ -111,6 +111,7 @@
     <string name="action_skip_confirm_title">Skip this node?</string>
     <string name="action_skip_confirm_body">Stop treating %1$s as this relay. It stays in the node database and can be restored from Settings.</string>
     <string name="action_clear_skipped">Clear skipped nodes</string>
+    <string name="action_return_matching_relay">Return matching relay</string>
     <string name="action_clear_skipped_confirm_title">Clear skipped nodes for this relay?</string>
     <string name="action_clear_skipped_confirm_body">These nodes will be considered as candidates for this relay again.</string>
     <string name="action_remove_skipped_node">Remove from skipped nodes</string>
@@ -199,6 +200,17 @@
     <string name="label_air_received">Air Received</string>
     <string name="label_db_received">DB Received</string>
     <string name="label_file_loaded">File Loaded</string>
+    <string name="graph_candidate_from_file">from file</string>
+    <string name="action_save_nodes">Save nodes</string>
+    <string name="action_load_nodes">Load nodes</string>
+    <string name="nodes_saved">Nodes saved</string>
+    <string name="nodes_save_failed">Could not save the file</string>
+    <string name="nodes_loaded">Loaded %1$d nodes</string>
+    <string name="nodes_loaded_with_skipped">Loaded %1$d nodes; %2$d unreadable records ignored</string>
+    <string name="nodes_load_failed_not_json">That file is not a node file</string>
+    <string name="nodes_load_failed_version">That node file comes from a newer version of the app</string>
+    <string name="nodes_load_failed_malformed">That node file is damaged or incomplete</string>
+    <string name="nodes_load_failed_read">Could not read the file</string>
     <string name="node_long_name">Long name</string>
     <string name="node_short_name">Short name</string>
     <string name="node_role">Role</string>
@@ -331,6 +343,10 @@
     <plurals name="plural_skipped_nodes">
         <item quantity="one">%d skipped node</item>
         <item quantity="other">%d skipped nodes</item>
+    </plurals>
+    <plurals name="plural_skipped_relay">
+        <item quantity="one">%d skipped relay</item>
+        <item quantity="other">%d skipped relays</item>
     </plurals>
     <plurals name="graph_candidate_samples">
         <item quantity="one">%d sample</item>

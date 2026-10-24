@@ -20,6 +20,7 @@ import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.ui.common.LocalRelativeClock
+import com.cerocoder.meshrelay.ui.common.NodeFileActions
 import com.cerocoder.meshrelay.ui.common.StatsTopBar
 import com.cerocoder.meshrelay.ui.common.StatusCount
 import com.cerocoder.meshrelay.ui.common.StatusStrip
@@ -61,6 +62,7 @@ fun MyNodeScreen(
     onOpenSettings: () -> Unit,
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
+    nodeFile: NodeFileActions? = null,
 ) {
     Scaffold(
         modifier = modifier,
@@ -76,6 +78,7 @@ fun MyNodeScreen(
                 onReset = onReset,
                 onOpenSettings = onOpenSettings,
                 onExit = onExit,
+                nodeFile = nodeFile,
             )
         },
     ) { innerPadding ->

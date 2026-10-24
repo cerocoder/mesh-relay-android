@@ -9,6 +9,8 @@ import android.content.IntentFilter
 import android.os.Build
 import android.os.Bundle
 import android.util.Log
+import android.widget.Toast
+import androidx.annotation.StringRes
 import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -35,6 +37,9 @@ import com.cerocoder.meshrelay.export.ExportFileNames
 import com.cerocoder.meshrelay.export.ExportKind
 import com.cerocoder.meshrelay.export.ExportRows
 import com.cerocoder.meshrelay.location.LocationAvailability
+import com.cerocoder.meshrelay.nodefile.NodeFileException
+import com.cerocoder.meshrelay.nodefile.NodeFileNames
+import com.cerocoder.meshrelay.nodefile.OrgJsonNodeFileCodec
 import com.cerocoder.meshrelay.stats.SeriesKey
 import com.cerocoder.meshrelay.stats.SystemTimeSource
 import com.cerocoder.meshrelay.settings.LanguageOption
@@ -297,6 +302,89 @@ private fun MeshRelayContent(
         }
     }
 
+    // The node file. Save nodes asks the engine for the directory's contents (the same
+    // request, await and consume round trip the CSV export makes), encodes them off Main
+    // and hands the text to the system picker; Load nodes reads the picked file, decodes
+    // it and folds it in. Toasts resolve through the activity context, which carries the
+    // app's own locale - the application context above does not.
+    val screenContext = LocalContext.current
+    fun toast(@StringRes id: Int, vararg args: Any) =
+        Toast.makeText(screenContext, screenContext.getString(id, *args), Toast.LENGTH_LONG).show()
+
+    val saveNodesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        val text = container.pendingNodeFileText
+        container.pendingNodeFileText = null
+        if (uri != null && text != null) {
+            scope.launch(Dispatchers.IO) {
+                // "wt" for the reason the CSV export gives: truncate, so a shorter file
+                // never leaves the tail of a longer one behind.
+                val saved = runCatching {
+                    appContext.contentResolver.openOutputStream(uri, "wt")?.use { out ->
+                        out.write(text.toByteArray(Charsets.UTF_8))
+                    } != null
+                }.onFailure { Log.w(TAG, "failed to write the node file", it) }.getOrDefault(false)
+                withContext(Dispatchers.Main) {
+                    toast(if (saved) R.string.nodes_saved else R.string.nodes_save_failed)
+                }
+            }
+        }
+    }
+
+    val loadNodesLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                val outcome = withContext(Dispatchers.IO) {
+                    runCatching {
+                        val text = appContext.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                            ?: error("the picked file could not be opened")
+                        OrgJsonNodeFileCodec.decode(text)
+                    }
+                }
+                outcome.onSuccess { decoded ->
+                    container.engine.loadNodeFile(decoded.file)
+                    container.mergeSkippedNodes(decoded.file.skippedNodes)
+                    if (decoded.skippedRecords == 0) {
+                        toast(R.string.nodes_loaded, decoded.file.entries.size)
+                    } else {
+                        toast(R.string.nodes_loaded_with_skipped, decoded.file.entries.size, decoded.skippedRecords)
+                    }
+                }.onFailure { error ->
+                    Log.w(TAG, "failed to load the node file", error)
+                    toast(
+                        when ((error as? NodeFileException)?.reason) {
+                            NodeFileException.Reason.NOT_JSON -> R.string.nodes_load_failed_not_json
+                            NodeFileException.Reason.UNKNOWN_VERSION -> R.string.nodes_load_failed_version
+                            NodeFileException.Reason.MALFORMED -> R.string.nodes_load_failed_malformed
+                            null -> R.string.nodes_load_failed_read
+                        },
+                    )
+                }
+            }
+        }
+    }
+
+    val onSaveNodes: () -> Unit = {
+        scope.launch {
+            container.engine.nodeFileConsumed()
+            container.engine.requestNodeFile()
+            val file = container.engine.nodeFileResult.filterNotNull().first()
+            container.engine.nodeFileConsumed()
+            val fileName = withContext(Dispatchers.Default) {
+                container.pendingNodeFileText = OrgJsonNodeFileCodec.encode(file)
+                NodeFileNames.suggest(System.currentTimeMillis())
+            }
+            saveNodesLauncher.launch(fileName)
+        }
+    }
+
+    val onLoadNodes: () -> Unit = {
+        loadNodesLauncher.launch(arrayOf("application/json", "text/plain", "application/octet-stream"))
+    }
+
     // Known, accepted limitation carried over from the spec's own shape for
     // exportResult (design doc section 6): it is not correlated to a particular
     // request. Two Export taps started close enough together that the second
@@ -430,5 +518,7 @@ private fun MeshRelayContent(
         },
         onExit = onExit,
         onExportSeries = onExportSeries,
+        onSaveNodes = onSaveNodes,
+        onLoadNodes = onLoadNodes,
     )
 }

@@ -271,11 +271,17 @@ internal fun candidateStatsLine(candidate: RelayCandidate, locale: Locale): Stri
     }
 
     val avgPart = stringResource(R.string.format_rssi_dbm, StatsFormat.candidateRssiAvg(avg, locale))
-    val samplesPart = pluralStringResource(
-        R.plurals.graph_candidate_samples,
-        candidate.directPacketCount,
-        candidate.directPacketCount,
-    )
+    // A value from a node file has no packets behind it this session; saying "0 samples"
+    // would read as a measurement, so it is named for what it is instead.
+    val samplesPart = if (candidate.directFromFile) {
+        stringResource(R.string.graph_candidate_from_file)
+    } else {
+        pluralStringResource(
+            R.plurals.graph_candidate_samples,
+            candidate.directPacketCount,
+            candidate.directPacketCount,
+        )
+    }
     val gapPart = candidate.gapDb?.let {
         stringResource(R.string.graph_candidate_gap, StatsFormat.candidateGapDb(it, locale))
     }

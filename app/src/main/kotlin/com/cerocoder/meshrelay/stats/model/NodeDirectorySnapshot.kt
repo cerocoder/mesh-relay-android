@@ -206,6 +206,16 @@ class NodeDirectorySnapshot(
         .sorted()
 
     /**
+     * The skipped node, if any, that an earlier session (or a loaded file) knew to be
+     * the relay behind [relayByte] - a node in the skip list whose low byte matches and
+     * whose annotations say `knownAsRelay`. The lowest node number when several qualify,
+     * so the answer cannot change between recompositions.
+     */
+    fun skippedKnownRelay(relayByte: Int): Int? = skippedNodes
+        .filter { Geo.lastByteOfNodeNum(it) == relayByte && annotationsByNode[it]?.knownAsRelay == true }
+        .minOrNull()
+
+    /**
      * The relay's short name when exactly one node can be behind the byte, `""`
      * otherwise. Ports get_node_name, mesh_stats.py:734-750.
      *

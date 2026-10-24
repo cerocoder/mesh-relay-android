@@ -34,6 +34,11 @@ data class CandidateSource(
     val directRssi: SignalStats,
     val dbSnr: Float?,
     val hopsAway: Int?,
+    /**
+     * An average direct RSSI remembered from a node file. Used only while [directRssi]
+     * has no packets this session; the first live packet replaces it.
+     */
+    val loadedRssiAvg: Float? = null,
 )
 
 /** One candidate, judged. */
@@ -48,6 +53,8 @@ data class RelayCandidate(
     val dbSnr: Float?,
     val hopsAway: Int?,
     val cannotForward: Boolean,
+    /** True when [directRssiAvg] came from a node file, not from packets heard this session. */
+    val directFromFile: Boolean = false,
 )
 
 object RelayCandidates {
@@ -70,7 +77,8 @@ object RelayCandidates {
         sources.map { evaluate(relayRssiAvg, it) }.sortedWith(ORDER)
 
     private fun evaluate(relayRssiAvg: Float?, source: CandidateSource): RelayCandidate {
-        val directAvg = source.directRssi.avg.takeIf { source.directRssi.hasData }
+        val liveAvg = source.directRssi.avg.takeIf { source.directRssi.hasData }
+        val directAvg = liveAvg ?: source.loadedRssiAvg
         val gap = if (directAvg != null && relayRssiAvg != null) abs(directAvg - relayRssiAvg) else null
         return RelayCandidate(
             nodeNum = source.nodeNum,
@@ -83,6 +91,7 @@ object RelayCandidates {
             dbSnr = source.dbSnr,
             hopsAway = source.hopsAway,
             cannotForward = source.role == NON_FORWARDING_ROLE,
+            directFromFile = liveAvg == null && source.loadedRssiAvg != null,
         )
     }
 
