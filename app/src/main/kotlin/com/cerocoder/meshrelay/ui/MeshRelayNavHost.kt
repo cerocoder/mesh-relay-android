@@ -52,6 +52,7 @@ import com.cerocoder.meshrelay.stats.model.SignalStats
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.detail.candidateRecord
+import com.cerocoder.meshrelay.ui.common.NodeFileActions
 import com.cerocoder.meshrelay.ui.detail.DetailMenuItem
 import com.cerocoder.meshrelay.ui.detail.DetailScreen
 import com.cerocoder.meshrelay.ui.detail.MatchingNodesTab
@@ -97,6 +98,8 @@ fun MeshRelayNavHost(
     onDisconnect: () -> Unit,
     onExit: () -> Unit,
     onExportSeries: (ExportKind, List<SeriesKey>) -> Unit,
+    onSaveNodes: () -> Unit,
+    onLoadNodes: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val backStack = rememberSaveable(saver = backStackSaver) { BackStack(Screen.Devices) }
@@ -180,6 +183,8 @@ fun MeshRelayNavHost(
             backStack = backStack,
             onExit = onExit,
             onExportSeries = onExportSeries,
+            onSaveNodes = onSaveNodes,
+            onLoadNodes = onLoadNodes,
             modifier = modifier,
         )
 
@@ -254,6 +259,8 @@ private fun MainScaffold(
     backStack: BackStack,
     onExit: () -> Unit,
     onExportSeries: (ExportKind, List<SeriesKey>) -> Unit,
+    onSaveNodes: () -> Unit,
+    onLoadNodes: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Scaffold(
@@ -327,6 +334,7 @@ private fun MainScaffold(
                 onOpenSettings = { backStack.push(Screen.Settings) },
                 onExit = onExit,
                 modifier = Modifier.padding(innerPadding),
+                nodeFile = NodeFileActions(onSave = onSaveNodes, onLoad = onLoadNodes),
             )
         }
     }
@@ -400,6 +408,7 @@ private fun DetailDestination(
                     meshviewUrl = meshviewUrl,
                     onSkipNode = { nodeNum -> container.skipRelayNode(nodeNum) },
                     onClearSkipped = { container.clearSkippedForRelay(relayByte) },
+                    onReturnRelay = { nodeNum -> container.returnMatchingRelay(nodeNum) },
                 )
 
                 is DetailSubject.Neighbour -> NeighbourNodeTab(
@@ -485,6 +494,7 @@ private fun GraphDestination(
                                 ?: SignalStats.EMPTY,
                             dbSnr = snapshot.directory.node(nodeNum)?.dbSnr,
                             hopsAway = snapshot.directory.node(nodeNum)?.hopsAway,
+                            loadedRssiAvg = snapshot.directory.annotations(nodeNum)?.avgRssi,
                         )
                     },
                 )
@@ -593,7 +603,7 @@ private fun NeighbourNodeTab(
             // a real card rather than a crash on `directory.node(nodeNum)!!`.
             record = candidateRecord(directory, nodeNum),
             identity = identity,
-            location = directory.locationInfo(nodeNum, from = directory.localPosition()),
+            location = directory.locationInfo(nodeNum, from = snapshot.observer?.toLatLon()),
             telemetry = directory.telemetry(nodeNum),
             meshviewUrl = meshviewUrl,
             onSkip = null,

@@ -114,9 +114,9 @@ fun NeighbourListScreen(
                 EmptyNeighboursState(modifier = Modifier.weight(1f))
             } else {
                 // Computed once, not per row: unlike a relay's matching-node
-                // lookup, this device's own position does not depend on which
-                // neighbour a given row is showing.
-                val localPosition = snapshot.directory.localPosition()
+                // lookup, the observer does not depend on which neighbour a
+                // given row is showing.
+                val localPosition = snapshot.observer?.toLatLon()
                 LazyColumn(
                     modifier = Modifier.weight(1f).fillMaxWidth(),
                     contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),

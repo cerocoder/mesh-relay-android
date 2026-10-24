@@ -37,6 +37,9 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.SortMode
 
+/** The node-file commands, which only the My node screen offers: Save nodes and Load nodes. */
+data class NodeFileActions(val onSave: () -> Unit, val onLoad: () -> Unit)
+
 /**
  * The node-database reload action, which only the relay screen has: the
  * neighbour list is built from live traffic rather than a database fetch, so
@@ -102,6 +105,7 @@ fun StatsTopBar(
     onExit: () -> Unit,
     modifier: Modifier = Modifier,
     reload: ReloadAction? = null,
+    nodeFile: NodeFileActions? = null,
 ) {
     var sortMenuExpanded by remember { mutableStateOf(false) }
     var overflowExpanded by remember { mutableStateOf(false) }
@@ -206,6 +210,23 @@ fun StatsTopBar(
                             onClick = {
                                 overflowExpanded = false
                                 onExport()
+                            },
+                        )
+                    }
+
+                    if (nodeFile != null) {
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_save_nodes)) },
+                            onClick = {
+                                overflowExpanded = false
+                                nodeFile.onSave()
+                            },
+                        )
+                        DropdownMenuItem(
+                            text = { Text(stringResource(R.string.action_load_nodes)) },
+                            onClick = {
+                                overflowExpanded = false
+                                nodeFile.onLoad()
                             },
                         )
                     }

@@ -2,7 +2,11 @@ package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
+import com.cerocoder.meshrelay.stats.model.IdentitySource
+import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.LiveAverages
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeFile
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.RemoteNodeStats
@@ -13,6 +17,7 @@ import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -48,7 +53,7 @@ class MeshStatsEngine(
     initialSortMode: SortMode,
     positionMode: StateFlow<PositionMode> = MutableStateFlow(PositionMode.PHONE),
     phoneFix: StateFlow<StampedPosition?> = MutableStateFlow(null),
-    time: TimeSource = SystemTimeSource,
+    private val time: TimeSource = SystemTimeSource,
 ) {
 
     private sealed interface Command {
@@ -60,6 +65,12 @@ class MeshStatsEngine(
         data class SetPhoneFix(val fix: StampedPosition?) : Command
         data class WatchSeries(val key: SeriesKey?) : Command
         data class RequestExport(val keys: List<SeriesKey>) : Command
+
+        /** Builds the node file from the directory and the neighbour table; see [nodeFileResult]. */
+        data object RequestNodeFile : Command
+
+        /** Folds a node file into the directory's loaded layer; statistics are never touched. */
+        data class LoadNodeFile(val file: NodeFile) : Command
         data object Reset : Command
 
         /**
@@ -87,6 +98,9 @@ class MeshStatsEngine(
          * than the empty snapshot it was left at while nobody was watching.
          */
         data object Refresh : Command
+
+        /** The 10 s mark of a phone-fix refresh that was held back; see [onPhoneFix]. */
+        data object FixDeadline : Command
     }
 
     // Bounded rather than UNLIMITED so that a producer which outruns the loop meets
@@ -130,6 +144,18 @@ class MeshStatsEngine(
     // coroutine rather than racing it - exactly as skippedRelayNodes already does.
     private var positionModeState = PositionMode.PHONE
     private var phoneFixState: StampedPosition? = null
+
+    // Set per command by apply(); the loop builds a snapshot only if something
+    // asked for one. A phone fix that fails the gate in onPhoneFix is the one
+    // command that does not.
+    private var buildNeeded = true
+
+    // The observer in the last snapshot built, the reference for the 5 m test;
+    // the time of the last refresh a phone fix caused, for the 10 s test; and
+    // whether a held-back refresh is already waiting for its 10 s mark.
+    private var publishedObserver: StampedPosition? = null
+    private var lastFixRefreshAtMillis: Long? = null
+    private var fixDeadlinePending = false
 
     // Which subject's chart is open, or null. At most one at a time: this is a
     // full-screen destination.
@@ -210,6 +236,7 @@ class MeshStatsEngine(
             }
 
             for (command in commands) {
+                buildNeeded = false
                 apply(command)
                 // Drain whatever is already queued before building. A burst of thirty
                 // packets must cost one snapshot, not thirty - at mesh traffic rates
@@ -222,14 +249,16 @@ class MeshStatsEngine(
                 // Nothing subscribed means nothing to build. With the screen off and
                 // the service running, this is what keeps the app cheap: ingestion
                 // continues, snapshot building stops entirely.
-                if (_snapshot.subscriptionCount.value > 0) {
+                if (buildNeeded && _snapshot.subscriptionCount.value > 0) {
                     // One directory view per batch, shared by the name refresh, the
                     // neighbour name sort and the snapshot itself. Taking it copies
                     // every map in the directory, so it is taken here - once - rather
                     // than per packet, which would hand back the coalescing above.
                     val view = directory.snapshot(skipped)
                     refreshRelayNames(view)
-                    _snapshot.value = buildSnapshot(view)
+                    val built = buildSnapshot(view)
+                    publishedObserver = built.observer
+                    _snapshot.value = built
                 }
                 publishWatchedSeries()
             }
@@ -274,7 +303,25 @@ class MeshStatsEngine(
     /** Clears [exportResult], so a stale export is never read twice. */
     fun exportConsumed() { _exportResult.value = null }
 
+    private val _nodeFileResult = MutableStateFlow<NodeFile?>(null)
+
+    /** The result of the most recent [requestNodeFile], until [nodeFileConsumed] clears it. */
+    val nodeFileResult: StateFlow<NodeFile?> = _nodeFileResult.asStateFlow()
+
+    /** Asks for the node file to be built on the engine's own coroutine; see [nodeFileResult]. */
+    fun requestNodeFile() { commands.trySend(Command.RequestNodeFile) }
+
+    /** Clears [nodeFileResult], so a stale file is never written twice. */
+    fun nodeFileConsumed() { _nodeFileResult.value = null }
+
+    /**
+     * Folds [file]'s nodes into the directory's loaded layer. The skip list is not
+     * part of this: it lives in settings and the caller merges it there.
+     */
+    fun loadNodeFile(file: NodeFile) { commands.trySend(Command.LoadNodeFile(file)) }
+
     private fun apply(command: Command) {
+        if (command !is Command.SetPhoneFix && command !is Command.FixDeadline) buildNeeded = true
         when (command) {
             is Command.Frame -> handleFrame(command.frame)
             is Command.SetPaused -> paused = command.paused
@@ -284,7 +331,11 @@ class MeshStatsEngine(
             // composition lives.
             is Command.SetSkipped -> skipped = command.skipped.toSet()
             is Command.SetPositionMode -> positionModeState = command.mode
-            is Command.SetPhoneFix -> phoneFixState = command.fix
+            is Command.SetPhoneFix -> {
+                phoneFixState = command.fix
+                onPhoneFix()
+            }
+            Command.FixDeadline -> onFixDeadline()
             is Command.WatchSeries -> {
                 watchedSeries = command.key
                 // Dropped here rather than at the next build: a closed chart's series must
@@ -297,6 +348,18 @@ class MeshStatsEngine(
             is Command.RequestExport -> {
                 _exportResult.value = command.keys.associateWith { key -> seriesBuffers[key]?.snapshot() ?: SignalSeries.EMPTY }
             }
+            Command.RequestNodeFile -> {
+                // A neighbour's average counts only when it has direct packets this
+                // session: the file then carries a measurement, never a zero.
+                val averages = neighbours.mapValues { (_, stats) ->
+                    LiveAverages(
+                        rssi = stats.rssi.avg.takeIf { stats.rssi.hasData },
+                        snr = stats.snr.avg.takeIf { stats.snr.hasData },
+                    )
+                }
+                _nodeFileResult.value = NodeFile(directory.exportEntries(averages), skipped)
+            }
+            is Command.LoadNodeFile -> directory.applyLoaded(command.file.entries)
             Command.Reset -> resetStatistics()
             Command.ResetForNewNode -> {
                 resetStatistics()
@@ -533,6 +596,56 @@ class MeshStatsEngine(
         PositionMode.NODE -> nodePosition()
     }
 
+    /**
+     * A new phone fix. It is always stored, but it asks for a snapshot only when
+     * the observer has moved more than [FIX_REFRESH_MIN_MOVE_M] from the one in
+     * the last snapshot AND at least [FIX_REFRESH_MIN_INTERVAL_MS] have passed
+     * since the last refresh a fix caused. A move inside the interval arms one
+     * deferred refresh for its end, so a phone that moved and then stood still is
+     * not left showing an old position. Every other trigger builds as it always
+     * did, and the snapshot it builds carries the latest fix, not the last gated
+     * one.
+     */
+    private fun onPhoneFix() {
+        // Nobody is watching, so nothing is built and there is nothing to gate.
+        if (_snapshot.subscriptionCount.value == 0) return
+        if (!observerMoved()) return
+        val last = lastFixRefreshAtMillis
+        val remaining = if (last == null) 0L else FIX_REFRESH_MIN_INTERVAL_MS - (time.nowMillis() - last)
+        if (remaining <= 0L) {
+            lastFixRefreshAtMillis = time.nowMillis()
+            buildNeeded = true
+        } else if (!fixDeadlinePending) {
+            fixDeadlinePending = true
+            scope.launch {
+                delay(remaining)
+                commands.send(Command.FixDeadline)
+            }
+        }
+    }
+
+    private fun onFixDeadline() {
+        fixDeadlinePending = false
+        // A packet refresh in the meantime may already have published this fix.
+        if (!observerMoved()) return
+        lastFixRefreshAtMillis = time.nowMillis()
+        buildNeeded = true
+    }
+
+    /**
+     * Whether the observer now differs from the last published one by more than
+     * [FIX_REFRESH_MIN_MOVE_M]. Appearing, disappearing or changing origin
+     * (phone to node and back) counts as moving; altitude alone does not.
+     */
+    private fun observerMoved(): Boolean {
+        val now = positionForSample()
+        val before = publishedObserver
+        if (now == null && before == null) return false
+        if (now == null || before == null || now.origin != before.origin) return true
+        return Geo.haversineKm(before.latitude, before.longitude, now.latitude, now.longitude) * 1000.0 >
+            FIX_REFRESH_MIN_MOVE_M
+    }
+
     private fun nodePosition(): StampedPosition? {
         val local = directory.localPosition() ?: return null
         return StampedPosition.fromDegrees(local.lat, local.lon, PositionOrigin.NODE, directory.localAltitude())
@@ -617,6 +730,12 @@ class MeshStatsEngine(
             val stats = relays.getValue(relayByte)
             val name = view.uniqueRelayName(relayByte)
             if (stats.nodeName != name) relays[relayByte] = stats.copy(nodeName = name)
+            // The one place `known_as_relay` becomes true: exactly one candidate is left
+            // for a byte that really relayed. Only ever latched - see NodeDirectory.
+            view.matchingNodeNums(relayByte).singleOrNull()?.let { only ->
+                val source = if (view.identity(only).source == IdentitySource.AIR) LearntSource.AIR else LearntSource.NODE
+                directory.latchKnownRelay(only, source)
+            }
         }
     }
 
@@ -630,6 +749,7 @@ class MeshStatsEngine(
         lastRelayedPacketAtMillis = lastRelayedPacketAtMillis,
         directory = view,
         skippedRelayNodes = skipped,
+        observer = positionForSample(),
     )
 
     /** Ports get_sorted_nodes, mesh_stats.py:1120-1140. */
@@ -686,6 +806,20 @@ class MeshStatsEngine(
 
     private companion object {
         const val COMMAND_CAPACITY = 256
+
+        /**
+         * Longest a phone fix may go without causing a snapshot refresh of its own.
+         * The owner's choice: it bounds the list redraws a moving phone causes to
+         * six a minute.
+         */
+        const val FIX_REFRESH_MIN_INTERVAL_MS = 10_000L
+
+        /**
+         * How far the observer must move from the one in the last snapshot before a
+         * fix may cause a refresh. The owner's choice; about the noise of a phone's
+         * GNSS, so a standing phone may still refresh once an interval.
+         */
+        const val FIX_REFRESH_MIN_MOVE_M = 5.0
 
         /** relay_node carries the low byte of a NodeNum and nothing wider. */
         const val MAX_RELAY_BYTE = 0xFF

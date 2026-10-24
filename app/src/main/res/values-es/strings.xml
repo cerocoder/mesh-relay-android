@@ -111,6 +111,7 @@
     <string name="action_skip_confirm_title">¿Descartar este nodo?</string>
     <string name="action_skip_confirm_body">Dejar de tratar a %1$s como este repetidor. Permanece en la base de nodos y puede restaurarse desde Ajustes.</string>
     <string name="action_clear_skipped">Borrar nodos descartados</string>
+    <string name="action_return_matching_relay">Devolver repetidor coincidente</string>
     <string name="action_clear_skipped_confirm_title">¿Borrar los nodos descartados de este repetidor?</string>
     <string name="action_clear_skipped_confirm_body">Estos nodos volverán a considerarse candidatos para este repetidor.</string>
     <string name="action_remove_skipped_node">Quitar de los nodos descartados</string>
@@ -198,6 +199,18 @@
     <string name="section_from_node_database">DE LA BASE DE NODOS</string>
     <string name="label_air_received">Recepción por aire</string>
     <string name="label_db_received">Recepción de la DB</string>
+    <string name="label_file_loaded">Cargado desde archivo</string>
+    <string name="graph_candidate_from_file">del archivo</string>
+    <string name="action_save_nodes">Guardar nodos</string>
+    <string name="action_load_nodes">Cargar nodos</string>
+    <string name="nodes_saved">Nodos guardados</string>
+    <string name="nodes_save_failed">No se pudo guardar el archivo</string>
+    <string name="nodes_loaded">%1$d nodos cargados</string>
+    <string name="nodes_loaded_with_skipped">%1$d nodos cargados; %2$d registros ilegibles ignorados</string>
+    <string name="nodes_load_failed_not_json">Ese archivo no es un archivo de nodos</string>
+    <string name="nodes_load_failed_version">Ese archivo de nodos es de una versión más reciente de la aplicación</string>
+    <string name="nodes_load_failed_malformed">Ese archivo de nodos está dañado o incompleto</string>
+    <string name="nodes_load_failed_read">No se pudo leer el archivo</string>
     <string name="node_long_name">Nombre largo</string>
     <string name="node_short_name">Nombre corto</string>
     <string name="node_role">Rol</string>
@@ -251,7 +264,7 @@
     <string name="settings_background_collection">Recopilar en segundo plano</string>
     <string name="settings_background_collection_summary">Sigue recopilando datos mientras la aplicación está en segundo plano. Sin esto, Android suspende la aplicación y la recopilación se detiene.</string>
     <string name="settings_use_phone_location">Usar la ubicación del teléfono</string>
-    <string name="settings_use_phone_location_summary">Marca cada medición con la posición del propio teléfono. Si se desactiva, se usa la posición del nodo local y no se enciende el GPS del teléfono.</string>
+    <string name="settings_use_phone_location_summary">Usa la posición del propio teléfono para la altitud de la cabecera, para la distancia y la dirección a cada nodo, y para marcar cada medición. Si se desactiva, se usa la posición del nodo local y no se enciende el GPS del teléfono.</string>
     <string name="settings_skipped_nodes">Nodos descartados</string>
     <string name="settings_skipped_nodes_empty">No hay nodos descartados</string>
     <string name="settings_clear_all_skipped">Borrar todos los nodos descartados</string>
@@ -330,6 +343,10 @@
     <plurals name="plural_skipped_nodes">
         <item quantity="one">%d nodo descartado</item>
         <item quantity="other">%d nodos descartados</item>
+    </plurals>
+    <plurals name="plural_skipped_relay">
+        <item quantity="one">%d repetidor descartado</item>
+        <item quantity="other">%d repetidores descartados</item>
     </plurals>
     <plurals name="graph_candidate_samples">
         <item quantity="one">%d muestra</item>

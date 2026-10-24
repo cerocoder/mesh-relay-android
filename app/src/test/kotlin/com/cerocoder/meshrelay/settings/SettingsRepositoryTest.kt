@@ -139,6 +139,42 @@ class SettingsRepositoryTest {
     }
 
     @Test
+    fun `adding skipped nodes unions with the existing list`() {
+        val subject = repo(FakeStore())
+        subject.addSkippedRelayNode(0x11223344)
+
+        subject.addSkippedRelayNodes(setOf(0x11223344, 0x55667788))
+
+        assertEquals(setOf(0x11223344, 0x55667788), subject.skippedRelayNodes.value)
+    }
+
+    @Test
+    fun `adding an empty set of skipped nodes changes nothing and writes nothing`() {
+        val store = FakeStore()
+        val subject = repo(store)
+        subject.addSkippedRelayNode(0x11223344)
+        val writesBefore = store.writes
+
+        subject.addSkippedRelayNodes(emptySet())
+
+        assertEquals(setOf(0x11223344), subject.skippedRelayNodes.value)
+        assertEquals(writesBefore, store.writes)
+    }
+
+    @Test
+    fun `the union of skipped nodes is persisted in one write`() {
+        val store = FakeStore()
+        val subject = repo(store)
+        subject.addSkippedRelayNode(0x11223344)
+        val writesBefore = store.writes
+
+        subject.addSkippedRelayNodes(setOf(0x55667788, 0x0000aa01))
+
+        assertEquals(writesBefore + 1, store.writes)
+        assertEquals(setOf(0x11223344, 0x55667788, 0x0000aa01), repo(store).skippedRelayNodes.value)
+    }
+
+    @Test
     fun `clearing by relay byte removes only nodes sharing that low byte`() {
         val subject = repo(FakeStore())
         subject.addSkippedRelayNode(0x9e75f1a4.toInt())

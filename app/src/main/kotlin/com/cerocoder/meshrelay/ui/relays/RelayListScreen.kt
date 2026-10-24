@@ -119,7 +119,7 @@ fun RelayListScreen(
                         val location = if (matchCount == 1) {
                             snapshot.directory.locationInfo(
                                 matchingNodeNums[0],
-                                snapshot.directory.localPosition(),
+                                snapshot.observer?.toLatLon(),
                             )
                         } else {
                             null

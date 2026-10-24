@@ -1,6 +1,11 @@
 package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Counters
+import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.NodeAnnotations
+import com.cerocoder.meshrelay.stats.model.NodeFile
+import com.cerocoder.meshrelay.stats.model.NodeFileEntry
+import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.StampedPosition
@@ -17,6 +22,7 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import okio.ByteString
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertSame
@@ -1135,5 +1141,301 @@ class MeshStatsEngineTest {
         runCurrent()
 
         assertEquals(watchedSizeBefore, subject.series.value?.size)
+    }
+
+    // --- The observer: one position for Alt, distance and the Graph's pins ---------
+
+    /** A phone fix [metres] due north of a fixed origin; one degree of latitude is about 111 320 m. */
+    private fun fixNorth(metres: Double) =
+        StampedPosition.fromDegrees(40.0 + metres / 111_320.0, -3.75, PositionOrigin.PHONE, altitude = 650)
+
+    /** The engine under test, with a clock the test moves and the inputs it can change. */
+    private inner class ObserverRig(scope: CoroutineScope, initialFix: StampedPosition?) {
+        var now = 1_000L
+        val fix = MutableStateFlow(initialFix)
+        val mode = MutableStateFlow(PositionMode.PHONE)
+        val subject = MeshStatsEngine(
+            scope, MutableStateFlow(emptySet()), SortMode.PACKETS,
+            positionMode = mode, phoneFix = fix,
+        ) { now }
+    }
+
+    @Test
+    fun `the snapshot's observer is the phone fix in phone mode`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+
+        assertEquals(PositionOrigin.PHONE, seen.last().observer?.origin)
+        assertEquals(650, seen.last().observer?.altitude)
+    }
+
+    @Test
+    fun `the snapshot's observer falls back to the node when no fix has arrived`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, null)
+        val seen = collectSnapshots(rig.subject)
+        rig.subject.attach(flowOf(myInfoFrame(SENDER), positionFrame(SENDER, 398628316, -40273231)))
+        runCurrent()
+
+        assertEquals(PositionOrigin.NODE, seen.last().observer?.origin)
+        assertEquals(600, seen.last().observer?.altitude)
+    }
+
+    @Test
+    fun `the snapshot's observer ignores the phone in node mode`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        rig.mode.value = PositionMode.NODE
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+
+        assertNull(seen.last().observer)
+    }
+
+    @Test
+    fun `a fix under five metres from the published observer causes no refresh`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(4.0)
+        runCurrent()
+
+        assertEquals(before, seen.size)
+    }
+
+    @Test
+    fun `a fix over five metres away refreshes at once when ten seconds have passed`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertEquals(fixNorth(6.0), seen.last().observer)
+    }
+
+    @Test
+    fun `a move inside the ten seconds waits for them and then refreshes once`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+        val before = seen.size
+
+        // Three more moves, 3 s after that refresh: all held back, one deadline armed.
+        rig.now = 103_000L
+        rig.fix.value = fixNorth(12.0); runCurrent()
+        rig.fix.value = fixNorth(18.0); runCurrent()
+        rig.fix.value = fixNorth(24.0); runCurrent()
+        assertEquals(before, seen.size)
+
+        rig.now = 110_000L
+        advanceTimeBy(7_000L)
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertEquals(fixNorth(24.0), seen.last().observer)
+    }
+
+    @Test
+    fun `a packet refresh carries the newest fix and cancels the held-back one`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+
+        rig.now = 103_000L
+        rig.fix.value = fixNorth(12.0)
+        runCurrent()
+        val held = seen.size
+
+        // Any other trigger builds as it always did, and picks up the latest fix.
+        rig.subject.attach(flowOf(relayed()))
+        runCurrent()
+        assertEquals(held + 1, seen.size)
+        assertEquals(fixNorth(12.0), seen.last().observer)
+
+        // The deadline finds nothing left to publish.
+        rig.now = 110_000L
+        advanceTimeBy(7_000L)
+        runCurrent()
+        assertEquals(held + 1, seen.size)
+    }
+
+    @Test
+    fun `switching the mode refreshes at once, inside the ten seconds`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, fixNorth(0.0))
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        rig.now = 100_000L
+        rig.fix.value = fixNorth(6.0)
+        runCurrent()
+        val before = seen.size
+
+        rig.now = 101_000L
+        rig.mode.value = PositionMode.NODE
+        runCurrent()
+
+        assertEquals(before + 1, seen.size)
+        assertNull(seen.last().observer)
+    }
+
+    @Test
+    fun `the first fix after none refreshes at once`() = runTest(StandardTestDispatcher()) {
+        val rig = ObserverRig(backgroundScope, null)
+        val seen = collectSnapshots(rig.subject)
+        runCurrent()
+        assertNull(seen.last().observer)
+
+        rig.fix.value = fixNorth(0.0)
+        runCurrent()
+
+        assertEquals(fixNorth(0.0), seen.last().observer)
+    }
+    // --- The node file ------------------------------------------------------------
+
+    private val relayNodeA = 0xA1000069.toInt()
+    private val relayNodeB = 0xA1001069.toInt()
+
+    private fun fileEntry(num: Int, shortName: String) = NodeFileEntry(
+        record = NodeRecord(
+            num = num, longName = null, shortName = shortName, hwModel = null, role = null,
+            dbPosition = null, dbSnr = null, lastHeardEpochSeconds = null, hopsAway = null,
+            hasPublicKey = false, receivedAtMillis = 0L,
+        ),
+        annotations = NodeAnnotations(LearntSource.AIR, notes = "n"),
+        uptimeSeconds = null,
+        telemetry = emptyMap(),
+    )
+
+    private fun twoNodeInfoFrames(vararg nums: Int) =
+        nums.map { nodeInfoFrame(it, "n") } + configCompleteFrame()
+
+    @Test
+    fun `loading a node file leaves every statistic untouched`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+        subject.attach(flowOf(relayed(), direct()))
+        runCurrent()
+        val before = seen.last()
+
+        subject.loadNodeFile(NodeFile(listOf(fileEntry(0x11111111, "LOAD")), emptySet()))
+        runCurrent()
+        val after = seen.last()
+
+        assertEquals(before.counters, after.counters)
+        assertEquals(before.relays, after.relays)
+        assertEquals(before.neighbours, after.neighbours)
+    }
+
+    @Test
+    fun `a loaded node appears in the snapshot directory`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        val seen = collectSnapshots(subject)
+
+        subject.loadNodeFile(NodeFile(listOf(fileEntry(0x11111111, "LOAD")), emptySet()))
+        runCurrent()
+
+        assertEquals("LOAD", seen.last().directory.identity(0x11111111).shortName)
+        assertEquals("n", seen.last().directory.annotations(0x11111111)?.notes)
+    }
+
+    @Test
+    fun `requestNodeFile uses live neighbour averages`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(
+            flowOf(
+                nodeInfoFrame(SENDER, "x"), configCompleteFrame(),
+                direct(from = SENDER, rssi = -80, snr = -4f),
+                direct(from = SENDER, rssi = -70, snr = -2f),
+            ),
+        )
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        val annotations = subject.nodeFileResult.value!!.entries.single().annotations
+        assertEquals(-75f, annotations.avgRssi)
+        assertEquals(-3f, annotations.avgSnr)
+    }
+
+    @Test
+    fun `requestNodeFile includes the current skip list`() = runTest(StandardTestDispatcher()) {
+        val skipped = MutableStateFlow(setOf(0x1234))
+        val subject = engine(backgroundScope, skipped)
+        collectSnapshots(subject)
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertEquals(setOf(0x1234), subject.nodeFileResult.value!!.skippedNodes)
+    }
+
+    @Test
+    fun `nodeFileConsumed clears the result`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.requestNodeFile()
+        runCurrent()
+        assertNotNull(subject.nodeFileResult.value)
+
+        subject.nodeFileConsumed()
+
+        assertNull(subject.nodeFileResult.value)
+    }
+
+    @Test
+    fun `a sole candidate for a heard relay byte is latched as known relay`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.single { it.record.num == relayNodeA }.annotations.knownAsRelay)
+    }
+
+    @Test
+    fun `two candidates are not latched`() = runTest(StandardTestDispatcher()) {
+        val subject = engine(backgroundScope)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA, relayNodeB).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.none { it.annotations.knownAsRelay })
+    }
+
+    @Test
+    fun `a latched relay stays flagged after it is skipped`() = runTest(StandardTestDispatcher()) {
+        val skipped = MutableStateFlow<Set<Int>>(emptySet())
+        val subject = engine(backgroundScope, skipped)
+        collectSnapshots(subject)
+        subject.attach(flowOf(*twoNodeInfoFrames(relayNodeA).toTypedArray(), relayed(relay = 0x69)))
+        runCurrent()
+
+        skipped.value = setOf(relayNodeA)
+        runCurrent()
+        subject.requestNodeFile()
+        runCurrent()
+
+        assertTrue(subject.nodeFileResult.value!!.entries.single { it.record.num == relayNodeA }.annotations.knownAsRelay)
     }
 }

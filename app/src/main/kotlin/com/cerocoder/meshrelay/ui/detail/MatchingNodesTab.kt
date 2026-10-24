@@ -70,6 +70,7 @@ fun MatchingNodesTab(
     meshviewUrl: String?,
     onSkipNode: (nodeNum: Int) -> Unit,
     onClearSkipped: () -> Unit,
+    onReturnRelay: (nodeNum: Int) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var clearDialogVisible by remember { mutableStateOf(false) }
@@ -77,7 +78,10 @@ fun MatchingNodesTab(
     val directory = snapshot.directory
     val candidates = directory.matchingNodeNums(relayByte)
     val skippedCountForThisByte = snapshot.skippedRelayNodes.count { Geo.lastByteOfNodeNum(it) == relayByte }
-    val localPosition = directory.localPosition()
+    // A skipped node that was known to be this byte's relay: shown as one "skipped relay"
+    // whatever else is skipped on the byte, with its own one-tap undo.
+    val skippedRelay = snapshot.directory.skippedKnownRelay(relayByte)
+    val localPosition = snapshot.observer?.toLatLon()
     // A card per candidate, not per database record: `candidates` is now drawn
     // from the union of both stores (matchingNodeNums's own contract, since the
     // node-storage split), so a node the radio has never listed can still be
@@ -97,15 +101,27 @@ fun MatchingNodesTab(
                 horizontalArrangement = Arrangement.SpaceBetween,
             ) {
                 Text(
-                    text = pluralStringResource(
-                        R.plurals.plural_skipped_nodes,
-                        skippedCountForThisByte,
-                        skippedCountForThisByte,
-                    ),
+                    text = if (skippedRelay != null) {
+                        pluralStringResource(R.plurals.plural_skipped_relay, 1, 1)
+                    } else {
+                        pluralStringResource(
+                            R.plurals.plural_skipped_nodes,
+                            skippedCountForThisByte,
+                            skippedCountForThisByte,
+                        )
+                    },
                     style = MaterialTheme.typography.bodyMedium,
                 )
-                TextButton(onClick = { clearDialogVisible = true }) {
-                    Text(stringResource(R.string.action_clear_skipped))
+                Column(horizontalAlignment = Alignment.End) {
+                    if (skippedRelay != null) {
+                        // An undo, not a deletion: no confirmation, unlike clearing the list.
+                        TextButton(onClick = { onReturnRelay(skippedRelay) }) {
+                            Text(stringResource(R.string.action_return_matching_relay))
+                        }
+                    }
+                    TextButton(onClick = { clearDialogVisible = true }) {
+                        Text(stringResource(R.string.action_clear_skipped))
+                    }
                 }
             }
         }
@@ -285,6 +301,7 @@ private fun MatchingNodesTabThreeMatchOneSkippedPreview() {
                 meshviewUrl = "https://meshview.meshtastic.es",
                 onSkipNode = {},
                 onClearSkipped = {},
+                onReturnRelay = {},
             )
         }
     }
@@ -301,6 +318,7 @@ private fun MatchingNodesTabSingleMatchPreview() {
                 meshviewUrl = "https://meshview.meshtastic.es",
                 onSkipNode = {},
                 onClearSkipped = {},
+                onReturnRelay = {},
             )
         }
     }
@@ -317,6 +335,7 @@ private fun MatchingNodesTabNoMatchPreview() {
                 meshviewUrl = "https://meshview.meshtastic.es",
                 onSkipNode = {},
                 onClearSkipped = {},
+                onReturnRelay = {},
             )
         }
     }
@@ -333,6 +352,7 @@ private fun MatchingNodesTabAllSkippedPreview() {
                 meshviewUrl = "https://meshview.meshtastic.es",
                 onSkipNode = {},
                 onClearSkipped = {},
+                onReturnRelay = {},
             )
         }
     }
@@ -349,6 +369,7 @@ private fun MatchingNodesTabDarkPreview() {
                 meshviewUrl = "https://meshview.meshtastic.es",
                 onSkipNode = {},
                 onClearSkipped = {},
+                onReturnRelay = {},
             )
         }
     }

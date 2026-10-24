@@ -82,6 +82,16 @@ class SettingsRepository(private val store: SettingsStore) {
         persist()
     }
 
+    /**
+     * Unions [nodeNums] into the skip list in one write. A node file's list is
+     * appended, never substituted, so a load can only add eliminations.
+     */
+    fun addSkippedRelayNodes(nodeNums: Set<Int>) {
+        if (nodeNums.isEmpty()) return
+        _skippedRelayNodes.value = _skippedRelayNodes.value + nodeNums
+        persist()
+    }
+
     fun removeSkippedRelayNode(nodeNum: Int) {
         _skippedRelayNodes.value = _skippedRelayNodes.value - nodeNum
         persist()

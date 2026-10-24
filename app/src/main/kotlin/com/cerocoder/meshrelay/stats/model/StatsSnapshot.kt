@@ -19,6 +19,12 @@ data class StatsSnapshot(
     val lastRelayedPacketAtMillis: Long?,
     val directory: NodeDirectorySnapshot,
     val skippedRelayNodes: Set<Int>,
+    /**
+     * Where the observer is, resolved once by the engine: the phone fix when
+     * *Use phone location* is on, otherwise the node's position. The status-line
+     * Alt and every distance and direction read this; null when neither exists.
+     */
+    val observer: StampedPosition? = null,
 ) {
     companion object {
         /** Before a single packet has arrived - what the screens render at startup. */
