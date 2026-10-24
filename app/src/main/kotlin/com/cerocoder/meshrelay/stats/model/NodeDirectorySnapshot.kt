@@ -137,7 +137,27 @@ class NodeDirectorySnapshot(
      * security property, not a cosmetic blank - worth a narrower rule than the
      * other four fields get.
      */
-    fun identity(nodeNum: Int): NodeIdentity {
+    fun identity(nodeNum: Int): NodeIdentity = fillBlanksFromFile(resolveIdentity(nodeNum), loadedByNode[nodeNum])
+
+    /**
+     * A field the winning live record leaves blank is filled from a loaded file, field by
+     * field; a field it has is never replaced. The source and the stamp stay the live
+     * record's: the label describes where the identity came from, and the file only
+     * supplies what that source did not say. This is the owner's rule for loading -
+     * add what is not yet filled, keep what the radio or the air already told us.
+     */
+    private fun fillBlanksFromFile(identity: NodeIdentity, loaded: NodeRecord?): NodeIdentity {
+        if (loaded == null || identity.source == IdentitySource.NONE || identity.source == IdentitySource.FILE) return identity
+        return identity.copy(
+            longName = identity.longName ?: loaded.longName?.takeIf { it.isNotEmpty() },
+            shortName = identity.shortName ?: loaded.shortName?.takeIf { it.isNotEmpty() },
+            hwModel = identity.hwModel ?: loaded.hwModel?.takeIf { it != "UNSET" },
+            role = identity.role ?: loaded.role?.takeIf { it.isNotEmpty() },
+            hasPublicKey = identity.hasPublicKey || loaded.hasPublicKey,
+        )
+    }
+
+    private fun resolveIdentity(nodeNum: Int): NodeIdentity {
         airNodes[nodeNum]?.let { air ->
             return NodeIdentity(
                 source = IdentitySource.AIR,
