@@ -91,5 +91,6 @@ dependencies {
     implementation(libs.wire.runtime)
 
     testImplementation(libs.junit)
+    testImplementation(libs.org.json)
     testImplementation(libs.coroutines.test)
 }
