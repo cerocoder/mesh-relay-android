@@ -894,3 +894,63 @@ Ruling: the header's Alt and every distance and direction now read the **observe
   always did and carries the latest fix; changing the setting refreshes at once.
   Cost if wrong: a distance up to 5 m or 10 s stale on screen; nothing recorded is affected, as the
   Graph and export read each fix as it arrives.
+
+### 65
+
+Ruling: the node file (spec `2026-10-24-node-file-design.md`) lives in a **third layer** inside
+  `NodeDirectory` - `loadedNodes`, `annotations`, `loadedTelemetry` - behind the radio store and the air
+  store, not merged into either. The radio refresh replaces its store wholesale, so a loaded node kept
+  there would vanish at the next refresh; keeping the layer apart also makes "live data always wins" a
+  matter of read order. `NodeDirectorySnapshot` resolves across the layers: identity is air, then radio,
+  then file (whole-record, as the storage-split design rules); every other field is filled per field from
+  the file only where the radio left it empty. `count` (the `DB(n)` figure) stays the radio's own.
+  Reset keeps the layer; only a different local node (`clearAll`) drops it.
+  Cost if wrong: a loaded value shown where a live one should be - bounded by the read order, which the
+  `NodeDirectoryLoadTest` cases pin.
+
+### 66
+
+Ruling: file identity is labelled **File Loaded** (`IdentitySource.FILE`, `label_file_loaded`), and a
+  loaded-only record reaches the card with `receivedAtMillis = 0` so the "from the node database" stamp
+  is never claimed for file data. The spec said a file value must never read as measured this session;
+  without the label the card would have printed "DB Received".
+  Cost if wrong: one label.
+
+### 67
+
+Ruling: **`known_as_relay` is latched, never cleared by the app.** The engine sets it while refreshing
+  relay names, when exactly one candidate is left for a byte that has relayed (the same test that
+  makes the Relay view show a name). It must be latched rather than recomputed because the flag has to
+  survive its node being skipped: a skipped node leaves the candidate list, so a recomputed flag would
+  go false at the very moment the "1 skipped relay" display needs it. A load overwrites the flag from
+  the file, and the next relay-name refresh latches it again if the evidence is still there.
+  Cost if wrong: a relay flagged by a coincidence (a lone candidate that was not the relay) stays
+  flagged until a file is loaded over it; nothing else in the app reads the flag.
+
+### 68
+
+Ruling: the average RSSI saved with a node is a **fallback for the Graph's candidate line only**.
+  `CandidateSource.loadedRssiAvg` is used when the node has zero direct packets this session - the
+  owner's whole definition, with no minimum count, consistent with the relay-candidate design. The row
+  says "from file" instead of a sample count, so it never reads as a measurement. `avg_snr` is saved but
+  nothing reads it yet. A save writes the live average when there is one and otherwise carries the
+  loaded one forward.
+  Cost if wrong: a stale average drawn as the red line for a node not heard this session, labelled as
+  from a file.
+
+### 69
+
+Ruling: telemetry is saved as the **latest value of each metric with the time it was heard**, plus
+  uptime; the history stays out because it is statistics. On load it becomes a one-sample record with
+  its true timestamp, used only while no live telemetry exists. A repeated load fills only a node that
+  has no loaded telemetry yet.
+  Cost if wrong: a card shows a single-sample min/avg/max for a loaded node until live telemetry arrives.
+
+### 70
+
+Ruling: **`org.json`**, the library Android ships, reads and writes the file (owner's decision) - no new
+  runtime dependency. JVM unit tests see only a stub of it, so `testImplementation("org.json:json")` is
+  required and `OrgJsonAvailableTest` fails if it is ever dropped. A hand-written file that omits
+  `learnt_source` is read as `node`; a record whose `num` does not parse is skipped and counted; an
+  unknown `version` is rejected.
+  Cost if wrong: one dependency line and one class to swap.

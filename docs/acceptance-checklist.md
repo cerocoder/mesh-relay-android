@@ -1384,12 +1384,70 @@ node's values at once. The *My node* tab shows the node's own position and altit
 
 ---
 
+## Group O — Saving and loading the node file (2026-10-24)
+
+### O1. Save nodes writes a readable file
+**Do:** Connect, wait until some nodes are listed, open **My node**, open the menu, tap **Save nodes**,
+pick a place.
+**Pass looks like:** a toast says the nodes were saved; the file is JSON with `version`, a `nodes`
+array (each with `learnt_source`, `known_as_relay`, `notes`, `watch_points`, and `avg_rssi` where a node
+was heard directly) and `skipped_nodes`. It contains no counters or series.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### O2. Load nodes into a fresh start brings the neighbourhood back
+**Do:** Force-stop the app, open it, connect, and before any air traffic load the file from O1.
+**Pass looks like:** the Relay tab names relays whose node numbers are in the file; a node card shows
+**File Loaded** as its identity source; the `DB(n)` count is unchanged; the counters on every screen
+still read zero.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### O3. Live data beats the file
+**Do:** After O2, wait for a node in the file to announce itself or to be heard.
+**Pass looks like:** its name, position and values switch to the live ones and its label changes from
+**File Loaded** to **Air Received** or **DB Received**; Reset afterwards keeps the loaded nodes.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### O4. A bad file is refused and changes nothing
+**Do:** Load a text file that is not JSON, then a JSON file with `"version": 2`.
+**Pass looks like:** each gives its own message (in Spanish too, with the phone set to Spanish) and the
+node list is unchanged.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### O5. Skipped relay shows "1 skipped relay" and Return matching relay undoes it
+**Do:** On a relay whose lone candidate is named, open Matching nodes and skip that candidate. Then
+tap **Return matching relay**.
+**Pass looks like:** after the skip the header reads "1 skipped relay" with **Return matching relay**
+and **Clear skipped nodes**; after Return, the node is the assigned relay again with no confirmation.
+Loading a file that carries skipped nodes appends them to Settings' skipped list without removing any.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+### O6. A loaded average draws the red line only until a packet is heard
+**Do:** Load a file with `avg_rssi` for a candidate not heard this session; open the relay's Graph and
+select that candidate. Then wait until that node is heard directly.
+**Pass looks like:** the candidate's row says "from file" and the red line is drawn at the loaded value;
+after its first direct packet the row shows a live sample count and the line moves to the live average.
+
+- [ ] Ran on: __________________ Result: __________________________________________________
+  Notes: ________________________________________________________________________________
+
+---
+
 ## Overall verdict
 
 Fill in only after every item above has actually been run (or explicitly recorded as not run,
 with a reason).
 
-- **Total items run:** _____ / 98
+- **Total items run:** _____ / 104
 - **Items passed:** _____
 - **Items failed / found an issue:** _____ (list below)
 - **Overall verdict (circle one):** ACCEPT / ACCEPT WITH KNOWN ISSUES / REJECT
