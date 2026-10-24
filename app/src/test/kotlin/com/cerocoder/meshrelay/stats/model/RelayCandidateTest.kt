@@ -1,7 +1,9 @@
 package com.cerocoder.meshrelay.stats.model
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class RelayCandidateTest {
@@ -120,5 +122,38 @@ class RelayCandidateTest {
             ),
         )
         assertEquals(listOf(true, false, false, false), ranked.sortedBy { it.nodeNum }.map { it.cannotForward })
+    }
+    // ---- a loaded average as the fallback ----
+
+    private fun loadedSource(live: SignalStats, loaded: Float?) =
+        CandidateSource(1, "n", "CLIENT", live, dbSnr = null, hopsAway = null, loadedRssiAvg = loaded)
+
+    @Test
+    fun `a loaded average is used when there are zero live packets`() {
+        val candidate = RelayCandidates.rank(-71f, listOf(loadedSource(SignalStats.EMPTY, -69f))).single()
+
+        assertEquals(-69f, candidate.directRssiAvg!!, 1e-4f)
+        assertEquals(2f, candidate.gapDb!!, 1e-4f)
+        assertEquals(CandidateVerdict.CONSISTENT, candidate.verdict)
+        assertEquals(0, candidate.directPacketCount)
+        assertTrue(candidate.directFromFile)
+    }
+
+    @Test
+    fun `a live average replaces the loaded one at the first packet`() {
+        val candidate = RelayCandidates.rank(-71f, listOf(loadedSource(stats(-60f), -69f))).single()
+
+        assertEquals(-60f, candidate.directRssiAvg!!, 1e-4f)
+        assertEquals(1, candidate.directPacketCount)
+        assertFalse(candidate.directFromFile)
+    }
+
+    @Test
+    fun `no live and no loaded average is unknown as before`() {
+        val candidate = RelayCandidates.rank(-71f, listOf(loadedSource(SignalStats.EMPTY, null))).single()
+
+        assertNull(candidate.directRssiAvg)
+        assertEquals(CandidateVerdict.UNKNOWN, candidate.verdict)
+        assertFalse(candidate.directFromFile)
     }
 }

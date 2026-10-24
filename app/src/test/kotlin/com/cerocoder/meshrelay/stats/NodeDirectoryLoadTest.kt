@@ -277,4 +277,38 @@ class NodeDirectoryLoadTest {
         assertEquals("Air", record.longName)
         assertEquals("AIR1", record.shortName)
     }
+    // ---- a skipped known relay ----
+
+    private fun flagged(num: Int) = entry(record(num), NodeAnnotations(LearntSource.AIR, knownAsRelay = true))
+
+    @Test
+    fun `skippedKnownRelay finds a skipped node flagged as relay`() {
+        directory.applyLoaded(listOf(flagged(FILE_ONLY)))
+
+        val view = directory.snapshot(setOf(FILE_ONLY))
+
+        assertEquals(FILE_ONLY, view.skippedKnownRelay(Geo.lastByteOfNodeNum(FILE_ONLY)))
+    }
+
+    @Test
+    fun `skippedKnownRelay is null when the node is not skipped`() {
+        directory.applyLoaded(listOf(flagged(FILE_ONLY)))
+
+        assertNull(directory.snapshot(emptySet()).skippedKnownRelay(Geo.lastByteOfNodeNum(FILE_ONLY)))
+    }
+
+    @Test
+    fun `skippedKnownRelay is null when the node is skipped but not flagged`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY))))
+
+        assertNull(directory.snapshot(setOf(FILE_ONLY)).skippedKnownRelay(Geo.lastByteOfNodeNum(FILE_ONLY)))
+    }
+
+    @Test
+    fun `skippedKnownRelay respects the zero to ff substitution`() {
+        val endsInZero = 0xB2001B00.toInt()
+        directory.applyLoaded(listOf(flagged(endsInZero)))
+
+        assertEquals(endsInZero, directory.snapshot(setOf(endsInZero)).skippedKnownRelay(0xff))
+    }
 }
