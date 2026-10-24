@@ -89,7 +89,7 @@ class NodeDirectoryLoadTest {
     }
 
     @Test
-    fun `air identity wins over loaded identity whole`() {
+    fun `air identity wins over loaded identity where it has a value`() {
         directory.applyUser(RADIO_NODE, User(long_name = "Air"), NOW)
 
         directory.applyLoaded(listOf(entry(record(RADIO_NODE, longName = "File", shortName = "FILE"))))
@@ -97,7 +97,31 @@ class NodeDirectoryLoadTest {
         val identity = snapshot().identity(RADIO_NODE)
         assertEquals(IdentitySource.AIR, identity.source)
         assertEquals("Air", identity.longName)
-        assertNull(identity.shortName)
+    }
+
+    @Test
+    fun `a loaded value fills a field the air record leaves blank`() {
+        directory.applyUser(RADIO_NODE, User(long_name = "Air"), NOW)
+
+        directory.applyLoaded(listOf(entry(record(RADIO_NODE, longName = "File", shortName = "FILE"))))
+
+        val identity = snapshot().identity(RADIO_NODE)
+        assertEquals(IdentitySource.AIR, identity.source)
+        assertEquals("FILE", identity.shortName)
+    }
+
+    @Test
+    fun `a loaded value fills a field the radio record leaves blank`() {
+        directory.beginRound()
+        directory.applyNodeInfo(NodeInfo(num = RADIO_NODE))
+        directory.markLoaded(NOW)
+
+        directory.applyLoaded(listOf(entry(record(RADIO_NODE, longName = "File", shortName = "FILE"))))
+
+        val identity = snapshot().identity(RADIO_NODE)
+        assertEquals(IdentitySource.DB, identity.source)
+        assertEquals("File", identity.longName)
+        assertEquals("FILE", identity.shortName)
     }
 
     @Test
