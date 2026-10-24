@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -105,7 +106,7 @@ private val SelectorRowSpacing = 8.dp
  *  2026-09-04 section 7) rather than stacking - see the comment above that
  *  row for why they no longer stack. */
 private val ToggleRowSpacing = 24.dp
-private val MarksRowSpacing = 4.dp
+private val MarksRowSpacing = 8.dp
 
 /**
  * The selected candidate's own signal line - [CandidateLineOverlay]'s width,
@@ -255,6 +256,11 @@ fun SignalGraphScreen(
     var viewportPx by remember { mutableFloatStateOf(0f) }
     var crosshairY by remember { mutableStateOf<Float?>(null) }
     var cycleAt by remember { mutableStateOf<Long?>(null) }
+    // The bookmark the crosshair is pinned to by the carousel, by timestamp. A touch puts
+    // the crosshair at a screen height, and new measurements slide the rows under it; a
+    // bookmark the carousel chose has to stay under the line, so it is followed by time.
+    // Any touch or drag takes the crosshair back to a plain screen height.
+    var pinnedAt by remember { mutableStateOf<Long?>(null) }
     var marksOpen by rememberSaveable { mutableStateOf(false) }
     var lastTotal by remember { mutableLongStateOf(0L) }
 
@@ -444,6 +450,7 @@ fun SignalGraphScreen(
             val onMarkCarousel = {
                 ChartGeometry.nextMark(markRows, cycleAt)?.let { mark ->
                     cycleAt = mark.atMillis
+                    pinnedAt = mark.atMillis
                     val target = ChartGeometry.scrollToShow(mark.row, scrollPx, viewportPx, shown.size, pxPerSample)
                     scrollPx = target
                     crosshairY = ChartGeometry.yOf(mark.row, target, pxPerSample)
@@ -473,13 +480,15 @@ fun SignalGraphScreen(
             // reader. Still right-aligned, and still disabled only in the
             // fully empty state - no statistics and no measurements - where
             // there is nothing to freeze and nothing to scale.
-            Row(
+            // A FlowRow, not a Row: with the Marks button the three controls are wider
+            // than a phone in Spanish ("Escala automática" was squeezed to about 230 px of
+            // its 290 on the reference device), and a Row gives way by truncating the
+            // labels. This keeps them on one line whenever they fit and wraps the last
+            // onto a second line when they do not.
+            FlowRow(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(horizontal = ScreenPadding),
-                // Tighter while the Marks button shares the row: at the normal gap the
-                // three controls are wider than a phone, and the switch labels were the
-                // ones that gave way ("Auto sc…" on the reference device).
                 horizontalArrangement = Arrangement.spacedBy(
                     if (marksAvailable) MarksRowSpacing else ToggleRowSpacing,
                     Alignment.End,
@@ -496,17 +505,14 @@ fun SignalGraphScreen(
                     checked = freeze,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { freeze = it },
-                    modifier = Modifier.weight(1f, fill = false),
                 )
                 LabelledSwitch(
                     label = stringResource(R.string.graph_auto_scale),
                     checked = autoScale,
                     enabled = hasSomethingToAct,
                     onCheckedChange = { autoScale = it },
-                    modifier = Modifier.weight(1f, fill = false),
                 )
             }
-
 
             // Spec section 7: "below this row, above the gauges", the selector
             // and Skip sharing one row (spec section 9's own "at the right
@@ -667,8 +673,14 @@ fun SignalGraphScreen(
                         snrColor = SnrTrack,
                         pointSizePx = POINT_SIZE_PX,
                         onViewportHeight = { viewportPx = it },
-                        onCrosshairAt = { crosshairY = it },
-                        onCrosshairCleared = { crosshairY = null },
+                        onCrosshairAt = {
+                            crosshairY = it
+                            pinnedAt = null
+                        },
+                        onCrosshairCleared = {
+                            crosshairY = null
+                            pinnedAt = null
+                        },
                         onLongPress = onMarkCarousel,
                         modifier = Modifier.fillMaxSize(),
                     )
@@ -693,7 +705,11 @@ fun SignalGraphScreen(
                     crosshairY?.let { touchY ->
                         Crosshair(
                             series = shown,
-                            touchY = touchY,
+                            // The pinned bookmark's own row while it still exists, else where
+                            // the finger put the line.
+                            touchY = markRows.firstOrNull { it.atMillis == pinnedAt }
+                                ?.let { ChartGeometry.yOf(it.row, effectiveScroll, pxPerSample) }
+                                ?: touchY,
                             scrollPx = effectiveScroll,
                             pxPerSample = pxPerSample,
                             viewportPx = viewportPx,
