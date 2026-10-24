@@ -198,6 +198,7 @@
     <string name="section_from_node_database">DE LA BASE DE NODOS</string>
     <string name="label_air_received">Recepción por aire</string>
     <string name="label_db_received">Recepción de la DB</string>
+    <string name="label_file_loaded">Cargado desde archivo</string>
     <string name="node_long_name">Nombre largo</string>
     <string name="node_short_name">Nombre corto</string>
     <string name="node_role">Rol</string>

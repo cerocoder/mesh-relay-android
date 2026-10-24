@@ -198,6 +198,7 @@
     <string name="section_from_node_database">FROM THE NODE DATABASE</string>
     <string name="label_air_received">Air Received</string>
     <string name="label_db_received">DB Received</string>
+    <string name="label_file_loaded">File Loaded</string>
     <string name="node_long_name">Long name</string>
     <string name="node_short_name">Short name</string>
     <string name="node_role">Role</string>

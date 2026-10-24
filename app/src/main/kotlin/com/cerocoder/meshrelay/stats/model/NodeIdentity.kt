@@ -1,7 +1,7 @@
 package com.cerocoder.meshrelay.stats.model
 
-/** Which store an identity was resolved from. */
-enum class IdentitySource { AIR, DB, NONE }
+/** Which store an identity was resolved from. [FILE] is data loaded from a node file, behind both live stores. */
+enum class IdentitySource { AIR, DB, FILE, NONE }
 
 /**
  * A node's identity as the interface should show it, and where it came from.

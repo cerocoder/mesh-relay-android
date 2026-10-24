@@ -2,7 +2,10 @@ package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.AirNodeRecord
 import com.cerocoder.meshrelay.stats.model.LatLon
+import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.NodeAnnotations
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeFileEntry
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionReport
@@ -37,6 +40,13 @@ class NodeDirectory(private val time: TimeSource) {
     private val nodesFromAir = HashMap<Int, AirNodeRecord>()
     private val positions = HashMap<Int, PositionHistory>()
     private val telemetryRecords = HashMap<Int, TelemetryRecord>()
+
+    // The third layer, filled only by [applyLoaded]. It sits behind [nodes] and
+    // [nodesFromAir] and is never touched by a database refresh or by Reset, so a
+    // node file's knowledge survives both; only [clearAll] drops it.
+    private val loadedNodes = HashMap<Int, NodeRecord>()
+    private val annotations = HashMap<Int, NodeAnnotations>()
+    private val loadedTelemetry = HashMap<Int, TelemetryRecord>()
 
     /**
      * A node-database refresh in progress. The radio streams one `node_info` frame
@@ -177,6 +187,46 @@ class NodeDirectory(private val time: TimeSource) {
         telemetryRecords[nodeNum] = record
     }
 
+    /**
+     * Folds a node file into the third layer.
+     *
+     * Annotations are **replaced completely** by the file's. The loaded record is
+     * **fill-only**: a field an earlier load already supplied is kept, and only gaps
+     * are filled - the live stores sit in front of this layer regardless, so a loaded
+     * value can never override what the radio or the air said. Loaded telemetry is
+     * taken only when none was loaded before, and live telemetry always wins over it
+     * when read.
+     *
+     * Nothing here touches [nodes], [nodesFromAir], [positions] or [telemetryRecords],
+     * and no statistic: this is the whole reason a load cannot disturb a measurement.
+     */
+    fun applyLoaded(entries: List<NodeFileEntry>) {
+        val atMillis = time.nowMillis()
+        for (entry in entries) {
+            val num = entry.record.num
+            annotations[num] = entry.annotations
+            val incoming = entry.record.copy(receivedAtMillis = atMillis)
+            val previous = loadedNodes[num]
+            // merge() lets its second argument win; the earlier load must, so it goes second.
+            loadedNodes[num] = if (previous == null) incoming else merge(incoming, previous)
+            if (loadedTelemetry[num] == null && (entry.uptimeSeconds != null || entry.telemetry.isNotEmpty())) {
+                var record = TelemetryRecord(lastUptimeSeconds = entry.uptimeSeconds)
+                entry.telemetry.forEach { (metric, sample) ->
+                    record = record.withMetric(metric, sample.atMillis, sample.value)
+                }
+                loadedTelemetry[num] = record
+            }
+        }
+    }
+
+    /**
+     * Records that [nodeNum] was the one candidate left for a heard relay byte.
+     * Only ever sets the flag: nothing in the application clears it.
+     */
+    fun latchKnownRelay(nodeNum: Int, learntSource: LearntSource) {
+        annotations[nodeNum] = (annotations[nodeNum] ?: NodeAnnotations(learntSource)).copy(knownAsRelay = true)
+    }
+
     fun setLocalNodeNum(num: Int) {
         localNodeNum = num
     }
@@ -274,6 +324,9 @@ class NodeDirectory(private val time: TimeSource) {
         pendingReceivedAny = false
         positions.clear()
         telemetryRecords.clear()
+        loadedNodes.clear()
+        annotations.clear()
+        loadedTelemetry.clear()
         localNodeNum = null
         loadedAtMillis = null
     }
@@ -304,6 +357,9 @@ class NodeDirectory(private val time: TimeSource) {
         positions = HashMap(positions),
         telemetry = HashMap(telemetryRecords),
         skipped = HashSet(skipped),
+        loadedNodes = HashMap(loadedNodes),
+        annotations = HashMap(annotations),
+        loadedTelemetry = HashMap(loadedTelemetry),
     )
 
     /**

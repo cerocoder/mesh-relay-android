@@ -167,8 +167,11 @@ fun NodeCard(
                 identity.receivedAtMillis?.takeIf { it != 0L }?.let { stamp ->
                     LabelValueRow(
                         label = stringResource(
-                            if (identity.source == IdentitySource.AIR) R.string.label_air_received
-                            else R.string.label_db_received
+                            when (identity.source) {
+                                IdentitySource.AIR -> R.string.label_air_received
+                                IdentitySource.FILE -> R.string.label_file_loaded
+                                else -> R.string.label_db_received
+                            },
                         ),
                         value = StatsFormat.nodeDatabaseLastHeard(
                             epochSeconds = (stamp / 1000L).toInt(),

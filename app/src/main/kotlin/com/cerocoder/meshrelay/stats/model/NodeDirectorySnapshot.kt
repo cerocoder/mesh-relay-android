@@ -25,7 +25,17 @@ class NodeDirectorySnapshot(
     positions: Map<Int, PositionHistory>,
     telemetry: Map<Int, TelemetryRecord>,
     skipped: Set<Int>,
+    /**
+     * The third layer: what a node file said, consulted only after both live stores.
+     * Defaults keep every existing construction site as it was.
+     */
+    loadedNodes: Map<Int, NodeRecord> = emptyMap(),
+    annotations: Map<Int, NodeAnnotations> = emptyMap(),
+    loadedTelemetry: Map<Int, TelemetryRecord> = emptyMap(),
 ) {
+    private val loadedByNode = loadedNodes
+    private val annotationsByNode = annotations
+    private val loadedTelemetryByNode = loadedTelemetry
     private val positionsByNode = positions
     private val telemetryByNode = telemetry
     private val skippedNodes = skipped
@@ -41,7 +51,7 @@ class NodeDirectorySnapshot(
      * air store that was on the order of 10^5 set insertions per snapshot where
      * an allocation-free filter would do.
      */
-    private val allNodeNums: Set<Int> by lazy { nodes.keys + airNodes.keys }
+    private val allNodeNums: Set<Int> by lazy { nodes.keys + airNodes.keys + loadedByNode.keys }
 
     val count: Int get() = nodes.size
 
@@ -52,7 +62,33 @@ class NodeDirectorySnapshot(
      */
     val airCount: Int get() = airNodes.size
 
-    fun node(nodeNum: Int): NodeRecord? = nodes[nodeNum]
+    /**
+     * The radio's record for [nodeNum], with every field it leaves null filled from
+     * what a loaded file said, field by field - or the loaded record alone when the
+     * radio has none. A loaded record's `receivedAtMillis` is withheld (zero): the
+     * card's "from the node database" stamp must never claim a file's data was
+     * received from the radio.
+     */
+    fun node(nodeNum: Int): NodeRecord? {
+        val radio = nodes[nodeNum]
+        val loaded = loadedByNode[nodeNum]
+        if (loaded == null) return radio
+        if (radio == null) return loaded.copy(receivedAtMillis = 0L)
+        return radio.copy(
+            longName = radio.longName ?: loaded.longName,
+            shortName = radio.shortName ?: loaded.shortName,
+            hwModel = radio.hwModel ?: loaded.hwModel,
+            role = radio.role ?: loaded.role,
+            dbPosition = radio.dbPosition ?: loaded.dbPosition,
+            dbSnr = radio.dbSnr ?: loaded.dbSnr,
+            lastHeardEpochSeconds = radio.lastHeardEpochSeconds ?: loaded.lastHeardEpochSeconds,
+            hopsAway = radio.hopsAway ?: loaded.hopsAway,
+            hasPublicKey = radio.hasPublicKey || loaded.hasPublicKey,
+        )
+    }
+
+    /** What the owner knows about [nodeNum] beyond what the mesh says, or null. */
+    fun annotations(nodeNum: Int): NodeAnnotations? = annotationsByNode[nodeNum]
 
     /** The node's short name, or `""` when neither store has named it. */
     fun shortName(nodeNum: Int): String = identity(nodeNum).shortName ?: ""
@@ -113,7 +149,21 @@ class NodeDirectorySnapshot(
                 receivedAtMillis = air.receivedAtMillis,
             )
         }
-        val db = nodes[nodeNum] ?: return NodeIdentity.NONE
+        val db = nodes[nodeNum]
+        if (db == null) {
+            // Behind both live stores, and whole-record like them: a loaded identity is
+            // used only when neither the air nor the radio has said anything.
+            val loaded = loadedByNode[nodeNum] ?: return NodeIdentity.NONE
+            return NodeIdentity(
+                source = IdentitySource.FILE,
+                longName = loaded.longName?.takeIf { it.isNotEmpty() },
+                shortName = loaded.shortName?.takeIf { it.isNotEmpty() },
+                hwModel = loaded.hwModel?.takeIf { it != "UNSET" },
+                role = loaded.role?.takeIf { it.isNotEmpty() },
+                hasPublicKey = loaded.hasPublicKey,
+                receivedAtMillis = loaded.receivedAtMillis,
+            )
+        }
         return NodeIdentity(
             source = IdentitySource.DB,
             longName = db.longName?.takeIf { it.isNotEmpty() },
@@ -125,7 +175,7 @@ class NodeDirectorySnapshot(
         )
     }
 
-    fun telemetry(nodeNum: Int): TelemetryRecord? = telemetryByNode[nodeNum]
+    fun telemetry(nodeNum: Int): TelemetryRecord? = telemetryByNode[nodeNum] ?: loadedTelemetryByNode[nodeNum]
 
     /**
      * Every node whose number could have produced this relay byte, skip-list
@@ -197,7 +247,7 @@ class NodeDirectorySnapshot(
      */
     fun locationInfo(nodeNum: Int, from: LatLon?): LocationInfo {
         val live = positionsByNode[nodeNum]?.newestWithCoordinates
-        val stored = if (live == null) nodes[nodeNum]?.dbPosition else null
+        val stored = if (live == null) node(nodeNum)?.dbPosition else null
         val report = live ?: stored ?: return LocationInfo.EMPTY
 
         val source = if (live != null) PositionSource.CURRENT else PositionSource.DB
