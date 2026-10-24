@@ -2,7 +2,11 @@ package com.cerocoder.meshrelay.stats
 
 import com.cerocoder.meshrelay.stats.model.Counters
 import com.cerocoder.meshrelay.stats.model.NeighbourStats
+import com.cerocoder.meshrelay.stats.model.IdentitySource
+import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.LiveAverages
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
+import com.cerocoder.meshrelay.stats.model.NodeFile
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.RemoteNodeStats
@@ -61,6 +65,12 @@ class MeshStatsEngine(
         data class SetPhoneFix(val fix: StampedPosition?) : Command
         data class WatchSeries(val key: SeriesKey?) : Command
         data class RequestExport(val keys: List<SeriesKey>) : Command
+
+        /** Builds the node file from the directory and the neighbour table; see [nodeFileResult]. */
+        data object RequestNodeFile : Command
+
+        /** Folds a node file into the directory's loaded layer; statistics are never touched. */
+        data class LoadNodeFile(val file: NodeFile) : Command
         data object Reset : Command
 
         /**
@@ -293,6 +303,23 @@ class MeshStatsEngine(
     /** Clears [exportResult], so a stale export is never read twice. */
     fun exportConsumed() { _exportResult.value = null }
 
+    private val _nodeFileResult = MutableStateFlow<NodeFile?>(null)
+
+    /** The result of the most recent [requestNodeFile], until [nodeFileConsumed] clears it. */
+    val nodeFileResult: StateFlow<NodeFile?> = _nodeFileResult.asStateFlow()
+
+    /** Asks for the node file to be built on the engine's own coroutine; see [nodeFileResult]. */
+    fun requestNodeFile() { commands.trySend(Command.RequestNodeFile) }
+
+    /** Clears [nodeFileResult], so a stale file is never written twice. */
+    fun nodeFileConsumed() { _nodeFileResult.value = null }
+
+    /**
+     * Folds [file]'s nodes into the directory's loaded layer. The skip list is not
+     * part of this: it lives in settings and the caller merges it there.
+     */
+    fun loadNodeFile(file: NodeFile) { commands.trySend(Command.LoadNodeFile(file)) }
+
     private fun apply(command: Command) {
         if (command !is Command.SetPhoneFix && command !is Command.FixDeadline) buildNeeded = true
         when (command) {
@@ -321,6 +348,18 @@ class MeshStatsEngine(
             is Command.RequestExport -> {
                 _exportResult.value = command.keys.associateWith { key -> seriesBuffers[key]?.snapshot() ?: SignalSeries.EMPTY }
             }
+            Command.RequestNodeFile -> {
+                // A neighbour's average counts only when it has direct packets this
+                // session: the file then carries a measurement, never a zero.
+                val averages = neighbours.mapValues { (_, stats) ->
+                    LiveAverages(
+                        rssi = stats.rssi.avg.takeIf { stats.rssi.hasData },
+                        snr = stats.snr.avg.takeIf { stats.snr.hasData },
+                    )
+                }
+                _nodeFileResult.value = NodeFile(directory.exportEntries(averages), skipped)
+            }
+            is Command.LoadNodeFile -> directory.applyLoaded(command.file.entries)
             Command.Reset -> resetStatistics()
             Command.ResetForNewNode -> {
                 resetStatistics()
@@ -691,6 +730,12 @@ class MeshStatsEngine(
             val stats = relays.getValue(relayByte)
             val name = view.uniqueRelayName(relayByte)
             if (stats.nodeName != name) relays[relayByte] = stats.copy(nodeName = name)
+            // The one place `known_as_relay` becomes true: exactly one candidate is left
+            // for a byte that really relayed. Only ever latched - see NodeDirectory.
+            view.matchingNodeNums(relayByte).singleOrNull()?.let { only ->
+                val source = if (view.identity(only).source == IdentitySource.AIR) LearntSource.AIR else LearntSource.NODE
+                directory.latchKnownRelay(only, source)
+            }
         }
     }
 
