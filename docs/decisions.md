@@ -901,9 +901,11 @@ Ruling: the node file (spec `2026-10-24-node-file-design.md`) lives in a **third
   `NodeDirectory` - `loadedNodes`, `annotations`, `loadedTelemetry` - behind the radio store and the air
   store, not merged into either. The radio refresh replaces its store wholesale, so a loaded node kept
   there would vanish at the next refresh; keeping the layer apart also makes "live data always wins" a
-  matter of read order. `NodeDirectorySnapshot` resolves across the layers: identity is air, then radio,
-  then file (whole-record, as the storage-split design rules); every other field is filled per field from
-  the file only where the radio left it empty. `count` (the `DB(n)` figure) stays the radio's own.
+  matter of read order. `NodeDirectorySnapshot` resolves across the layers: identity is the air record
+  if there is one, else the radio's, else the file's; **a field the winning record leaves blank is then
+  filled from the file**, field by field, and the source label and stamp stay the live record's (the
+  owner's rule: add what is not yet filled, keep what the radio or the air told us). Every other field is
+  filled the same way from the file only where the radio left it empty. `count` (the `DB(n)` figure) stays the radio's own.
   Reset keeps the layer; only a different local node (`clearAll`) drops it.
   Cost if wrong: a loaded value shown where a live one should be - bounded by the read order, which the
   `NodeDirectoryLoadTest` cases pin.
