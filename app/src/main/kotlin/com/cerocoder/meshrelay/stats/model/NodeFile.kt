@@ -17,3 +17,6 @@ data class NodeFile(
     val entries: List<NodeFileEntry>,
     val skippedNodes: Set<Int>,
 )
+
+/** A node's average direct signal this session; null where it has no direct packets. */
+data class LiveAverages(val rssi: Float?, val snr: Float?)

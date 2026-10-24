@@ -3,12 +3,14 @@ package com.cerocoder.meshrelay.stats
 import com.cerocoder.meshrelay.stats.model.AirNodeRecord
 import com.cerocoder.meshrelay.stats.model.LatLon
 import com.cerocoder.meshrelay.stats.model.LearntSource
+import com.cerocoder.meshrelay.stats.model.LiveAverages
 import com.cerocoder.meshrelay.stats.model.NodeAnnotations
 import com.cerocoder.meshrelay.stats.model.NodeDirectorySnapshot
 import com.cerocoder.meshrelay.stats.model.NodeFileEntry
 import com.cerocoder.meshrelay.stats.model.NodeRecord
 import com.cerocoder.meshrelay.stats.model.PositionHistory
 import com.cerocoder.meshrelay.stats.model.PositionReport
+import com.cerocoder.meshrelay.stats.model.TelemetrySample
 import com.cerocoder.meshrelay.stats.model.TelemetryRecord
 import com.cerocoder.meshrelay.stats.model.localAltitudeOf
 import com.cerocoder.meshrelay.stats.model.localPositionOf
@@ -216,6 +218,58 @@ class NodeDirectory(private val time: TimeSource) {
                 }
                 loadedTelemetry[num] = record
             }
+        }
+    }
+
+    /**
+     * Every node this directory knows, in node-number order, as the node file stores it.
+     *
+     * Identity is resolved through the snapshot's own precedence (air, then radio, then
+     * a loaded file) so a saved file says what the screens say. A position heard this
+     * session is preferred to the database's; the averages are [liveAverages] when the
+     * node has direct packets and otherwise whatever an earlier load remembered, so a
+     * second save does not lose them. Telemetry is the latest value of each metric with
+     * the time it was heard - the history is statistics and stays out.
+     */
+    fun exportEntries(liveAverages: Map<Int, LiveAverages>): List<NodeFileEntry> {
+        val view = snapshot(emptySet())
+        return (nodes.keys + nodesFromAir.keys + loadedNodes.keys).sorted().map { num ->
+            val identity = view.identity(num)
+            val base = view.node(num) ?: NodeRecord(
+                num = num, longName = null, shortName = null, hwModel = null, role = null,
+                dbPosition = null, dbSnr = null, lastHeardEpochSeconds = null, hopsAway = null,
+                hasPublicKey = false, receivedAtMillis = 0L,
+            )
+            val record = base.copy(
+                longName = identity.longName,
+                shortName = identity.shortName,
+                hwModel = identity.hwModel,
+                role = identity.role,
+                hasPublicKey = identity.hasPublicKey,
+                dbPosition = positions[num]?.newestWithCoordinates?.copy(precisionBits = null) ?: base.dbPosition,
+                receivedAtMillis = 0L,
+            )
+            val stored = annotations[num]
+            val source = when {
+                num in nodesFromAir -> LearntSource.AIR
+                num in nodes -> LearntSource.NODE
+                else -> stored?.learntSource ?: LearntSource.NODE
+            }
+            val live = liveAverages[num]
+            val annotated = stored ?: NodeAnnotations(source)
+            val telemetry = view.telemetry(num)
+            NodeFileEntry(
+                record = record,
+                annotations = annotated.copy(
+                    learntSource = source,
+                    avgRssi = live?.rssi ?: annotated.avgRssi,
+                    avgSnr = live?.snr ?: annotated.avgSnr,
+                ),
+                uptimeSeconds = telemetry?.lastUptimeSeconds,
+                telemetry = telemetry?.metrics.orEmpty().mapNotNull { (metric, history) ->
+                    history.samples.lastOrNull()?.let { metric to TelemetrySample(it.value, it.atMillis) }
+                }.toMap(),
+            )
         }
     }
 
