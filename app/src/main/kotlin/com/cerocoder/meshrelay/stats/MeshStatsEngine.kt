@@ -578,6 +578,8 @@ class MeshStatsEngine(
             snr = if (signal == null) existing.snr else existing.snr.plus(signal.snr),
             rssi = if (signal == null) existing.rssi else existing.rssi.plus(signal.rssi),
             packetCount = existing.packetCount + 1,
+            // Only the first packet opens the window packetsPerHour is measured over.
+            firstPacketAtMillis = if (existing.packetCount == 0) atMillis else existing.firstPacketAtMillis,
             lastPacketAtMillis = atMillis,
         )
 

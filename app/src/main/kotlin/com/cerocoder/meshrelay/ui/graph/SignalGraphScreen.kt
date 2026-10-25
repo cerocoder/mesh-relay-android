@@ -460,6 +460,18 @@ fun SignalGraphScreen(
                 MarksSheet(
                     points = watchPoints,
                     locale = locale,
+                    inChart = { point -> markRows.any { it.atMillis == point.atMillis } },
+                    onJump = { point ->
+                        // The same move the carousel makes, to the bookmark that was tapped.
+                        markRows.firstOrNull { it.atMillis == point.atMillis }?.let { mark ->
+                            cycleAt = mark.atMillis
+                            pinnedAt = mark.atMillis
+                            val target = ChartGeometry.scrollToShow(mark.row, scrollPx, viewportPx, shown.size, pxPerSample)
+                            scrollPx = target
+                            crosshairY = ChartGeometry.yOf(mark.row, target, pxPerSample)
+                            marksOpen = false
+                        }
+                    },
                     onChange = onSetWatchPoints,
                     onDismiss = { marksOpen = false },
                 )
@@ -945,13 +957,31 @@ private fun BoxScope.Crosshair(
         // cannot tell a clipped number from a real one, but they can tell an
         // ellipsis. `TimeRow` below makes the same choice for the same reason,
         // and Spanish is the longer of this app's two languages.
-        Text(
-            text = StatsFormat.graphTimestamp(series.atMillis(index), locale, LocalTimeFormat.current),
-            style = MaterialTheme.typography.labelSmall,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
+        Row(
+            horizontalArrangement = Arrangement.spacedBy(LabelSpacing),
             modifier = Modifier.onSizeChanged { timestampHeightPx = it.height },
-        )
+        ) {
+            Text(
+                text = StatsFormat.graphTimestamp(series.atMillis(index), locale, LocalTimeFormat.current),
+                style = MaterialTheme.typography.labelSmall,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier.weight(1f, fill = false),
+            )
+            // The observer's altitude when this measurement was taken, stored with its position
+            // and worded as the status strip words it. Absent when the sample has no altitude.
+            position?.altitude?.let { altitude ->
+                Text(
+                    text = stringResource(
+                        R.string.format_altitude_field,
+                        stringResource(R.string.format_altitude_m, altitude),
+                    ),
+                    style = MaterialTheme.typography.labelSmall,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
         Row(horizontalArrangement = Arrangement.spacedBy(LabelSpacing)) {
             Text(
                 text = stringResource(R.string.format_rssi_dbm, StatsFormat.sampleRssi(series.rssi(index), locale)),

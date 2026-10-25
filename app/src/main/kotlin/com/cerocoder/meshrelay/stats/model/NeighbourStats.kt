@@ -17,5 +17,14 @@ data class NeighbourStats(
     val snr: SignalStats = SignalStats.EMPTY,
     val rssi: SignalStats = SignalStats.EMPTY,
     val packetCount: Int = 0,
+    val firstPacketAtMillis: Long = 0,
     val lastPacketAtMillis: Long = 0,
-)
+) {
+    /**
+     * Packets per hour over the window this session has heard the node directly, first packet
+     * to last - the rule [RelayStats.packetsPerHour] uses. It shows a chatty neighbour; a node
+     * heard twice a few seconds apart reads high until more packets arrive.
+     */
+    val packetsPerHour: Float
+        get() = PacketRate.perHour(packetCount, firstPacketAtMillis, lastPacketAtMillis)
+}

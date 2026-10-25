@@ -7,6 +7,19 @@ import org.junit.Test
 class AggregatesTest {
 
     @Test
+    fun `a neighbour's rate is its packets over the window from first to last`() {
+        // 30 packets across ten minutes is 180 an hour.
+        val stats = NeighbourStats(nodeNum = 1, packetCount = 30, firstPacketAtMillis = 1_000_000L, lastPacketAtMillis = 1_600_000L)
+        assertEquals(180f, stats.packetsPerHour, 0.001f)
+    }
+
+    @Test
+    fun `a neighbour heard once has no rate yet`() {
+        val stats = NeighbourStats(nodeNum = 1, packetCount = 1, firstPacketAtMillis = 5L, lastPacketAtMillis = 5L)
+        assertEquals(0f, stats.packetsPerHour, 0f)
+    }
+
+    @Test
     fun `hop averages follow the packets that carried hop information`() {
         val stats = RemoteNodeStats()
             .plus(hopStart = 3, hopLimit = 1, hopsKnown = true)

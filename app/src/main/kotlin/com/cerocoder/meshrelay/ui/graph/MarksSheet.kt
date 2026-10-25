@@ -1,5 +1,6 @@
 package com.cerocoder.meshrelay.ui.graph
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -57,6 +58,10 @@ private val MarkIconSize = 40.dp
 fun MarksSheet(
     points: List<WatchPoint>,
     locale: Locale,
+    /** True when the bookmark's measurement is in the chart now, so a tap can take the crosshair there. */
+    inChart: (WatchPoint) -> Boolean,
+    /** Puts the crosshair on the bookmark's measurement; only called for a bookmark [inChart] accepts. */
+    onJump: (WatchPoint) -> Unit,
     onChange: (List<WatchPoint>) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -74,6 +79,8 @@ fun MarksSheet(
                 MarkEntry(
                     point = point,
                     locale = locale,
+                    jumpable = inChart(point),
+                    onJump = { onJump(point) },
                     onEdit = { editing = point },
                     onRemove = { removing = point },
                 )
@@ -109,6 +116,8 @@ fun MarksSheet(
 private fun MarkEntry(
     point: WatchPoint,
     locale: Locale,
+    jumpable: Boolean,
+    onJump: () -> Unit,
     onEdit: () -> Unit,
     onRemove: () -> Unit,
 ) {
@@ -128,7 +137,13 @@ private fun MarkEntry(
             .padding(start = 16.dp, end = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(modifier = Modifier.weight(1f).padding(vertical = 8.dp)) {
+        // Only the text block is the tap target, so the three pictograms keep their own meaning.
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .clickable(enabled = jumpable, onClick = onJump)
+                .padding(vertical = 8.dp),
+        ) {
             Text(
                 text = StatsFormat.graphTimestamp(point.atMillis, locale, LocalTimeFormat.current),
                 style = MaterialTheme.typography.bodyMedium,
