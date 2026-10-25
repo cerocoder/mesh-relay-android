@@ -36,7 +36,8 @@ import java.util.Locale
  *   the database has never reported a hop count.
  *
  * [packetsPerHour] is shown for both subjects, the rate being what reveals a chatty
- * neighbour as well as a busy relay. It is null only where the caller has none to give.
+ * neighbour as well as a busy relay. It reads [R.string.common_not_available] while null, which
+ * is until at least three packets have been heard over at least a minute.
  */
 @Composable
 fun DetailSummary(
@@ -62,12 +63,13 @@ fun DetailSummary(
             // reasoning RelayListScreen's own LabelledCount follows.
             value = totalPackets.toString(),
         )
-        if (packetsPerHour != null) {
-            SummaryRow(
-                label = stringResource(R.string.detail_packets_per_hour),
-                value = stringResource(R.string.format_packets_per_hour, StatsFormat.packetsPerHour(packetsPerHour, locale)),
-            )
-        }
+        SummaryRow(
+            label = stringResource(R.string.detail_packets_per_hour),
+            // Not available until three packets spread over a minute exist (PacketRate).
+            value = packetsPerHour?.let {
+                stringResource(R.string.format_packets_per_hour, StatsFormat.packetsPerHour(it, locale))
+            } ?: notAvailable,
+        )
         when (subject) {
             is DetailSubject.Relay -> if (skippedCount > 0) {
                 SummaryRow(

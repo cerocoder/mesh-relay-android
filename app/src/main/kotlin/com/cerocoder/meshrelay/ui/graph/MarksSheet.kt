@@ -151,6 +151,19 @@ private fun MarkEntry(
                 overflow = TextOverflow.Ellipsis,
             )
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                // The observer's altitude at that measurement, worded as the status strip and the
+                // crosshair word it; absent when the bookmark's position had none.
+                position?.altitude?.let { altitude ->
+                    Text(
+                        text = stringResource(
+                            R.string.format_altitude_field,
+                            stringResource(R.string.format_altitude_m, altitude),
+                        ),
+                        style = MaterialTheme.typography.labelSmall,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
                 Text(
                     text = stringResource(R.string.format_rssi_dbm, StatsFormat.sampleRssi(point.rssi, locale)),
                     color = RssiTrack,

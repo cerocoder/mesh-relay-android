@@ -10,13 +10,24 @@ class AggregatesTest {
     fun `a neighbour's rate is its packets over the window from first to last`() {
         // 30 packets across ten minutes is 180 an hour.
         val stats = NeighbourStats(nodeNum = 1, packetCount = 30, firstPacketAtMillis = 1_000_000L, lastPacketAtMillis = 1_600_000L)
-        assertEquals(180f, stats.packetsPerHour, 0.001f)
+        assertEquals(180f, stats.packetsPerHour!!, 0.001f)
     }
 
     @Test
-    fun `a neighbour heard once has no rate yet`() {
-        val stats = NeighbourStats(nodeNum = 1, packetCount = 1, firstPacketAtMillis = 5L, lastPacketAtMillis = 5L)
-        assertEquals(0f, stats.packetsPerHour, 0f)
+    fun `a neighbour heard fewer than three times has no rate yet`() {
+        val two = NeighbourStats(nodeNum = 1, packetCount = 2, firstPacketAtMillis = 0L, lastPacketAtMillis = 600_000L)
+        assertNull(two.packetsPerHour)
+    }
+
+    @Test
+    fun `three packets inside less than a minute give no rate, and exactly a minute does`() {
+        assertNull(NeighbourStats(nodeNum = 1, packetCount = 3, firstPacketAtMillis = 0L, lastPacketAtMillis = 59_999L).packetsPerHour)
+        // 3 packets in 60 s is 180 an hour.
+        assertEquals(
+            180f,
+            NeighbourStats(nodeNum = 1, packetCount = 3, firstPacketAtMillis = 0L, lastPacketAtMillis = 60_000L).packetsPerHour!!,
+            0.001f,
+        )
     }
 
     @Test
@@ -73,20 +84,14 @@ class AggregatesTest {
             firstPacketAtMillis = 1_000_000L,
             lastPacketAtMillis = 1_000_000L + 30 * 60_000L,
         )
-        assertEquals(120f, relay.packetsPerHour, 0.01f)   // 60 packets in half an hour
+        assertEquals(120f, relay.packetsPerHour!!, 0.01f)   // 60 packets in half an hour
     }
 
     @Test
-    fun `the packet rate is zero before there is a window to measure`() {
-        // One packet gives no duration, and dividing by it would report an infinite
-        // rate for every relay in its first second.
-        assertEquals(0f, RelayStats(relayByte = 1, packetCount = 1).packetsPerHour, 0.0001f)
-        assertEquals(0f, RelayStats(relayByte = 1, packetCount = 0).packetsPerHour, 0.0001f)
-        assertEquals(
-            0f,
-            RelayStats(relayByte = 1, packetCount = 9, firstPacketAtMillis = 5L, lastPacketAtMillis = 5L).packetsPerHour,
-            0.0001f,
-        )
+    fun `the packet rate is absent before there are three packets over a minute`() {
+        assertNull(RelayStats(relayByte = 1, packetCount = 1).packetsPerHour)
+        assertNull(RelayStats(relayByte = 1, packetCount = 0).packetsPerHour)
+        assertNull(RelayStats(relayByte = 1, packetCount = 9, firstPacketAtMillis = 5L, lastPacketAtMillis = 5L).packetsPerHour)
     }
 
     @Test
@@ -102,18 +107,9 @@ class AggregatesTest {
     }
 
     @Test
-    fun `two packets over a positive window give a real rate`() {
-        // Separates the packetCount < 2 guard from the duration guard: every other
-        // case in this file has both guards true or both false at once. Nudging the
-        // threshold to packetCount < 3 (or requiring more than two packets some
-        // other way) would return 0f here instead of a real rate.
-        val relay = RelayStats(
-            relayByte = 1,
-            packetCount = 2,
-            firstPacketAtMillis = 0L,
-            lastPacketAtMillis = 1_000L,
-        )
-        assertEquals(7200f, relay.packetsPerHour, 0.01f)   // 2 packets in 1 second
+    fun `two packets over a long window still give no rate`() {
+        val relay = RelayStats(relayByte = 1, packetCount = 2, firstPacketAtMillis = 0L, lastPacketAtMillis = 600_000L)
+        assertNull(relay.packetsPerHour)
     }
 
     @Test

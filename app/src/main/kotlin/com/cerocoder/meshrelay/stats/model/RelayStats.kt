@@ -27,7 +27,7 @@ data class RelayStats(
     /** Distinct remote nodes whose packets this relay has forwarded. */
     val knownNodesCount: Int get() = fromNodeStats.size
 
-    /** Packets per hour over the observed window; see [PacketRate.perHour] for the zero cases. */
-    val packetsPerHour: Float
+    /** Packets per hour over the observed window; null until [PacketRate] has enough to measure. */
+    val packetsPerHour: Float?
         get() = PacketRate.perHour(packetCount, firstPacketAtMillis, lastPacketAtMillis)
 }

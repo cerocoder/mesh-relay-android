@@ -22,9 +22,9 @@ data class NeighbourStats(
 ) {
     /**
      * Packets per hour over the window this session has heard the node directly, first packet
-     * to last - the rule [RelayStats.packetsPerHour] uses. It shows a chatty neighbour; a node
-     * heard twice a few seconds apart reads high until more packets arrive.
+     * to last - the rule [RelayStats.packetsPerHour] uses. It shows a chatty neighbour; null
+     * until [PacketRate] has enough packets over enough time to mean something.
      */
-    val packetsPerHour: Float
+    val packetsPerHour: Float?
         get() = PacketRate.perHour(packetCount, firstPacketAtMillis, lastPacketAtMillis)
 }
