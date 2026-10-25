@@ -48,6 +48,11 @@ class NodeDirectory(private val time: TimeSource) {
     // node file's knowledge survives both; only [clearAll] drops it.
     private val loadedNodes = HashMap<Int, NodeRecord>()
     private val annotations = HashMap<Int, NodeAnnotations>()
+
+    // Bookmarks made on relay graphs, by relay byte. Not tied to any node: a byte can match
+    // several, and the owner marks where the signal was good before deciding which it is.
+    // Kept with the annotations - saved and loaded with the node file, dropped by [clearAll].
+    private val relayWatchPoints = HashMap<Int, List<String>>()
     private val loadedTelemetry = HashMap<Int, TelemetryRecord>()
 
     /**
@@ -202,8 +207,11 @@ class NodeDirectory(private val time: TimeSource) {
      * Nothing here touches [nodes], [nodesFromAir], [positions] or [telemetryRecords],
      * and no statistic: this is the whole reason a load cannot disturb a measurement.
      */
-    fun applyLoaded(entries: List<NodeFileEntry>) {
+    fun applyLoaded(entries: List<NodeFileEntry>, relayMarks: Map<Int, List<String>> = emptyMap()) {
         val atMillis = time.nowMillis()
+        // Replaced per byte, as a node's annotations are: the file's list for a byte is the
+        // owner's whole list for it. A byte the file does not mention is left alone.
+        relayMarks.forEach { (relayByte, points) -> setRelayWatchPoints(relayByte, points) }
         for (entry in entries) {
             val num = entry.record.num
             annotations[num] = entry.annotations
@@ -291,6 +299,14 @@ class NodeDirectory(private val time: TimeSource) {
         val current = annotations[nodeNum] ?: NodeAnnotations(source)
         annotations[nodeNum] = current.copy(watchPoints = rawPoints)
     }
+
+    /** Replaces the bookmarks of one relay byte; an empty list forgets the byte. */
+    fun setRelayWatchPoints(relayByte: Int, rawPoints: List<String>) {
+        if (rawPoints.isEmpty()) relayWatchPoints.remove(relayByte) else relayWatchPoints[relayByte] = rawPoints
+    }
+
+    /** Every relay byte's bookmarks, as the node file stores them. */
+    fun exportRelayWatchPoints(): Map<Int, List<String>> = HashMap(relayWatchPoints)
 
     fun setLocalNodeNum(num: Int) {
         localNodeNum = num
@@ -391,6 +407,7 @@ class NodeDirectory(private val time: TimeSource) {
         telemetryRecords.clear()
         loadedNodes.clear()
         annotations.clear()
+        relayWatchPoints.clear()
         loadedTelemetry.clear()
         localNodeNum = null
         loadedAtMillis = null
@@ -425,6 +442,7 @@ class NodeDirectory(private val time: TimeSource) {
         loadedNodes = HashMap(loadedNodes),
         annotations = HashMap(annotations),
         loadedTelemetry = HashMap(loadedTelemetry),
+        relayWatchPoints = HashMap(relayWatchPoints),
     )
 
     /**

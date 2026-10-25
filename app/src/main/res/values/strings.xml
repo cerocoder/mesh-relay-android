@@ -192,7 +192,6 @@
     <string name="graph_marks">Marks</string>
     <string name="graph_marks_title">Marks</string>
     <string name="graph_watch_add">Add bookmark</string>
-    <string name="graph_watch_add_needs_node">Select a candidate node to add a bookmark</string>
     <string name="graph_watch_remove">Remove bookmark</string>
     <string name="graph_watch_remove_body">Remove the bookmark made at %1$s?</string>
     <string name="graph_watch_info">Bookmark info</string>

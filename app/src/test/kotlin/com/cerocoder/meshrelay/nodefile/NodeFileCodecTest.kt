@@ -149,4 +149,38 @@ class NodeFileCodecTest {
         assertEquals("!1234abcd", json.getJSONArray("skipped_nodes").getString(0))
         assertTrue(codec.decode(json.toString()).file.skippedNodes == setOf(0x1234abcd))
     }
+
+    @Test
+    fun `relay bookmarks round trip under their relay byte`() {
+        val marks = mapOf(
+            0x2a to listOf("""{"at_millis":1,"rssi":-70.0,"snr":5.0,"note":"a"}"""),
+            0x9c to listOf("""{"at_millis":2,"rssi":-90.0,"snr":-3.0,"note":""}""", """{"at_millis":3,"rssi":-80.0,"snr":0.0,"note":"b"}"""),
+        )
+        val original = NodeFile(emptyList(), emptySet(), marks)
+
+        val json = JSONObject(codec.encode(original))
+        val decoded = codec.decode(json.toString()).file
+
+        assertEquals("0x2a", json.getJSONArray("relay_watch_points").getJSONObject(0).getString("relay_byte"))
+        assertEquals(marks.keys, decoded.relayWatchPoints.keys)
+        assertEquals(2, decoded.relayWatchPoints.getValue(0x9c).size)
+        assertEquals(
+            JSONObject(marks.getValue(0x2a).single()).toString(),
+            JSONObject(decoded.relayWatchPoints.getValue(0x2a).single()).toString(),
+        )
+    }
+
+    @Test
+    fun `a file with no relay bookmarks has no relay section`() {
+        assertTrue(!JSONObject(codec.encode(fileOf(full))).has("relay_watch_points"))
+    }
+
+    @Test
+    fun `a relay section with an unreadable byte keeps the rest`() {
+        val text = """{"version":1,"nodes":[],"relay_watch_points":[
+            {"relay_byte":"zz","watch_points":[{"at_millis":1}]},
+            {"relay_byte":"0x2a","watch_points":[{"at_millis":2}]}]}"""
+
+        assertEquals(setOf(0x2a), codec.decode(text).file.relayWatchPoints.keys)
+    }
 }

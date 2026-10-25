@@ -372,4 +372,22 @@ class NodeDirectoryLoadTest {
 
         assertEquals(listOf("""{"a":1}"""), snapshot().annotations(RADIO_NODE)!!.watchPoints)
     }
+
+    @Test
+    fun `relay bookmarks are kept per byte, replaced by a load, and dropped by clearAll`() {
+        directory.setRelayWatchPoints(0x2a, listOf("""{"a":1}"""))
+        directory.setRelayWatchPoints(0x9c, listOf("""{"a":2}"""))
+
+        directory.applyLoaded(emptyList(), mapOf(0x2a to listOf("""{"a":3}""")))
+
+        assertEquals(listOf("""{"a":3}"""), snapshot().relayWatchPoints(0x2a))
+        assertEquals(listOf("""{"a":2}"""), snapshot().relayWatchPoints(0x9c))
+        assertEquals(mapOf(0x2a to listOf("""{"a":3}"""), 0x9c to listOf("""{"a":2}""")), directory.exportRelayWatchPoints())
+
+        directory.setRelayWatchPoints(0x9c, emptyList())
+        assertTrue(snapshot().relayWatchPoints(0x9c).isEmpty())
+
+        directory.clearAll()
+        assertTrue(snapshot().relayWatchPoints(0x2a).isEmpty())
+    }
 }

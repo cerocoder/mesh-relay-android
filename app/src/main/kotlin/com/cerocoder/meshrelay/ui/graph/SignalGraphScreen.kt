@@ -231,15 +231,14 @@ fun SignalGraphScreen(
     onBack: () -> Unit,
     modifier: Modifier = Modifier,
     /**
-     * The node a bookmark belongs to when this graph shows a neighbour; null for a relay,
-     * whose bookmarks go to the selected candidate instead (or the only one, when a
-     * relay byte has just one).
+     * Every bookmark of this graph's subject. Whose they are is the caller's business - a
+     * relay graph's belong to the relay byte, whichever candidate is selected, and a
+     * neighbour graph's to that neighbour - which is why this screen cannot depend on it.
+     * Read live: Freeze holds the drawing, not the owner's marks.
      */
-    subjectNodeNum: Int? = null,
-    /** Every bookmark held for a node, oldest first. Read live: Freeze holds the drawing, not the owner's marks. */
-    watchPointsOf: (nodeNum: Int) -> List<WatchPoint> = { emptyList() },
-    /** Replaces a node's whole bookmark list; the caller stores it. */
-    onSetWatchPoints: (nodeNum: Int, points: List<WatchPoint>) -> Unit = { _, _ -> },
+    watchPoints: List<WatchPoint> = emptyList(),
+    /** Replaces the subject's whole bookmark list; the caller stores it. */
+    onSetWatchPoints: (points: List<WatchPoint>) -> Unit = {},
 ) {
     // Both survive a rotation. Freeze especially: a rotation must not silently
     // resume a chart the reader deliberately stopped.
@@ -433,10 +432,6 @@ fun SignalGraphScreen(
             // KDoc for why the parameter alone cannot be trusted once Freeze
             // is on.
             val selectedCandidate = frame.candidates.firstOrNull { it.nodeNum == selected }
-            // Whose bookmarks these are: a neighbour's own, or for a relay the selected
-            // candidate's - a relay byte is not a node, so it cannot hold one itself.
-            val watchNodeNum = subjectNodeNum ?: (selectedCandidate ?: frame.candidates.singleOrNull())?.nodeNum
-            val watchPoints = watchNodeNum?.let(watchPointsOf).orEmpty()
             val watchedTimes = remember(watchPoints) { watchPoints.mapTo(HashSet()) { it.atMillis } }
             val markRows = remember(shown, watchedTimes) { ChartGeometry.markRows(shown, watchedTimes) }
 
@@ -461,11 +456,11 @@ fun SignalGraphScreen(
             // A sheet left open when its last bookmark is removed must not reopen by itself
             // the next time one is added.
             LaunchedEffect(marksAvailable) { if (!marksAvailable) marksOpen = false }
-            if (marksOpen && watchNodeNum != null && marksAvailable) {
+            if (marksOpen && marksAvailable) {
                 MarksSheet(
                     points = watchPoints,
                     locale = locale,
-                    onChange = { onSetWatchPoints(watchNodeNum, it) },
+                    onChange = onSetWatchPoints,
                     onDismiss = { marksOpen = false },
                 )
             }
@@ -715,10 +710,7 @@ fun SignalGraphScreen(
                             viewportPx = viewportPx,
                             locale = locale,
                             watchPoints = watchPoints,
-                            canWatch = watchNodeNum != null,
-                            onWatchPointsChange = { points ->
-                                watchNodeNum?.let { onSetWatchPoints(it, points) }
-                            },
+                            onWatchPointsChange = onSetWatchPoints,
                         )
                     }
                 }
@@ -875,7 +867,6 @@ private fun BoxScope.Crosshair(
     viewportPx: Float,
     locale: Locale,
     watchPoints: List<WatchPoint>,
-    canWatch: Boolean,
     onWatchPointsChange: (List<WatchPoint>) -> Unit,
 ) {
     val row = ChartGeometry.rowAtClamped(touchY, scrollPx, pxPerSample, series.size)
@@ -1003,14 +994,11 @@ private fun BoxScope.Crosshair(
                             .sortedBy { it.atMillis },
                     )
                 },
-                enabled = canWatch,
                 modifier = Modifier.size(GlobeSize),
             ) {
                 Icon(
                     painter = painterResource(R.drawable.ic_watch_add),
-                    contentDescription = stringResource(
-                        if (canWatch) R.string.graph_watch_add else R.string.graph_watch_add_needs_node,
-                    ),
+                    contentDescription = stringResource(R.string.graph_watch_add),
                 )
             }
         } else {

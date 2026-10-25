@@ -62,6 +62,7 @@ class MeshStatsEngine(
         data class SetSort(val mode: SortMode) : Command
         data class SetSkipped(val skipped: Set<Int>) : Command
         data class SetWatchPoints(val nodeNum: Int, val rawPoints: List<String>) : Command
+        data class SetRelayWatchPoints(val relayByte: Int, val rawPoints: List<String>) : Command
         data class SetPositionMode(val mode: PositionMode) : Command
         data class SetPhoneFix(val fix: StampedPosition?) : Command
         data class WatchSeries(val key: SeriesKey?) : Command
@@ -315,6 +316,11 @@ class MeshStatsEngine(
     /** Clears [nodeFileResult], so a stale file is never written twice. */
     fun nodeFileConsumed() { _nodeFileResult.value = null }
 
+    /** Replaces one relay byte's bookmarks; see [NodeDirectory.setRelayWatchPoints]. */
+    fun setRelayWatchPoints(relayByte: Int, rawPoints: List<String>) {
+        commands.trySend(Command.SetRelayWatchPoints(relayByte, rawPoints))
+    }
+
     /** Replaces one node's bookmarks; see [NodeDirectory.setWatchPoints]. */
     fun setWatchPoints(nodeNum: Int, rawPoints: List<String>) { commands.trySend(Command.SetWatchPoints(nodeNum, rawPoints)) }
 
@@ -361,10 +367,11 @@ class MeshStatsEngine(
                         snr = stats.snr.avg.takeIf { stats.snr.hasData },
                     )
                 }
-                _nodeFileResult.value = NodeFile(directory.exportEntries(averages), skipped)
+                _nodeFileResult.value = NodeFile(directory.exportEntries(averages), skipped, directory.exportRelayWatchPoints())
             }
             is Command.SetWatchPoints -> directory.setWatchPoints(command.nodeNum, command.rawPoints)
-            is Command.LoadNodeFile -> directory.applyLoaded(command.file.entries)
+            is Command.SetRelayWatchPoints -> directory.setRelayWatchPoints(command.relayByte, command.rawPoints)
+            is Command.LoadNodeFile -> directory.applyLoaded(command.file.entries, command.file.relayWatchPoints)
             Command.Reset -> resetStatistics()
             Command.ResetForNewNode -> {
                 resetStatistics()

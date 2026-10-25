@@ -32,7 +32,9 @@ class NodeDirectorySnapshot(
     loadedNodes: Map<Int, NodeRecord> = emptyMap(),
     annotations: Map<Int, NodeAnnotations> = emptyMap(),
     loadedTelemetry: Map<Int, TelemetryRecord> = emptyMap(),
+    relayWatchPoints: Map<Int, List<String>> = emptyMap(),
 ) {
+    private val relayWatchPointsByByte = relayWatchPoints
     private val loadedByNode = loadedNodes
     private val annotationsByNode = annotations
     private val loadedTelemetryByNode = loadedTelemetry
@@ -92,6 +94,9 @@ class NodeDirectorySnapshot(
 
     /** What the owner knows about [nodeNum] beyond what the mesh says, or null. */
     fun annotations(nodeNum: Int): NodeAnnotations? = annotationsByNode[nodeNum]
+
+    /** The raw JSON text of every bookmark made on [relayByte]'s graph, oldest first as stored. */
+    fun relayWatchPoints(relayByte: Int): List<String> = relayWatchPointsByByte[relayByte].orEmpty()
 
     /** The node's short name, or `""` when neither store has named it. */
     fun shortName(nodeNum: Int): String = identity(nodeNum).shortName ?: ""

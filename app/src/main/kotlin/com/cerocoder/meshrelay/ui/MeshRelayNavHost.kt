@@ -50,7 +50,6 @@ import com.cerocoder.meshrelay.stats.model.RelayCandidates
 import com.cerocoder.meshrelay.stats.model.RelayStats
 import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
-import com.cerocoder.meshrelay.stats.model.WatchPoint
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 import com.cerocoder.meshrelay.transport.DeviceListEntry
 import com.cerocoder.meshrelay.ui.detail.candidateRecord
@@ -468,15 +467,6 @@ private fun GraphDestination(
         onDispose { container.engine.watchSeries(null) }
     }
 
-    // Bookmarks live in the node's annotations, as the raw JSON text the node file
-    // carries; this is the one place they are decoded and encoded for the screen.
-    val watchPointsOf: (Int) -> List<WatchPoint> = { nodeNum ->
-        snapshot.directory.annotations(nodeNum)?.watchPoints.orEmpty().mapNotNull(WatchPointJson::decode)
-    }
-    val onSetWatchPoints: (Int, List<WatchPoint>) -> Unit = { nodeNum, points ->
-        container.engine.setWatchPoints(nodeNum, points.map(WatchPointJson::encode))
-    }
-
     // A subject cleared by a reset while the chart is open falls back to an
     // all-zero record rather than crashing, exactly as DetailScreen's own header
     // resolution already allows for.
@@ -532,8 +522,15 @@ private fun GraphDestination(
                 onSkipCandidate = { nodeNum -> container.skipRelayNode(nodeNum) },
                 onBack = onBack,
                 modifier = modifier,
-                watchPointsOf = watchPointsOf,
-                onSetWatchPoints = onSetWatchPoints,
+                // Bookmarks belong to the relay byte, not to whichever candidate is
+                // selected: the owner marks where the signal was good before deciding
+                // which node is behind the byte. Stored as the raw JSON text the node
+                // file carries; this is where it is decoded and encoded.
+                watchPoints = snapshot.directory.relayWatchPoints(subject.relayByte)
+                    .mapNotNull(WatchPointJson::decode),
+                onSetWatchPoints = { points ->
+                    container.engine.setRelayWatchPoints(subject.relayByte, points.map(WatchPointJson::encode))
+                },
             )
         }
 
@@ -558,9 +555,12 @@ private fun GraphDestination(
                 onSkipCandidate = {},
                 onBack = onBack,
                 modifier = modifier,
-                subjectNodeNum = subject.nodeNum,
-                watchPointsOf = watchPointsOf,
-                onSetWatchPoints = onSetWatchPoints,
+                // A neighbour is a node, so its bookmarks are that node's own.
+                watchPoints = snapshot.directory.annotations(subject.nodeNum)?.watchPoints.orEmpty()
+                    .mapNotNull(WatchPointJson::decode),
+                onSetWatchPoints = { points ->
+                    container.engine.setWatchPoints(subject.nodeNum, points.map(WatchPointJson::encode))
+                },
             )
         }
     }
