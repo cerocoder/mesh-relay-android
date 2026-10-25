@@ -39,6 +39,10 @@ data class CandidateSource(
      * has no packets this session; the first live packet replaces it.
      */
     val loadedRssiAvg: Float? = null,
+    /** Direct SNR this session; [SignalStats.EMPTY] when never heard. */
+    val directSnr: SignalStats = SignalStats.EMPTY,
+    /** The SNR twin of [loadedRssiAvg]: a node-file fallback until the first live packet. */
+    val loadedSnrAvg: Float? = null,
 )
 
 /** One candidate, judged. */
@@ -55,6 +59,8 @@ data class RelayCandidate(
     val cannotForward: Boolean,
     /** True when [directRssiAvg] came from a node file, not from packets heard this session. */
     val directFromFile: Boolean = false,
+    /** Average direct SNR, live or from a node file on the same terms as [directRssiAvg]. */
+    val directSnrAvg: Float? = null,
 )
 
 object RelayCandidates {
@@ -79,6 +85,7 @@ object RelayCandidates {
     private fun evaluate(relayRssiAvg: Float?, source: CandidateSource): RelayCandidate {
         val liveAvg = source.directRssi.avg.takeIf { source.directRssi.hasData }
         val directAvg = liveAvg ?: source.loadedRssiAvg
+        val directSnrAvg = source.directSnr.avg.takeIf { source.directSnr.hasData } ?: source.loadedSnrAvg
         val gap = if (directAvg != null && relayRssiAvg != null) abs(directAvg - relayRssiAvg) else null
         return RelayCandidate(
             nodeNum = source.nodeNum,
@@ -92,6 +99,7 @@ object RelayCandidates {
             hopsAway = source.hopsAway,
             cannotForward = source.role == NON_FORWARDING_ROLE,
             directFromFile = liveAvg == null && source.loadedRssiAvg != null,
+            directSnrAvg = directSnrAvg,
         )
     }
 

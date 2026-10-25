@@ -1,6 +1,8 @@
 package com.cerocoder.meshrelay.ui.graph
 
 import com.cerocoder.meshrelay.stats.SignalScales
+import com.cerocoder.meshrelay.stats.SignalSeriesBuffer
+import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
@@ -369,5 +371,72 @@ class ChartGeometryTest {
         // at -71f, only the `max - min <= 0f` guard can keep this out of HIGH.
         assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(100f, -71f, -71f).offScale)
         assertEquals(ChartGeometry.OffScale.NONE, ChartGeometry.candidateLine(-1000f, -71f, -71f).offScale)
+    }
+
+    // --- bookmarks on the chart ---
+
+    /** Samples at 1000, 2000, ... ms, oldest first, so row 0 is the last one appended. */
+    private fun seriesOf(count: Int): SignalSeries {
+        val buffer = SignalSeriesBuffer()
+        repeat(count) { i -> buffer.append((i + 1) * 1_000L, -90f, 5f, null, 0x11111111) }
+        return buffer.snapshot()
+    }
+
+    @Test
+    fun `mark rows are newest first and skip bookmarks with no sample`() {
+        val series = seriesOf(10)
+
+        val rows = ChartGeometry.markRows(series, setOf(2_000L, 9_000L, 123L))
+
+        assertEquals(listOf(ChartGeometry.MarkRow(1, 9_000L), ChartGeometry.MarkRow(8, 2_000L)), rows)
+    }
+
+    @Test
+    fun `no bookmarks means no mark rows`() {
+        assertTrue(ChartGeometry.markRows(seriesOf(10), emptySet()).isEmpty())
+    }
+
+    private val marks = listOf(
+        ChartGeometry.MarkRow(1, 9_000L),
+        ChartGeometry.MarkRow(5, 5_000L),
+        ChartGeometry.MarkRow(8, 2_000L),
+    )
+
+    @Test
+    fun `the carousel starts at the newest bookmark`() {
+        assertEquals(marks[0], ChartGeometry.nextMark(marks, null))
+    }
+
+    @Test
+    fun `the carousel steps to the next older bookmark`() {
+        assertEquals(marks[1], ChartGeometry.nextMark(marks, 9_000L))
+        assertEquals(marks[2], ChartGeometry.nextMark(marks, 5_000L))
+    }
+
+    @Test
+    fun `the carousel wraps from the oldest back to the newest`() {
+        assertEquals(marks[0], ChartGeometry.nextMark(marks, 2_000L))
+    }
+
+    @Test
+    fun `the carousel continues sensibly from a bookmark that has been removed`() {
+        assertEquals(marks[2], ChartGeometry.nextMark(marks, 4_000L))
+    }
+
+    @Test
+    fun `the carousel has nowhere to go without bookmarks`() {
+        assertEquals(null, ChartGeometry.nextMark(emptyList(), 5_000L))
+    }
+
+    @Test
+    fun `a row already on screen does not scroll`() {
+        assertEquals(100f, ChartGeometry.scrollToShow(row = 120, scrollPx = 100f, viewportPx = 50f, size = 1000, pxPerSample = 1f), 0f)
+    }
+
+    @Test
+    fun `a row off screen is centred and clamped`() {
+        assertEquals(475f, ChartGeometry.scrollToShow(row = 500, scrollPx = 0f, viewportPx = 50f, size = 1000, pxPerSample = 1f), 0f)
+        assertEquals(0f, ChartGeometry.scrollToShow(row = 3, scrollPx = 300f, viewportPx = 50f, size = 1000, pxPerSample = 1f), 0f)
+        assertEquals(950f, ChartGeometry.scrollToShow(row = 999, scrollPx = 0f, viewportPx = 50f, size = 1000, pxPerSample = 1f), 0f)
     }
 }

@@ -39,7 +39,22 @@ enum class PositionOrigin(val code: Byte) {
  * node broadcasting lat/lon with no altitude field at all, is a real position
  * with no altitude - see [PositionHistory.newestWithCoordinates]'s own KDoc.
  */
-data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOrigin, val altitude: Int? = null) {
+data class StampedPosition(
+    val latI: Int,
+    val lonI: Int,
+    val origin: PositionOrigin,
+    val altitude: Int? = null,
+    /** True when [altitude] is an earlier value carried forward because this fix gave no good one. */
+    val altitudeHeld: Boolean = false,
+) {
+
+    val altitudeState: AltitudeState
+        get() = when {
+            altitude == null -> AltitudeState.MISSING
+            altitudeHeld -> AltitudeState.HELD
+            else -> AltitudeState.FRESH
+        }
+
 
     /** Multiplied in `Double`, the conversion [PositionReport] already documents. */
     val latitude: Double get() = latI * COORD_SCALE
@@ -71,12 +86,22 @@ data class StampedPosition(val latI: Int, val lonI: Int, val origin: PositionOri
          * nonsense value from a broken provider clamps instead of appearing on the
          * other side of the world.
          */
-        fun fromDegrees(lat: Double, lon: Double, origin: PositionOrigin, altitude: Int? = null): StampedPosition =
+        fun fromDegrees(
+            lat: Double,
+            lon: Double,
+            origin: PositionOrigin,
+            altitude: Int? = null,
+            altitudeHeld: Boolean = false,
+        ): StampedPosition =
             StampedPosition(
                 latI = (lat / COORD_SCALE).roundToInt(),
                 lonI = (lon / COORD_SCALE).roundToInt(),
                 origin = origin,
                 altitude = altitude,
+                altitudeHeld = altitudeHeld,
             )
     }
 }
+
+/** How trustworthy the altitude on a position is right now; the status strip colours by it. */
+enum class AltitudeState { FRESH, HELD, MISSING }

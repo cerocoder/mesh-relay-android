@@ -411,7 +411,7 @@ private fun MeshRelayContent(
             // work on top of that - neither belongs on the UI thread.
             val fileName = withContext(Dispatchers.Default) {
                 val rows = ExportRows.build(seriesByKey, exportSnapshot)
-                container.pendingExportText = CsvWriter.write(rows)
+                container.pendingExportText = CsvWriter.write(rows, kind)
                 ExportFileNames.suggest(kind, keys, System.currentTimeMillis())
             }
             exportLauncher.launch(fileName)

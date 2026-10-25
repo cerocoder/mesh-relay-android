@@ -16,6 +16,11 @@ data class NodeFileEntry(
 data class NodeFile(
     val entries: List<NodeFileEntry>,
     val skippedNodes: Set<Int>,
+    /**
+     * Bookmarks made on a relay graph, by relay byte, each the raw JSON text of one bookmark.
+     * A relay byte is not a node, so these are not in any node's annotations.
+     */
+    val relayWatchPoints: Map<Int, List<String>> = emptyMap(),
 )
 
 /** A node's average direct signal this session; null where it has no direct packets. */

@@ -272,14 +272,7 @@ private fun resolveHeader(subject: DetailSubject, snapshot: StatsSnapshot): Deta
             titlePrimary = stringResource(R.string.detail_neighbour_title, NodeId.format(subject.nodeNum)),
             titleSecondary = snapshot.directory.shortName(subject.nodeNum),
             totalPackets = neighbour.packetCount,
-            // NeighbourStats carries no firstPacketAtMillis the way RelayStats
-            // does, so there is no honest duration to divide its packetCount
-            // by - see DetailSummary's own KDoc for why this stays null rather
-            // than an approximation built from the signal histories' sample
-            // timestamps (capped, and skipped for any packet with no decodable
-            // signal), which would misrepresent a guess as the exact figure a
-            // relay's rate is.
-            packetsPerHour = null,
+            packetsPerHour = neighbour.packetsPerHour,
             skippedCount = 0,
             hopsAway = snapshot.directory.node(subject.nodeNum)?.hopsAway,
             snr = neighbour.snr,

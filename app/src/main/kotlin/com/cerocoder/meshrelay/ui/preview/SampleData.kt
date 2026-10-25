@@ -42,7 +42,7 @@ import com.cerocoder.meshrelay.stats.model.TelemetryRecord
  *  3. No matching node at all: [RELAY_NO_MATCH_BYTE].
  *  4. One skipped candidate (non-empty skipped list): [RELAY_SKIPPED_CANDIDATE_BYTE],
  *     whose only candidate [NUM_ILLESCAS_MUDO] is in `snapshot.skippedRelayNodes`.
- *  5. Heard once (`packetsPerHour == 0`, single-point gauge): [relayHeardOnce].
+ *  5. Heard once (`packetsPerHour == null`, single-point gauge): [relayHeardOnce].
  *  6. Never heard (age reads "Never"): [relayNeverHeard] - `packetCount` and
  *     `lastPacketAtMillis` at their zero defaults.
  *  7. Position with altitude / with position but no altitude / with none:
@@ -484,7 +484,7 @@ object SampleData {
         lastPacketAtMillis = NOW - 20_000L,
     )
 
-    /** Heard exactly once: packetsPerHour reads 0 and the gauge has nothing to span. */
+    /** Heard exactly once: packetsPerHour is null and the gauge has nothing to span. */
     private val relayHeardOnce = RelayStats(
         relayByte = RELAY_HEARD_ONCE_BYTE,
         nodeName = "SIERRA-NORTE-TEMP-07", // == directory.uniqueRelayName(RELAY_HEARD_ONCE_BYTE)

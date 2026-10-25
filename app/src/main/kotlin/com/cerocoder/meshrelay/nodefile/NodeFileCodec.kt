@@ -46,6 +46,21 @@ object OrgJsonNodeFileCodec : NodeFileCodec {
         root.put("version", VERSION)
         root.put("nodes", JSONArray().also { array -> file.entries.forEach { array.put(encodeEntry(it)) } })
         root.put("skipped_nodes", JSONArray().also { array -> file.skippedNodes.sorted().forEach { array.put(NodeId.format(it)) } })
+        if (file.relayWatchPoints.isNotEmpty()) {
+            // Only written when there is something to say, so a file with no relay bookmarks
+            // is byte for byte what version 1 always wrote.
+            root.put("relay_watch_points", JSONArray().also { array ->
+                file.relayWatchPoints.toSortedMap().forEach { (relayByte, points) ->
+                    array.put(
+                        JSONObject()
+                            .put("relay_byte", "0x%02x".format(relayByte))
+                            .put("watch_points", JSONArray().also { out ->
+                                points.forEach { raw -> runCatching { JSONTokener(raw).nextValue() }.getOrNull()?.let { out.put(it) } }
+                            }),
+                    )
+                }
+            })
+        }
         return root.toString(2)
     }
 
@@ -78,8 +93,29 @@ object OrgJsonNodeFileCodec : NodeFileCodec {
                 NodeId.parse(array.optString(index, ""))?.let { skippedNodes.add(it) }
             }
         }
-        return DecodedNodeFile(NodeFile(entries, skippedNodes), skipped)
+
+        val relayWatchPoints = LinkedHashMap<Int, List<String>>()
+        root.optJSONArray("relay_watch_points")?.let { array ->
+            for (index in 0 until array.length()) {
+                val item = array.optJSONObject(index) ?: continue
+                // A byte that does not parse is dropped, like an unparseable skipped id.
+                val relayByte = parseRelayByte(item.optString("relay_byte", "")) ?: continue
+                val points = ArrayList<String>()
+                item.optJSONArray("watch_points")?.let { list ->
+                    for (i in 0 until list.length()) {
+                        val element = list.get(i)
+                        points.add(if (element is String) JSONObject.quote(element) else element.toString())
+                    }
+                }
+                if (points.isNotEmpty()) relayWatchPoints[relayByte] = points
+            }
+        }
+        return DecodedNodeFile(NodeFile(entries, skippedNodes, relayWatchPoints), skipped)
     }
+
+    /** `0x2a` or `2a`, one byte; null for anything else. */
+    private fun parseRelayByte(text: String): Int? =
+        text.removePrefix("0x").removePrefix("0X").toIntOrNull(16)?.takeIf { it in 0..0xFF }
 
     private fun encodeEntry(entry: NodeFileEntry): JSONObject {
         val record = entry.record

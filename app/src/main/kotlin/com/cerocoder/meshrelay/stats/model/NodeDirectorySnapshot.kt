@@ -32,7 +32,9 @@ class NodeDirectorySnapshot(
     loadedNodes: Map<Int, NodeRecord> = emptyMap(),
     annotations: Map<Int, NodeAnnotations> = emptyMap(),
     loadedTelemetry: Map<Int, TelemetryRecord> = emptyMap(),
+    relayWatchPoints: Map<Int, List<String>> = emptyMap(),
 ) {
+    private val relayWatchPointsByByte = relayWatchPoints
     private val loadedByNode = loadedNodes
     private val annotationsByNode = annotations
     private val loadedTelemetryByNode = loadedTelemetry
@@ -62,6 +64,9 @@ class NodeDirectorySnapshot(
      */
     val airCount: Int get() = airNodes.size
 
+    /** How many nodes a node file has supplied; independent of the radio's [count]. */
+    val loadedCount: Int get() = loadedByNode.size
+
     /**
      * The radio's record for [nodeNum], with every field it leaves null filled from
      * what a loaded file said, field by field - or the loaded record alone when the
@@ -89,6 +94,9 @@ class NodeDirectorySnapshot(
 
     /** What the owner knows about [nodeNum] beyond what the mesh says, or null. */
     fun annotations(nodeNum: Int): NodeAnnotations? = annotationsByNode[nodeNum]
+
+    /** The raw JSON text of every bookmark made on [relayByte]'s graph, oldest first as stored. */
+    fun relayWatchPoints(relayByte: Int): List<String> = relayWatchPointsByByte[relayByte].orEmpty()
 
     /** The node's short name, or `""` when neither store has named it. */
     fun shortName(nodeNum: Int): String = identity(nodeNum).shortName ?: ""

@@ -6,11 +6,12 @@ import android.location.Location
 import android.location.LocationListener
 import android.location.LocationManager
 import android.os.Bundle
+import android.os.Build
 import android.os.Looper
+import android.os.SystemClock
 import android.util.Log
 import com.cerocoder.meshrelay.stats.model.PositionOrigin
 import com.cerocoder.meshrelay.stats.model.StampedPosition
-import kotlin.math.roundToInt
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -36,6 +37,9 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
 
     private var listening = false
 
+    // Touched only from onLocationChanged, which the main looper serialises.
+    private val altitudeFilter = AltitudeFilter()
+
     /**
      * An explicit object, not a SAM conversion.
      *
@@ -48,12 +52,17 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
      */
     private val listener = object : LocationListener {
         override fun onLocationChanged(location: Location) {
+            val now = SystemClock.elapsedRealtime()
+            // Only the GNSS provider knows a height; the network provider's is a
+            // guess and would drag the filter around.
+            val kept = location.provider == LocationManager.GPS_PROVIDER && offerAltitude(location, now)
+            val altitude = altitudeFilter.valueAt(now)
             _fix.value = StampedPosition.fromDegrees(
                 location.latitude,
                 location.longitude,
                 PositionOrigin.PHONE,
-                // hasAltitude() guards this: not every provider reports one on every fix.
-                altitude = location.altitude.roundToInt().takeIf { location.hasAltitude() },
+                altitude = altitude,
+                altitudeHeld = altitude != null && !kept,
             )
         }
 
@@ -63,6 +72,22 @@ class AndroidPhoneLocationSource(context: Context) : PhoneLocationSource {
         override fun onProviderEnabled(provider: String) = Unit
 
         override fun onProviderDisabled(provider: String) = Unit
+    }
+
+    /** Whether this fix gave the filter a measurement it kept. */
+    private fun offerAltitude(location: Location, nowMillis: Long): Boolean {
+        // Height above mean sea level where the platform has it (API 34): the plain
+        // altitude is ellipsoid height on some fixes and sea level on others, about
+        // fifty metres apart over Madrid.
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE && location.hasMslAltitude()) {
+            val accuracy = if (location.hasMslAltitudeAccuracy()) location.mslAltitudeAccuracyMeters else null
+            return altitudeFilter.accept(nowMillis, location.mslAltitudeMeters, accuracy)
+        }
+        if (location.hasAltitude()) {
+            val accuracy = if (location.hasVerticalAccuracy()) location.verticalAccuracyMeters else null
+            return altitudeFilter.accept(nowMillis, location.altitude, accuracy)
+        }
+        return false
     }
 
     // The permission is checked immediately above every call, by availability

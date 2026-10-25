@@ -12,12 +12,16 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.cerocoder.meshrelay.R
-import com.cerocoder.meshrelay.stats.AgeText
-import com.cerocoder.meshrelay.stats.RelativeAge
 import com.cerocoder.meshrelay.stats.SortMode
+import com.cerocoder.meshrelay.stats.model.AltitudeState
 import com.cerocoder.meshrelay.stats.model.StatsSnapshot
 
 /** One counter in the strip: its label and the number the snapshot reports for it. */
@@ -50,12 +54,10 @@ data class StatusCount(@StringRes val label: Int, val value: Int)
  * than a phone's width, and F-3 was that shape wrapping badly rather than at all.
  *
  * Every number here comes straight off [StatsSnapshot] with no arithmetic of its
- * own; the one derived value ("how long ago was the database loaded") is produced
- * by [AgeText.relativeTo], the same tested function [AgeLabel] uses, so the load
- * time reads as a relative age ("5m ago") rather than the original's absolute
- * timestamp - there is no absolute-date-format string resource to port that
- * literally, and every other age on these screens is already relative to the same
- * clock.
+ * own. The right end of the first line is `LOAD(n)`, the number of nodes a node
+ * file supplied, where the original showed when the database was loaded. The
+ * altitude is coloured by how it was got: green when the latest fix gave a good
+ * measurement, yellow when an earlier one is being held, red when there is none.
  */
 @Composable
 fun StatusStrip(
@@ -64,22 +66,30 @@ fun StatusStrip(
     sortMode: SortMode?,
     modifier: Modifier = Modifier,
 ) {
-    val nowMillis = LocalRelativeClock.current
-
     Column(
         modifier = modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 4.dp),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
+        val altitudeField = stringResource(R.string.format_altitude_field, myAltitudeText(snapshot))
+        val header = stringResource(
+            R.string.format_db_header,
+            snapshot.directory.count,
+            snapshot.directory.airCount,
+            altitudeField,
+            snapshot.directory.loadedCount,
+        )
+        val altitudeColor = altitudeColor(snapshot.observer?.altitudeState ?: AltitudeState.MISSING)
         Text(
-            text = stringResource(
-                R.string.format_db_header,
-                snapshot.directory.count,
-                snapshot.directory.airCount,
-                myAltitudeText(snapshot),
-                dbLoadTimeText(snapshot.directory.loadedAtMillis, nowMillis),
-            ),
+            text = buildAnnotatedString {
+                append(header)
+                // The field is a whole substituted argument, so it is found as a whole.
+                val start = header.indexOf(altitudeField)
+                if (start >= 0) {
+                    addStyle(SpanStyle(color = altitudeColor, fontWeight = FontWeight.Bold), start, start + altitudeField.length)
+                }
+            },
             style = MaterialTheme.typography.bodySmall,
         )
 
@@ -145,19 +155,15 @@ private fun myAltitudeText(snapshot: StatsSnapshot): String {
 }
 
 /**
- * How long ago the node database was (re)loaded, or [R.string.common_not_available]
- * before it ever has been. Mirrors the branch [AgeLabel] renders for a packet's
- * age: the subtraction and the never/seconds/minutes/hours split both live in
- * [AgeText.relativeTo], already unit tested there. This function only resolves the
- * matching string resource for each branch.
+ * Light on a dark background and deep on a light one, chosen by the background's
+ * luminance so the green, yellow and red each stay readable in both themes.
  */
 @Composable
-private fun dbLoadTimeText(loadedAtMillis: Long?, nowMillis: Long): String {
-    if (loadedAtMillis == null) return stringResource(R.string.common_not_available)
-    return when (val age = AgeText.relativeTo(nowMillis, loadedAtMillis)) {
-        is RelativeAge.Seconds -> stringResource(R.string.format_ago_seconds, age.seconds)
-        is RelativeAge.Minutes -> stringResource(R.string.format_ago_minutes, age.minutes, age.seconds)
-        is RelativeAge.Hours -> stringResource(R.string.format_ago_hours, age.hours, age.minutes)
-        RelativeAge.Never -> stringResource(R.string.common_never)
+private fun altitudeColor(state: AltitudeState): Color {
+    val dark = MaterialTheme.colorScheme.background.luminance() < 0.5f
+    return when (state) {
+        AltitudeState.FRESH -> if (dark) Color(0xFF81C784) else Color(0xFF2E7D32)
+        AltitudeState.HELD -> if (dark) Color(0xFFFFEB3B) else Color(0xFFB26A00)
+        AltitudeState.MISSING -> if (dark) Color(0xFFFF8A80) else Color(0xFFC62828)
     }
 }

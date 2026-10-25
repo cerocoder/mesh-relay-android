@@ -1,6 +1,7 @@
 package com.cerocoder.meshrelay.ui.graph
 
 import com.cerocoder.meshrelay.stats.SignalScales
+import com.cerocoder.meshrelay.stats.model.SignalSeries
 import com.cerocoder.meshrelay.stats.model.SignalStats
 import kotlin.math.ceil
 import kotlin.math.floor
@@ -142,6 +143,49 @@ object ChartGeometry {
         if (size <= 0) return RowWindow(0, -1)
         val window = displayedRows(scrollPx, viewportPx, size, pxPerSample)
         return if (window.isEmpty) RowWindow(0, size - 1) else window
+    }
+
+    /** One bookmarked measurement as the chart holds it: its row, and the timestamp that identifies it. */
+    data class MarkRow(val row: Int, val atMillis: Long)
+
+    /**
+     * The rows of [series] that carry a bookmark, top of the chart first - so newest first,
+     * which is also the order the long-press carousel walks them in. A bookmark is matched to
+     * a measurement by timestamp; one whose measurement is no longer in the series (loaded
+     * from a file, or evicted by the ring) has no row and is not here.
+     */
+    fun markRows(series: SignalSeries, marked: Set<Long>): List<MarkRow> {
+        if (marked.isEmpty()) return emptyList()
+        val rows = ArrayList<MarkRow>()
+        // Walking the storage newest to oldest is walking the rows downwards.
+        for (index in series.size - 1 downTo 0) {
+            val atMillis = series.atMillis(index)
+            if (atMillis in marked) rows.add(MarkRow(indexOfRow(index, series.size), atMillis))
+        }
+        return rows
+    }
+
+    /**
+     * The bookmark the carousel moves to from the one it last stood on ([afterAtMillis], null
+     * when it has not stood on any): the next older one, or the newest again after the oldest.
+     * Keyed by timestamp rather than row because rows shift as measurements arrive, and a
+     * bookmark the owner has since removed still leaves a sensible place to continue from.
+     * Null only when there are no bookmarks at all.
+     */
+    fun nextMark(marks: List<MarkRow>, afterAtMillis: Long?): MarkRow? {
+        if (marks.isEmpty()) return null
+        if (afterAtMillis == null) return marks.first()
+        return marks.firstOrNull { it.atMillis < afterAtMillis } ?: marks.first()
+    }
+
+    /**
+     * The scroll offset that puts [row] on screen: unchanged when it is already fully inside
+     * the viewport, otherwise centred on it, and clamped like every other offset.
+     */
+    fun scrollToShow(row: Int, scrollPx: Float, viewportPx: Float, size: Int, pxPerSample: Float): Float {
+        val y = yOf(row, scrollPx, pxPerSample)
+        if (y >= 0f && y + pxPerSample <= viewportPx) return scrollPx
+        return clampScroll(row * pxPerSample - viewportPx / 2f, size, viewportPx, pxPerSample)
     }
 
     /** Where this row sits in the viewport, in pixels from its top edge. */

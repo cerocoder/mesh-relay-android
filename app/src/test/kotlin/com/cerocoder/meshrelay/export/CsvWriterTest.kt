@@ -24,19 +24,19 @@ class CsvWriterTest {
 
     @Test
     fun `an empty row list still writes the header`() {
-        assertEquals("$header\n", CsvWriter.write(emptyList()))
+        assertEquals("$header\n", CsvWriter.write(emptyList(), ExportKind.RELAY_DETAIL))
     }
 
     @Test
     fun `one row writes exactly eleven comma-separated fields`() {
-        val text = CsvWriter.write(listOf(row()))
+        val text = CsvWriter.write(listOf(row()), ExportKind.RELAY_DETAIL)
         val dataLine = text.lines()[1]
         assertEquals(11, dataLine.split(",").size)
     }
 
     @Test
     fun `rssi is whole and snr keeps one decimal, matching the app's own single-sample precision`() {
-        val text = CsvWriter.write(listOf(row(rssi = -94f, snr = -7.5f)))
+        val text = CsvWriter.write(listOf(row(rssi = -94f, snr = -7.5f)), ExportKind.RELAY_DETAIL)
         val fields = text.lines()[1].split(",")
         assertEquals("-94", fields[5])
         assertEquals("-7.5", fields[6])
@@ -44,7 +44,7 @@ class CsvWriterTest {
 
     @Test
     fun `coordinates are formatted to seven decimal places`() {
-        val text = CsvWriter.write(listOf(row(observerLat = 40.330012, observerLon = -3.750441)))
+        val text = CsvWriter.write(listOf(row(observerLat = 40.330012, observerLon = -3.750441)), ExportKind.RELAY_DETAIL)
         val fields = text.lines()[1].split(",")
         assertEquals("40.3300120", fields[7])
         assertEquals("-3.7504410", fields[8])
@@ -54,6 +54,7 @@ class CsvWriterTest {
     fun `null observer fields render as blank, not the word null`() {
         val text = CsvWriter.write(
             listOf(row(observerLat = null, observerLon = null, observerAltitudeM = null, observerSource = null)),
+            ExportKind.RELAY_DETAIL,
         )
         val fields = text.lines()[1].split(",")
         assertEquals("", fields[7])
@@ -65,29 +66,29 @@ class CsvWriterTest {
     @Test
     fun `the timestamp is ISO-8601 UTC at seconds precision`() {
         // 2026-09-16T04:00:00Z
-        val text = CsvWriter.write(listOf(row(atMillis = 1_789_531_200_000L)))
+        val text = CsvWriter.write(listOf(row(atMillis = 1_789_531_200_000L)), ExportKind.RELAY_DETAIL)
         assertEquals("2026-09-16T04:00:00Z", text.lines()[1].split(",")[4])
     }
 
     @Test
     fun `a node name containing a comma is quoted`() {
-        val text = CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2")))
+        val text = CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2")), ExportKind.RELAY_DETAIL)
         assertEquals("\"Getafe, Router 2\"", text.lines()[1].split(",", limit = 3).let {
             // Re-join is unnecessary: a correctly quoted comma keeps the field whole,
             // so splitting on "," naively would otherwise have produced 12 pieces.
-            CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2"))).lines()[1]
+            CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2")), ExportKind.RELAY_DETAIL).lines()[1]
         }.let { line -> Regex("\"[^\"]*\"").find(line)!!.value })
     }
 
     @Test
     fun `a node name containing a double quote is escaped by doubling it`() {
-        val text = CsvWriter.write(listOf(row(nodeName = """Node "One"""")))
+        val text = CsvWriter.write(listOf(row(nodeName = """Node "One"""")), ExportKind.RELAY_DETAIL)
         assertEquals("\"Node \"\"One\"\"\"", Regex("\"(?:[^\"]|\"\")*\"").find(text.lines()[1])!!.value)
     }
 
     @Test
     fun `a node name containing a newline is quoted`() {
-        val text = CsvWriter.write(listOf(row(nodeName = "Line one\nLine two")))
+        val text = CsvWriter.write(listOf(row(nodeName = "Line one\nLine two")), ExportKind.RELAY_DETAIL)
         // The embedded newline is preserved literally inside the quotes (RFC 4180
         // allows a quoted field to contain a line break), rather than being escaped
         // away - so it does not vanish. But that also means a newline-naive split
@@ -106,7 +107,7 @@ class CsvWriterTest {
 
     @Test
     fun `a quoted field's own comma does not create an extra column`() {
-        val text = CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2")))
+        val text = CsvWriter.write(listOf(row(nodeName = "Getafe, Router 2")), ExportKind.RELAY_DETAIL)
         val dataLine = text.lines()[1]
         // A naive split on "," would see 12 pieces; a correct CSV reader sees 11.
         assertEquals(11, splitCsvLine(dataLine).size)
@@ -137,7 +138,7 @@ class CsvWriterTest {
         val previous = Locale.getDefault()
         try {
             Locale.setDefault(Locale.forLanguageTag("es-ES"))
-            val text = CsvWriter.write(listOf(row(rssi = -94f, snr = -7.5f, observerLat = 40.330012, observerLon = -3.750441)))
+            val text = CsvWriter.write(listOf(row(rssi = -94f, snr = -7.5f, observerLat = 40.330012, observerLon = -3.750441)), ExportKind.RELAY_DETAIL)
             val fields = text.lines()[1].split(",")
             assertEquals("-94", fields[5])
             assertEquals("-7.5", fields[6])
@@ -153,10 +154,38 @@ class CsvWriterTest {
         val previous = Locale.getDefault()
         try {
             Locale.setDefault(Locale.forLanguageTag("es-ES"))
-            val text = CsvWriter.write(listOf(row()))
+            val text = CsvWriter.write(listOf(row()), ExportKind.RELAY_DETAIL)
             assertEquals(header, text.lines()[0])
         } finally {
             Locale.setDefault(previous)
         }
+    }
+
+    @Test
+    fun `both name columns of a relay file are quoted even without a comma`() {
+        val line = CsvWriter.write(listOf(row()), ExportKind.RELAY_DETAIL).lines()[1]
+        assertEquals(listOf("0x1a", "PQPL1", "!9e75f1a4", "1ce5"), splitCsvLine(line).take(4))
+        assertEquals(true, line.startsWith("0x1a,\"PQPL1\",!9e75f1a4,\"1ce5\","))
+    }
+
+    @Test
+    fun `a neighbour file names the node once, as the neighbour`() {
+        val text = CsvWriter.write(listOf(row(nodeId = "!9e75f1a4", nodeName = "1ce5")), ExportKind.NEIGHBOUR_LIST)
+        val lines = text.lines()
+        assertEquals(
+            "neighbor_id,neighbor_name,timestamp_utc,rssi_dbm,snr_db,observer_lat,observer_lon,observer_altitude_m,observer_source",
+            lines[0],
+        )
+        assertEquals(true, lines[1].startsWith("!9e75f1a4,\"1ce5\","))
+        assertEquals(9, splitCsvLine(lines[1]).size)
+    }
+
+    @Test
+    fun `the neighbour detail export has the same columns as the neighbour list`() {
+        val rows = listOf(row())
+        assertEquals(
+            CsvWriter.write(rows, ExportKind.NEIGHBOUR_LIST),
+            CsvWriter.write(rows, ExportKind.NEIGHBOUR_DETAIL),
+        )
     }
 }

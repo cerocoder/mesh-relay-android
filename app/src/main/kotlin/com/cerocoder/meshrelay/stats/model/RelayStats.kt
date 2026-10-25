@@ -27,17 +27,7 @@ data class RelayStats(
     /** Distinct remote nodes whose packets this relay has forwarded. */
     val knownNodesCount: Int get() = fromNodeStats.size
 
-    /**
-     * Packets per hour over the observed window ([firstPacketAtMillis] to
-     * [lastPacketAtMillis]). Zero before there is a window to measure: with fewer
-     * than two packets, or a non-positive duration, there is nothing to divide by
-     * that would not report an infinite rate for a relay's first packet.
-     */
-    val packetsPerHour: Float
-        get() {
-            if (packetCount < 2) return 0f
-            val durationSeconds = (lastPacketAtMillis - firstPacketAtMillis) / 1000f
-            if (durationSeconds <= 0f) return 0f
-            return packetCount / durationSeconds * 3600f
-        }
+    /** Packets per hour over the observed window; null until [PacketRate] has enough to measure. */
+    val packetsPerHour: Float?
+        get() = PacketRate.perHour(packetCount, firstPacketAtMillis, lastPacketAtMillis)
 }

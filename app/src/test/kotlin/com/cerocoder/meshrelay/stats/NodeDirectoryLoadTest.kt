@@ -335,4 +335,59 @@ class NodeDirectoryLoadTest {
 
         assertEquals(endsInZero, directory.snapshot(setOf(endsInZero)).skippedKnownRelay(0xff))
     }
+
+    @Test
+    fun `loaded count is the number of nodes the file supplied`() {
+        assertEquals(0, snapshot().loadedCount)
+
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY)), entry(record(RADIO_NODE))))
+
+        assertEquals(2, snapshot().loadedCount)
+    }
+
+    @Test
+    fun `loaded count survives a reset of the runtime data`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY))))
+
+        directory.clearRuntimeData()
+
+        assertEquals(1, snapshot().loadedCount)
+    }
+
+    @Test
+    fun `setWatchPoints replaces the list and keeps the other annotations`() {
+        directory.applyLoaded(listOf(entry(record(FILE_ONLY), NodeAnnotations(LearntSource.AIR, notes = "x"))))
+
+        directory.setWatchPoints(FILE_ONLY, listOf("""{"a":1}""", """{"a":2}"""))
+        directory.setWatchPoints(FILE_ONLY, listOf("""{"a":2}"""))
+
+        val annotations = snapshot().annotations(FILE_ONLY)!!
+        assertEquals(listOf("""{"a":2}"""), annotations.watchPoints)
+        assertEquals("x", annotations.notes)
+    }
+
+    @Test
+    fun `setWatchPoints creates annotations for a node that had none`() {
+        directory.setWatchPoints(RADIO_NODE, listOf("""{"a":1}"""))
+
+        assertEquals(listOf("""{"a":1}"""), snapshot().annotations(RADIO_NODE)!!.watchPoints)
+    }
+
+    @Test
+    fun `relay bookmarks are kept per byte, replaced by a load, and dropped by clearAll`() {
+        directory.setRelayWatchPoints(0x2a, listOf("""{"a":1}"""))
+        directory.setRelayWatchPoints(0x9c, listOf("""{"a":2}"""))
+
+        directory.applyLoaded(emptyList(), mapOf(0x2a to listOf("""{"a":3}""")))
+
+        assertEquals(listOf("""{"a":3}"""), snapshot().relayWatchPoints(0x2a))
+        assertEquals(listOf("""{"a":2}"""), snapshot().relayWatchPoints(0x9c))
+        assertEquals(mapOf(0x2a to listOf("""{"a":3}"""), 0x9c to listOf("""{"a":2}""")), directory.exportRelayWatchPoints())
+
+        directory.setRelayWatchPoints(0x9c, emptyList())
+        assertTrue(snapshot().relayWatchPoints(0x9c).isEmpty())
+
+        directory.clearAll()
+        assertTrue(snapshot().relayWatchPoints(0x2a).isEmpty())
+    }
 }

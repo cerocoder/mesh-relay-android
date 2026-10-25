@@ -37,6 +37,7 @@ import com.cerocoder.meshrelay.R
 import com.cerocoder.meshrelay.ble.BleReadiness
 import com.cerocoder.meshrelay.connection.ConnectionState
 import com.cerocoder.meshrelay.export.ExportKind
+import com.cerocoder.meshrelay.nodefile.WatchPointJson
 import com.cerocoder.meshrelay.settings.AppSettings
 import com.cerocoder.meshrelay.settings.GaugeMode
 import com.cerocoder.meshrelay.stats.Geo
@@ -495,6 +496,9 @@ private fun GraphDestination(
                             dbSnr = snapshot.directory.node(nodeNum)?.dbSnr,
                             hopsAway = snapshot.directory.node(nodeNum)?.hopsAway,
                             loadedRssiAvg = snapshot.directory.annotations(nodeNum)?.avgRssi,
+                            directSnr = snapshot.neighbours.find { it.nodeNum == nodeNum }?.snr
+                                ?: SignalStats.EMPTY,
+                            loadedSnrAvg = snapshot.directory.annotations(nodeNum)?.avgSnr,
                         )
                     },
                 )
@@ -518,6 +522,15 @@ private fun GraphDestination(
                 onSkipCandidate = { nodeNum -> container.skipRelayNode(nodeNum) },
                 onBack = onBack,
                 modifier = modifier,
+                // Bookmarks belong to the relay byte, not to whichever candidate is
+                // selected: the owner marks where the signal was good before deciding
+                // which node is behind the byte. Stored as the raw JSON text the node
+                // file carries; this is where it is decoded and encoded.
+                watchPoints = snapshot.directory.relayWatchPoints(subject.relayByte)
+                    .mapNotNull(WatchPointJson::decode),
+                onSetWatchPoints = { points ->
+                    container.engine.setRelayWatchPoints(subject.relayByte, points.map(WatchPointJson::encode))
+                },
             )
         }
 
@@ -542,6 +555,12 @@ private fun GraphDestination(
                 onSkipCandidate = {},
                 onBack = onBack,
                 modifier = modifier,
+                // A neighbour is a node, so its bookmarks are that node's own.
+                watchPoints = snapshot.directory.annotations(subject.nodeNum)?.watchPoints.orEmpty()
+                    .mapNotNull(WatchPointJson::decode),
+                onSetWatchPoints = { points ->
+                    container.engine.setWatchPoints(subject.nodeNum, points.map(WatchPointJson::encode))
+                },
             )
         }
     }
