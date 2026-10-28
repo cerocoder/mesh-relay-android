@@ -431,7 +431,7 @@ class NodeDirectory(private val time: TimeSource) {
      * interface can hold the result for as long as a composition lives while the
      * engine keeps folding packets into the originals.
      */
-    fun snapshot(skipped: Set<Int>): NodeDirectorySnapshot = NodeDirectorySnapshot(
+    fun snapshot(skipped: Set<Int>, heard: Set<Int> = emptySet()): NodeDirectorySnapshot = NodeDirectorySnapshot(
         nodes = HashMap(nodes),
         airNodes = HashMap(nodesFromAir),
         loadedAtMillis = loadedAtMillis,
@@ -443,6 +443,7 @@ class NodeDirectory(private val time: TimeSource) {
         annotations = HashMap(annotations),
         loadedTelemetry = HashMap(loadedTelemetry),
         relayWatchPoints = HashMap(relayWatchPoints),
+        heard = HashSet(heard),
     )
 
     /**

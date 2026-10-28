@@ -331,6 +331,19 @@ class NodeDirectoryTest {
     }
 
     @Test
+    fun `a node heard directly but never identified is still a candidate`() {
+        loadRelayCandidates()
+        val unnamedNeighbour = 0xC20EEE2A.toInt()
+
+        val nums = directory.snapshot(emptySet(), heard = setOf(unnamedNeighbour, GETAFE_VECINO))
+            .matchingNodeNums(0x2a)
+
+        // The neighbour carries no name in either store, but it was heard on this very
+        // byte; the named ones stay, and a heard node on another byte stays out.
+        assertEquals(listOf(GETAFE_ROUTER, TOLEDO_ESTACION, TOLEDO_ALTO, unnamedNeighbour).sorted(), nums)
+    }
+
+    @Test
     fun `a skipped node is not offered as a candidate`() {
         loadRelayCandidates()
 

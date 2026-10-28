@@ -256,7 +256,7 @@ class MeshStatsEngine(
                     // neighbour name sort and the snapshot itself. Taking it copies
                     // every map in the directory, so it is taken here - once - rather
                     // than per packet, which would hand back the coalescing above.
-                    val view = directory.snapshot(skipped)
+                    val view = directory.snapshot(skipped, heard = neighbours.keys)
                     refreshRelayNames(view)
                     val built = buildSnapshot(view)
                     publishedObserver = built.observer

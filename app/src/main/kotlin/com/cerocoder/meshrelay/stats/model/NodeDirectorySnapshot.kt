@@ -33,7 +33,14 @@ class NodeDirectorySnapshot(
     annotations: Map<Int, NodeAnnotations> = emptyMap(),
     loadedTelemetry: Map<Int, TelemetryRecord> = emptyMap(),
     relayWatchPoints: Map<Int, List<String>> = emptyMap(),
+    /**
+     * Nodes heard directly this session, identified or not. A neighbour that never sent a
+     * NODEINFO is in neither live store, yet it is the likeliest owner of a relay byte it
+     * was heard on - so it counts as a candidate like any other.
+     */
+    heard: Set<Int> = emptySet(),
 ) {
+    private val heardNodes = heard
     private val relayWatchPointsByByte = relayWatchPoints
     private val loadedByNode = loadedNodes
     private val annotationsByNode = annotations
@@ -53,7 +60,7 @@ class NodeDirectorySnapshot(
      * air store that was on the order of 10^5 set insertions per snapshot where
      * an allocation-free filter would do.
      */
-    private val allNodeNums: Set<Int> by lazy { nodes.keys + airNodes.keys + loadedByNode.keys }
+    private val allNodeNums: Set<Int> by lazy { nodes.keys + airNodes.keys + loadedByNode.keys + heardNodes }
 
     val count: Int get() = nodes.size
 
