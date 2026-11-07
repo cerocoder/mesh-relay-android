@@ -11,6 +11,11 @@ node over serial or BLE. This port targets a phone instead: it connects to a
 Meshtastic node over **Bluetooth Low Energy** and re-implements every feature
 of `mesh_stats`, redesigned for a touch screen rather than a terminal.
 
+## Documentation
+
+**[Read the user guide](docs/user-guide/README.md)**: how to install the app, what each screen shows, and
+how to use the numbers, with screenshots and everyday recipes.
+
 ## Status
 
 This is an early-stage, personal project under active development. It is not
