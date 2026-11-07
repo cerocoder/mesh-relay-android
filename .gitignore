@@ -16,3 +16,6 @@
 *.keystore
 *.p12
 *.jks.b64
+
+# Temporary research materials for documentation design
+.research-tmp/
